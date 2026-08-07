@@ -63,8 +63,10 @@
 
     app.appendChild(h("header.topbar",
       h("div.topbar-inner",
-        h("div.brand", { onclick: () => (location.hash = "#/dashboard") }, "my", h("span", "financial"), h("small", "WEALTH OS")),
-        h("nav.mainnav", NAV.map(([r, label]) => h("button.nav-item", { dataset: { route: r }, onclick: () => (location.hash = `#/${r}`) }, label))),
+        h("div.brand", { title: "Back to homepage", onclick: () => (location.href = "/") }, "my", h("span", "financial"), h("small", "WEALTH OS")),
+        h("nav.mainnav",
+          NAV.map(([r, label]) => h("button.nav-item", { dataset: { route: r }, onclick: () => (location.hash = `#/${r}`) }, label)),
+          h("a.nav-item", { href: "/learn", title: "Plain-English guides (server-rendered)" }, "Insights ↗")),
         h("div.top-right",
           h("div.mkt-pill", h("span.mkt-dot", { id: "mktDot" }), h("span", { id: "mktPhase" }, "…"), h("span.clock", { id: "istClock" })),
           ccySel,
@@ -73,7 +75,11 @@
     app.appendChild(h("div.ticker-strip", h("div.ticker-inner", { id: "tickerStrip" }, h("span.tick-item", "loading market strip…"))));
     app.appendChild(h("main.page", h("div", { id: "view" })));
     app.appendChild(h("footer.site",
-      h("div", `© ${new Date().getFullYear()} myfinancial · Educational demo platform. Market data is synthetically generated; swap in a licensed NSE/BSE feed for production (see README).`),
+      h("div", { style: { marginBottom: "6px" } },
+        h("a", { href: "/" }, "Home"), " · ", h("a", { href: "/learn" }, "Insights"), " · ",
+        h("a", { href: "https://github.com/myfinancialria/myfinancial", rel: "noopener" }, "GitHub"), " · ",
+        h("a", { href: "/sitemap.xml" }, "Sitemap")),
+      h("div", `© ${new Date().getFullYear()} myfinancial · Educational demo platform. Synthetic feed by default — connect Upstox/FYERS for live NSE data (see README).`),
       h("div", "All analytics, signals and AI responses are informational only and do not constitute investment advice under SEBI (Investment Advisers) Regulations, 2013. Investments are subject to market risks. Documents encrypted with AES-256-GCM · DPDP-aligned data handling.")));
 
     window.Views.assistant.mount(app);   // floating AI drawer

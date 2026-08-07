@@ -264,7 +264,7 @@
       chart.clear();
       const n = ranges[activeRange];
       chart.addSeries(d.navs.slice(-n), { color: COLORS.BLUE, title: "NAV" });
-      if (d.bench) chart.addSeries(d.bench.slice(-n), { color: "#647a9e", title: d.benchName, fill: false });
+      if (d.bench) chart.addSeries(d.bench.slice(-n), { color: "#7a7a7a", title: d.benchName, fill: false });
     };
     const rangeBtns = h("div.range-btns", Object.keys(ranges).map((r) =>
       h("button.rb", { class: r === activeRange ? "active" : "", onclick: (e) => { activeRange = r; paint(); e.target.parentElement.querySelectorAll(".rb").forEach((b) => b.classList.toggle("active", b === e.target)); } }, r)));
@@ -276,7 +276,7 @@
       chart.el,
       h("div.legend-row", { style: { marginTop: "8px" } },
         h("span", h("span.legend-dot", { style: { background: COLORS.BLUE } }), d.name),
-        d.bench ? h("span", h("span.legend-dot", { style: { background: "#647a9e" } }), `${d.benchName} TRI (rebased)`) : null));
+        d.bench ? h("span", h("span.legend-dot", { style: { background: "#7a7a7a" } }), `${d.benchName} TRI (rebased)`) : null));
 
     // rolling 3Y chart
     const roll = lineChart({ height: 200 });
@@ -297,7 +297,7 @@
         h("div.stat", h("div.s-label", "XIRR"), h("div.s-value", { class: pctCls(s.xirrPct) }, fmtPct(s.xirrPct, 1)))));
       sipChart.clear();
       sipChart.addSeries(s.timeline.map((t) => ({ time: t.time, value: t.value })), { color: COLORS.UP, title: "Value" });
-      sipChart.addSeries(s.timeline.map((t) => ({ time: t.time, value: t.invested })), { color: "#647a9e", title: "Invested", fill: false });
+      sipChart.addSeries(s.timeline.map((t) => ({ time: t.time, value: t.invested })), { color: "#7a7a7a", title: "Invested", fill: false });
     };
     const sipCard = h("div.card",
       h("div.card-head", h("div", h("div.card-title", "🧮 SIP Backtester"), h("div.card-sub", "actual point-to-point accumulation on this NAV history"))),
@@ -373,7 +373,7 @@
           onclick: (e) => {
             answers[q.id] = val;
             e.target.closest("div").querySelectorAll(".btn").forEach((b) => (b.style.borderColor = "var(--border2)", b.style.background = "var(--surface2)"));
-            e.target.style.borderColor = "var(--blue)"; e.target.style.background = "rgba(76,141,255,.15)";
+            e.target.style.borderColor = "var(--blue)"; e.target.style.background = "rgba(255,255,255,.12)";
             prog.querySelector("i").style.width = `${(Object.keys(answers).length / questions.length) * 100}%`;
           },
         }, label)));
@@ -397,7 +397,7 @@
             { label: "Equity", value: p.model.equityPct, color: COLORS.BLUE },
             { label: "Debt", value: p.model.debtPct, color: COLORS.UP },
             { label: "Gold", value: p.model.goldPct, color: COLORS.GOLD },
-            { label: "Liquid", value: p.model.liquidPct, color: "#64748b" },
+            { label: "Liquid", value: p.model.liquidPct, color: "#5a5a5a" },
           ].filter((s) => s.value > 0),
           { centre: centreEl });
         const pickRows = p.picks.map((pk) => h("tr.click", { onclick: () => navigate(`#/funds/${pk.code}`) },

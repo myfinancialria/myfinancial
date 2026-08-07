@@ -108,7 +108,7 @@
           h("div.kv", h("span.dim", "Emergency runway"), h("b", { class: ratios.emergencyMonths >= 6 ? "up-t" : "down-t" }, `${fmtNum(ratios.emergencyMonths, 1)} months`))),
         h("div.card",
           h("div.card-title", { style: { marginBottom: "12px" } }, "Mix by class"),
-          donut(Object.entries(nw.byClass).map(([k, v], i) => ({ label: k.replace(/_/g, " "), value: v, color: [COLORS.BLUE, COLORS.UP, COLORS.GOLD, COLORS.VIOLET, COLORS.CYAN, "#fb7185", "#a3e635", "#f97316", "#64748b", "#e879f9"][i % 10] }))))));
+          donut(Object.entries(nw.byClass).map(([k, v], i) => ({ label: k.replace(/_/g, " "), value: v, color: ["#ffffff", "#d9d9d9", "#b8b8b8", "#989898", "#7a7a7a", "#616161", "#4d4d4d", "#3c3c3c", "#2e2e2e", "#232323"][i % 10] }))))));
   }
 
   // ------------------------------ tax centre ----------------------------------
@@ -123,7 +123,7 @@
       wrap.appendChild(paint(data));
     };
 
-    const regimeCard = (r, better) => h("div.card", { style: better ? { borderColor: "rgba(16,185,129,.55)", boxShadow: "0 0 0 1px rgba(16,185,129,.35)" } : {} },
+    const regimeCard = (r, better) => h("div.card", { style: better ? { borderColor: "#ffffff", boxShadow: "0 0 0 1px rgba(255,255,255,.35)" } : {} },
       h("div.card-head",
         h("div", h("div.card-title", `${r.regime} Regime`), h("div.card-sub", r.fy)),
         better ? h("span.vbadge.ACHIEVABLE", "RECOMMENDED") : null),

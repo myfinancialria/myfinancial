@@ -126,7 +126,7 @@
       h("div.divider"),
       h("div", { style: { display: "flex", justifyContent: "space-between", fontSize: "12px", marginBottom: "6px" } },
         h("span.up-t", `▲ ${ad.advances} advancing`), h("span.dim", `${ad.unchanged} flat`), h("span.down-t", `▼ ${ad.declines} declining`)),
-      h("div.bar", h("i", { style: { width: `${(ad.advances / (ad.advances + ad.declines + ad.unchanged)) * 100}%`, background: "linear-gradient(90deg,#0b9e6f,#10b981)" } })),
+      h("div.bar", h("i", { style: { width: `${(ad.advances / (ad.advances + ad.declines + ad.unchanged)) * 100}%`, background: "#ffffff" } })),
       h("div.divider"),
       h("div.grid.cols-2", { style: { gap: "10px" } },
         h("div", h("div.card-sub", { style: { marginBottom: "6px" } }, "TOP GAINERS"),
@@ -141,7 +141,7 @@
       hbars(insurance.items.map((it) => ({
         label: it.label, value: Math.min(it.have, it.need), max: it.need,
         display: `${fmtMoney(it.have)} / ${fmtMoney(it.need)}`,
-        color: it.gap === 0 ? "linear-gradient(90deg,#0b9e6f,#10b981)" : "linear-gradient(90deg,#d09114,#f0b429)",
+        color: it.gap === 0 ? "#ffffff" : "#9f9f9f",
         note: it.gap > 0 ? `Gap ${fmtMoney(it.gap)}` : "Adequate ✓",
       })), { max: Math.max(...insurance.items.map((i) => i.need)) }));
 

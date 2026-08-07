@@ -121,10 +121,10 @@
     ), { width: "820px" });
     const bars = (await api(`/market/history/${p.symbol}?days=210`)).bars;
     cc.setBars(bars);
-    cc.addPriceLine(p.entry, "#4c8dff", "entry");
-    cc.addPriceLine(p.target2, "#10b981", "T2");
-    cc.addPriceLine(p.stop, "#f43f5e", "SL");
-    if (p.anchors?.length) cc.setMarkers(p.anchors.map((a) => ({ time: a.t, position: p.bias === "BULLISH" ? "belowBar" : "aboveBar", color: "#f0b429", shape: p.bias === "BULLISH" ? "arrowUp" : "arrowDown", text: "" })));
+    cc.addPriceLine(p.entry, "#ffffff", "entry");
+    cc.addPriceLine(p.target2, "#bfbfbf", "T2");
+    cc.addPriceLine(p.stop, "#6f6f6f", "SL");
+    if (p.anchors?.length) cc.setMarkers(p.anchors.map((a) => ({ time: a.t, position: p.bias === "BULLISH" ? "belowBar" : "aboveBar", color: "#ffffff", shape: p.bias === "BULLISH" ? "arrowUp" : "arrowDown", text: "" })));
   }
 
   // -------------------------------- breakouts ---------------------------------
@@ -179,7 +179,7 @@
       cc.setBars(bars);
       const closes = bars.map((b) => ({ time: b.time, close: b.close }));
       const ema = (n) => { const k = 2 / (n + 1); let p = null; return closes.map((c) => ({ time: c.time, value: p = p === null ? c.close : c.close * k + p * (1 - k) })); };
-      cc.addLine(ema(20), "#f0b429"); cc.addLine(ema(50), "#8b5cf6");
+      cc.addLine(ema(20), "#c9c9c9"); cc.addLine(ema(50), "#6f6f6f");
     };
     const rangeBtns = h("div.range-btns",
       [["6M", "1D", 126], ["1Y", "1D", 260], ["3Y", "1D", 756], ["5Y", "1W", 1260], ["10Y", "1W", 2520]].map(([label, res, dd], i) =>
@@ -187,7 +187,7 @@
 
     const chartCard = h("div.card",
       h("div.card-head",
-        h("div", h("div.card-title", `${symbol} · NSE`), h("div.card-sub", "EMA 20 (gold) · EMA 50 (violet) · volume")),
+        h("div", h("div.card-title", `${symbol} · NSE`), h("div.card-sub", "EMA 20 (light) · EMA 50 (dark) · volume")),
         rangeBtns),
       cc.el);
 
@@ -226,7 +226,7 @@
     // health pillars
     const healthCard = h("div.card",
       h("div.card-head", h("div", h("div.card-title", "🩺 Financial Health"), h("div.card-sub", `composite ${health.score}/100`))),
-      hbars(health.pillars.map((p) => ({ label: p.name, value: p.score, display: `${p.score}/100`, color: p.score >= 70 ? "linear-gradient(90deg,#0b9e6f,#10b981)" : p.score >= 45 ? "linear-gradient(90deg,#d09114,#f0b429)" : "linear-gradient(90deg,#c22,#f43f5e)", note: p.note })), { max: 100 }));
+      hbars(health.pillars.map((p) => ({ label: p.name, value: p.score, display: `${p.score}/100`, color: p.score >= 70 ? "#ffffff" : p.score >= 45 ? "#9f9f9f" : "repeating-linear-gradient(45deg,#8a8a8a 0 6px,#4a4a4a 6px 12px)", note: p.note })), { max: 100 }));
 
     // financials
     let mode = "annual";
@@ -260,7 +260,7 @@
       h("div.card-head", h("div", h("div.card-title", `🏭 ${peers.sectorName} peers`), h("div.card-sub", `sector medians — P/E ${peers.medians.pe}× · P/B ${peers.medians.pb}× · ROE ${peers.medians.roe}%`))),
       h("div.tbl-scroll", { style: { maxHeight: "330px" } }, h("table.tbl",
         h("thead", h("tr", h("th", "Company"), h("th", "MCap ₹Cr"), h("th", "P/E"), h("th", "P/B"), h("th", "EV/EBITDA"), h("th", "ROE"), h("th", "Growth"), h("th", "D/E"))),
-        h("tbody", peers.peers.map((p) => h("tr.click", { style: p.self ? { background: "rgba(76,141,255,.08)" } : {}, onclick: () => !p.self && navigate(`#/equities/${p.symbol}`) },
+        h("tbody", peers.peers.map((p) => h("tr.click", { style: p.self ? { background: "rgba(255,255,255,.06)" } : {}, onclick: () => !p.self && navigate(`#/equities/${p.symbol}`) },
           h("td", h("div.sym", p.name), p.self ? h("div.sub", "— this company") : null),
           h("td.num", fmtNum(p.mcap, 0)), h("td.num", p.pe), h("td.num", p.pb), h("td.num", p.evEbitda ?? "—"),
           h("td.num", p.roe), h("td", { class: pctCls(p.revGrowthPct) }, fmtPct(p.revGrowthPct, 1)), h("td.num", p.debtToEquity ?? "—")))))));
