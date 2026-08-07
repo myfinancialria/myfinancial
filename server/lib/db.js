@@ -79,6 +79,19 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE TABLE IF NOT EXISTS chat_history (
   id TEXT PRIMARY KEY, user_id TEXT, role TEXT, content TEXT, meta TEXT DEFAULT '{}', created INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS baskets (
+  id TEXT PRIMARY KEY, user_id TEXT, goal_id TEXT, name TEXT, created INTEGER,
+  band TEXT, years REAL, alloc TEXT DEFAULT '{}', holdings TEXT DEFAULT '[]',
+  monthly_sip REAL DEFAULT 0, invested REAL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS articles (
+  slug TEXT PRIMARY KEY, title TEXT, meta_description TEXT, keywords TEXT,
+  category TEXT, body_md TEXT, faq TEXT DEFAULT '[]',
+  generator TEXT DEFAULT 'grounded-composer',      -- or 'aimlapi:<model>'
+  created INTEGER, updated INTEGER
+);
 `);
 
 // ------------------------------- helpers -----------------------------------

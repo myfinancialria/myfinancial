@@ -18,6 +18,9 @@ import * as signals from "../engines/signals.js";
 import * as estate from "../engines/estate.js";
 import * as vault from "../engines/vault.js";
 import * as assistant from "../engines/assistant.js";
+import * as amfi from "../providers/amfi.js";
+import * as baskets from "../engines/baskets.js";
+import * as seo from "../engines/seo.js";
 
 export const api = Router();
 const ok = (res, data) => res.json({ ok: true, data });
@@ -141,7 +144,7 @@ api.get("/funds/screen", wrap((req, res) => ok(res, fundsE.screen({
 api.get("/funds/:code", wrap((req, res) => {
   const d = fundsE.fundDetail(req.params.code, Math.min(Number(req.query.years || 10), 10));
   if (!d) return res.status(404).json({ ok: false, error: "Unknown fund" });
-  ok(res, d);
+  ok(res, { ...d, plainEnglish: seo.plainEnglishFund(d) });
 }));
 api.get("/funds/:code/sip", wrap((req, res) => ok(res, fundsE.sipBacktest(req.params.code, Number(req.query.monthly || 10000), Number(req.query.years || 5)))));
 
@@ -197,6 +200,55 @@ api.get("/vault/doc/:id", requireAuth, wrap((req, res) => {
   ok(res, d);
 }));
 api.delete("/vault/doc/:id", requireAuth, wrap((req, res) => ok(res, vault.deleteDoc(req.user.id, req.params.id))));
+
+// --------------------------- live data providers -----------------------------
+api.get("/providers/status", wrap((req, res) => ok(res, { market: market.liveStatus(), mf: amfi.statusSync() })));
+
+// ----------------------- live MF universe (AMFI/mfapi) -----------------------
+api.get("/mflive/buckets", wrap((req, res) => ok(res, Object.entries(amfi.CATEGORIES).map(([key, [assetClass, expReturn, expVol, label]]) => ({ key, assetClass, label })))));
+api.get("/mflive/screen", wrap(async (req, res) => ok(res, await amfi.screen({
+  q: req.query.q || "", bucket: req.query.bucket || "", assetClass: req.query.assetClass || "",
+  minStars: Number(req.query.minStars || 0), sort: req.query.sort || "r3", dir: req.query.dir || "desc",
+  limit: Math.min(Number(req.query.limit || 150), 400), enrichTop: 8,
+}))));
+api.get("/mflive/scheme/:code", wrap(async (req, res) => {
+  const [hist, met] = await Promise.all([amfi.schemeHistory(req.params.code), amfi.enrich(req.params.code)]);
+  ok(res, { ...hist, metrics: met });
+}));
+
+// ------------------------- baskets & rebalancing ------------------------------
+api.get("/baskets", requireAuth, wrap(async (req, res) => ok(res, await baskets.listBaskets(req.user.id))));
+api.post("/baskets/preview", requireAuth, wrap(async (req, res) => {
+  const goal = q.one("SELECT * FROM goals WHERE id = ? AND user_id = ?", String(req.body.goalId || ""), req.user.id);
+  if (!goal) throw new Error("Goal not found");
+  const years = Math.max(0.5, goal.target_year - new Date().getFullYear());
+  const band = baskets.bandOfUser(req.user);
+  const alloc = baskets.allocation(band, years);
+  ok(res, { band, years, alloc, expectedReturnPct: baskets.blendedReturn(alloc), proposal: await baskets.proposeBasket(band, alloc) });
+}));
+api.post("/baskets/from-goal", requireAuth, wrap(async (req, res) => {
+  const goal = q.one("SELECT * FROM goals WHERE id = ? AND user_id = ?", String(req.body.goalId || ""), req.user.id);
+  if (!goal) throw new Error("Goal not found");
+  ok(res, await baskets.createFromGoal(req.user, goal, { lumpsum: Number(req.body.lumpsum || 0), monthly: Number(req.body.monthly || 0) }));
+}));
+api.get("/baskets/:id/rebalance", requireAuth, wrap(async (req, res) => {
+  const plan = await baskets.rebalancePlan(req.user.id, req.params.id, Number(req.query.threshold || 5));
+  if (!plan) return res.status(404).json({ ok: false, error: "Basket not found" });
+  ok(res, plan);
+}));
+api.post("/baskets/:id/invest", requireAuth, wrap(async (req, res) => {
+  const b = await baskets.investInBasket(req.user.id, req.params.id, Number(req.body.amount || 0));
+  if (!b) throw new Error("Basket not found or invalid amount");
+  ok(res, b);
+}));
+api.delete("/baskets/:id", requireAuth, wrap((req, res) => ok(res, baskets.deleteBasket(req.user.id, req.params.id))));
+
+// ------------------------------ SEO content -----------------------------------
+api.get("/seo/articles", wrap((req, res) => ok(res, seo.listArticles())));
+api.post("/seo/regenerate", requireAuth, wrap(async (req, res) => ok(res, {
+  llmConfigured: !!process.env.AIMLAPI_KEY,
+  results: await seo.regenerate(req.body.slug || null),
+})));
 
 // ------------------------------ assistant ------------------------------------
 api.post("/assistant/ask", requireAuth, wrap(async (req, res) => {

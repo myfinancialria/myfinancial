@@ -53,14 +53,50 @@ public/  (zero-build SPA)                     server/
 - **Auth**: HMAC-signed sessions; persona login. Swap `POST /api/login` for a Google OIDC code exchange in production — session issuance and everything downstream is unchanged.
 - **Live ticks**: WebSocket `/ws` random-walks LTPs and streams batches; the dashboard holdings table and stock pages patch in place.
 
-### Swapping in licensed data (production)
+### Live market data — Upstox & FYERS (built in)
 
-All market access goes through the provider surface in `server/engines/market.js` (`daily · weekly · quote · optionChain · fundamentals …`). Implement the same functions against:
-- **Broker APIs**: Zerodha Kite Connect, Upstox, Dhan, Fyers (candles + quotes + chains)
-- **Vendors**: Global Datafeeds, TrueData (exchange-licensed redistribution)
-- **MF NAVs**: AMFI daily NAV feed / mfapi.in; fundamentals: screener-grade data vendors
+Broker adapters ship in `server/providers/`. Pick one and export its tokens:
 
-Public redistribution of NSE/BSE real-time data requires an exchange licence — see `../ANALYSIS.md` for the teardown of how production terminals structure this.
+```bash
+# Upstox v2 (https://upstox.com/developer/api) — daily token from your app's OAuth flow
+export MYFIN_PROVIDER=upstox
+export UPSTOX_ACCESS_TOKEN=eyJ...
+
+# or FYERS v3 (https://myapi.fyers.in) — appId + daily access token
+export MYFIN_PROVIDER=fyers
+export FYERS_APP_ID=XXXXXXXX-100
+export FYERS_ACCESS_TOKEN=eyJ...
+
+npm start
+```
+
+How it behaves: candles sync every 15 minutes and quotes every 5 seconds into an in-memory cache; the engines read the cache first and the deterministic synthetic feed backfills anything the broker window doesn't cover (deep history is spliced level-matched at the seam, so 10-year lookbacks keep working). Upstox instrument keys are resolved from their published NSE master (downloaded & cached — no hardcoded ISINs); FYERS symbols are derived (`NSE:RELIANCE-EQ`). Zero config → pure synthetic mode. Check `GET /api/providers/status` any time. Note broker tokens expire daily — refresh them via each broker's login flow.
+
+### Live mutual-fund universe, goal baskets & rebalancing
+
+Ports the pipeline from [`myfinancialria/myfinancial-advisor`](https://github.com/myfinancialria/myfinancial-advisor):
+- **All-India universe** (`server/providers/amfi.js`): official **AMFI NAVAll** (≈2,400+ Direct-Growth schemes, cached 12h) → advisor's category taxonomy → **mfapi.in** enrichment (1/3/5-yr CAGR + volatility, cached, politeness-throttled with a boot warmup) → per-category 1–5★ ranking. Screener with search/category/asset-class/rating filters lives at **Mutual Funds → All-India Live**; any scheme opens its full NAV history chart.
+- **Goal baskets** (`server/engines/baskets.js`, robo.py port): SEBI-style risk band + years-to-goal → glide-path-capped equity/debt/gold (money needed soon can't ride the market) → top-ranked live funds per sleeve (synthetic curated funds as offline fallback) → units bought at NAV.
+- **Rebalancing**: drift vs target weights with **fresh-SIP-first** orders — sell only beyond the ±5% threshold, with LTCG (₹1.25L exemption) and exit-load warnings on every plan.
+
+### SEO content engine & /learn
+
+Server-rendered, crawler-first pages: **`/learn`** (index) and **`/learn/<slug>`** with meta description, canonical, OpenGraph, `Article` + `FAQPage` JSON-LD, plus **`/sitemap.xml`** and **`/robots.txt`**. Eight articles seed automatically at boot from the **grounded composer** — plain-English pieces whose every number comes from the live engines (tax comparisons, top-fund tables from AMFI data, SIP math), written for the common Indian investor.
+
+Optional LLM layer via **AIMLAPI** (OpenAI-compatible):
+
+```bash
+export AIMLAPI_KEY=sk-...
+export AIMLAPI_MODEL=gpt-4o-mini   # optional, default shown
+# then, authenticated: POST /api/seo/regenerate        (all articles)
+#                      POST /api/seo/regenerate {"slug":"..."}  (one)
+```
+
+The LLM receives the pre-computed facts and expands the copy — numbers and fund names are contractually locked in the prompt; without a key the grounded composer output stands. Fund detail pages also carry a "🗣️ In plain words" interpretation generated from the same engine.
+
+### Other production notes
+
+Public redistribution of real-time NSE/BSE data requires an exchange licence (broker APIs above are licensed for your own use). Vendors like Global Datafeeds/TrueData offer redistribution-licensed feeds behind the same provider interface.
 
 ### AI assistant LLM adapter
 
@@ -80,6 +116,11 @@ Grounded answers are composed deterministically (so the demo needs no keys). Set
 |---|---|---|
 | `PORT` | `5599` | HTTP + WS port |
 | `MYFIN_SECRET` | dev value | Session HMAC + vault KDF master — **set in production** |
+| `MYFIN_PROVIDER` | `synthetic` | Market feed: `upstox` \| `fyers` \| `synthetic` |
+| `UPSTOX_ACCESS_TOKEN` | unset | Upstox v2 daily access token |
+| `FYERS_APP_ID` / `FYERS_ACCESS_TOKEN` | unset | FYERS v3 credentials |
+| `AIMLAPI_KEY` | unset | Enables LLM enhancement of /learn articles (aimlapi.com) |
+| `AIMLAPI_MODEL` | `gpt-4o-mini` | AIMLAPI model id |
 | `ANTHROPIC_API_KEY` | unset | Enables Claude verbalisation in the assistant |
 | `MYFIN_LLM_MODEL` | `claude-sonnet-5` | Assistant model id |
 

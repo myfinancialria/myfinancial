@@ -16,6 +16,7 @@
 // ---------------------------------------------------------------------------
 import { STOCKS, INDICES, SECTORS, STOCK_MAP, INDEX_MAP } from "../data/universe.js";
 import { rng, hash32, mulberry32, DAY, isoIST, isWeekend, clamp, round2 } from "../lib/util.js";
+import * as live from "../providers/live.js";
 
 const START = Date.parse("2016-01-04T10:00:00Z");        // series epoch (Mon)
 const ANCHOR = Date.parse("2026-01-01T10:00:00Z");       // price bridged to `base` here
@@ -126,16 +127,16 @@ function synth(symbol) {
 // ---------------------------------------------------------------------------
 // live tick state — random-walks the last close during the session
 // ---------------------------------------------------------------------------
-const live = new Map(); // symbol → {ltp, dayHigh, dayLow, lastTs}
+const tickState = new Map(); // symbol → {ltp, dayHigh, dayLow, lastTs}
 
 function liveState(symbol) {
   const bars = synth(symbol);
   if (!bars) return null;
   const lastBar = bars[bars.length - 1];
-  if (!live.has(symbol)) {
-    live.set(symbol, { ltp: lastBar.close, dayOpen: lastBar.open, dayHigh: lastBar.high, dayLow: lastBar.low, vol: lastBar.volume, prevClose: bars[bars.length - 2]?.close ?? lastBar.open });
+  if (!tickState.has(symbol)) {
+    tickState.set(symbol, { ltp: lastBar.close, dayOpen: lastBar.open, dayHigh: lastBar.high, dayLow: lastBar.low, vol: lastBar.volume, prevClose: bars[bars.length - 2]?.close ?? lastBar.open });
   }
-  return live.get(symbol);
+  return tickState.get(symbol);
 }
 
 /** advance one tick for a symbol (called by the ticker loop) */
@@ -172,16 +173,42 @@ export function startTicker(broadcast, intervalMs = 2500) {
 }
 
 // ---------------------------------------------------------------------------
-// public provider surface
+// public provider surface — live broker bars preferred, synthetic backfill
 // ---------------------------------------------------------------------------
+const spliceCache = new Map(); // symbol → { version, bars }
+
+/** Live broker tail + level-matched synthetic head = full-depth daily series. */
+function effectiveSeries(symbol) {
+  const liveBars = live.bars(symbol);
+  if (!liveBars || !liveBars.length) return synth(symbol);
+  const cached = spliceCache.get(symbol);
+  if (cached && cached.version === live.version()) return cached.bars;
+  const synthetic = synth(symbol) || [];
+  const firstLiveTime = liveBars[0].time;
+  const head = synthetic.filter((b) => b.time < firstLiveTime);
+  let out;
+  if (!head.length) out = liveBars;
+  else {
+    const k = liveBars[0].open / head[head.length - 1].close || 1; // level-match at the seam
+    out = head.map((b) => ({ ...b, open: round2(b.open * k), high: round2(b.high * k), low: round2(b.low * k), close: round2(b.close * k) })).concat(liveBars);
+  }
+  spliceCache.set(symbol, { version: live.version(), bars: out });
+  return out;
+}
+
+export function startLiveFeed() {
+  live.start([...STOCKS.map((s) => s.symbol), ...INDICES.map((i) => i.symbol)]);
+}
+export const liveStatus = () => live.status();
+
 export function daily(symbol, days = 260) {
-  const bars = synth(symbol);
+  const bars = effectiveSeries(symbol);
   if (!bars) return [];
   return days >= bars.length ? bars : bars.slice(bars.length - days);
 }
 
 export function weekly(symbol, weeks = 260) {
-  const bars = synth(symbol);
+  const bars = effectiveSeries(symbol);
   if (!bars) return [];
   const out = [];
   let cur = null;
@@ -203,14 +230,27 @@ export function weekly(symbol, weeks = 260) {
 
 export function quote(symbol) {
   const s = spec(symbol);
-  const st = liveState(symbol);
-  if (!s || !st) return null;
-  const change = st.ltp - st.prevClose;
+  if (!s) return null;
+  const lq = live.quote(symbol);                                // fresh broker quote wins
+  let ltp, prevClose, dayOpen, dayHigh, dayLow, vol, source;
+  if (lq) {
+    ({ ltp } = lq);
+    prevClose = lq.prevClose ?? ltp; dayOpen = lq.open ?? ltp;
+    dayHigh = lq.high ?? ltp; dayLow = lq.low ?? ltp; vol = lq.volume || 0;
+    source = live.mode();
+  } else {
+    const st = liveState(symbol);
+    if (!st) return null;
+    ({ ltp } = st);
+    prevClose = st.prevClose; dayOpen = st.dayOpen; dayHigh = st.dayHigh; dayLow = st.dayLow; vol = st.vol;
+    source = "synthetic";
+  }
+  const change = ltp - prevClose;
   return {
-    symbol, name: s.name, sector: s.sector || null, isIndex: !!INDEX_MAP[symbol],
-    ltp: st.ltp, prevClose: round2(st.prevClose), open: round2(st.dayOpen),
-    high: round2(st.dayHigh), low: round2(st.dayLow), volume: st.vol,
-    change: round2(change), changePct: round2((change / st.prevClose) * 100),
+    symbol, name: s.name, sector: s.sector || null, isIndex: !!INDEX_MAP[symbol], source,
+    ltp: round2(ltp), prevClose: round2(prevClose), open: round2(dayOpen),
+    high: round2(dayHigh), low: round2(dayLow), volume: vol,
+    change: round2(change), changePct: round2(prevClose ? (change / prevClose) * 100 : 0),
     week52High: round2(Math.max(...daily(symbol, 252).map((b) => b.high))),
     week52Low: round2(Math.min(...daily(symbol, 252).map((b) => b.low))),
   };

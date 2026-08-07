@@ -4,13 +4,195 @@
    =========================================================================== */
 (() => {
   "use strict";
-  const { h, api, store, fmtMoney, fmtNum, fmtPct, pctCls, stars, toast, navigate, debounce } = window.MF;
+  const { h, api, del, store, fmtMoney, fmtNum, fmtPct, pctCls, stars, toast, navigate, debounce } = window.MF;
   const { lineChart, donut, radar, COLORS } = window.MFC;
 
   async function render(rest) {
     if (rest?.[0] === "robo") return robo();
+    if (rest?.[0] === "live") return liveUniverse();
+    if (rest?.[0] === "baskets") return basketsView();
     if (rest?.[0] && rest[0].startsWith("MF")) return detail(rest[0]);
     return screener();
+  }
+
+  const fundTabs = (active) => h("div.tabs", { style: { marginBottom: "16px" } },
+    [["", "Curated Screener"], ["live", "🇮🇳 All-India Live (AMFI)"], ["baskets", "🧺 Goal Baskets"], ["robo", "🤖 Robo-Advisory"]].map(([id, label]) =>
+      h("button.tab", { class: id === active ? "active" : "", onclick: () => navigate(`#/funds${id ? "/" + id : ""}`) }, label)));
+
+  // ---------------------- All-India live universe (AMFI) ---------------------
+  async function liveUniverse() {
+    const buckets = await api("/mflive/buckets");
+    const state = { q: "", bucket: "", assetClass: "", minStars: 0, sort: "r3", dir: "desc" };
+    const info = h("span.chip.blue", "loading…");
+    const tblWrap = h("div.tbl-scroll", { style: { maxHeight: "600px" } });
+
+    const load = debounce(async () => {
+      tblWrap.innerHTML = "";
+      tblWrap.appendChild(h("div.skeleton", { style: { height: "300px" } }));
+      try {
+        const data = await api(`/mflive/screen?q=${encodeURIComponent(state.q)}&bucket=${state.bucket}&assetClass=${state.assetClass}&minStars=${state.minStars}&sort=${state.sort}&dir=${state.dir}&limit=150`);
+        info.textContent = `${data.total.toLocaleString("en-IN")} Direct-Growth schemes · NAV date ${data.navDate}`;
+        tblWrap.innerHTML = "";
+        const sortTh = (key, label) => h("th.sortable", { onclick: () => { state.dir = state.sort === key && state.dir === "desc" ? "asc" : "desc"; state.sort = key; load(); } },
+          `${label} ${state.sort === key ? (state.dir === "desc" ? "▼" : "▲") : ""}`);
+        tblWrap.appendChild(h("table.tbl",
+          h("thead", h("tr", h("th", "Scheme"), h("th", "Category"), h("th", "Rating"), sortTh("nav", "NAV"), sortTh("r1", "1Y"), sortTh("r3", "3Y"), sortTh("r5", "5Y"), sortTh("vol", "Volatility"))),
+          h("tbody", data.funds.map((f) => h("tr.click", { onclick: () => liveSchemeModal(f) },
+            h("td", { style: { whiteSpace: "normal", maxWidth: "380px" } }, h("div.sym", f.name.replace(/ - Direct.*$/i, "")), h("div.sub", `${f.amc} · code ${f.code}`)),
+            h("td", h("span.chip", f.category)),
+            h("td", f.stars ? stars(f.stars) : h("span.dim", "—")),
+            h("td.num", fmtNum(f.nav)),
+            h("td", { class: pctCls(f.r1) }, f.r1 === null ? h("span.dim", "…") : fmtPct(f.r1, 1, false)),
+            h("td", { class: pctCls(f.r3) }, f.r3 === null ? h("span.dim", "…") : fmtPct(f.r3, 1, false)),
+            h("td", { class: pctCls(f.r5) }, f.r5 === null ? h("span.dim", "…") : fmtPct(f.r5, 1, false)),
+            h("td.num", f.vol === null ? "—" : `${f.vol}%`))))));
+      } catch (e) {
+        tblWrap.innerHTML = "";
+        tblWrap.appendChild(h("div.empty", `Live AMFI feed unreachable (${e.message}). The curated screener keeps working offline — retry when online.`));
+        info.textContent = "offline";
+      }
+    }, 250);
+
+    const filters = h("div.card",
+      h("div", { style: { display: "grid", gridTemplateColumns: "2fr 1.4fr 1fr 1fr", gap: "10px", alignItems: "end" } },
+        h("div", h("label.lbl", "Search scheme / AMC"), h("input.inp", { placeholder: "e.g. Parag Parikh, HDFC…", oninput: (e) => { state.q = e.target.value; load(); } })),
+        h("div", h("label.lbl", "Category"), h("select.ctl", { style: { width: "100%" }, onchange: (e) => { state.bucket = e.target.value; load(); } },
+          h("option", { value: "" }, "All categories"), buckets.map((b) => h("option", { value: b.key }, b.label)))),
+        h("div", h("label.lbl", "Asset class"), h("select.ctl", { style: { width: "100%" }, onchange: (e) => { state.assetClass = e.target.value; load(); } },
+          ["", "equity", "hybrid", "debt", "gold"].map((a) => h("option", { value: a }, a || "All")))),
+        h("div", h("label.lbl", "Min rating"), h("select.ctl", { style: { width: "100%" }, onchange: (e) => { state.minStars = +e.target.value; load(); } },
+          ["0", "3", "4", "5"].map((r) => h("option", { value: r }, r === "0" ? "Any" : `${r}★+`))))));
+
+    load();
+    return h("div",
+      h("div.page-head",
+        h("div", h("div.page-title", "All-India Mutual Fund Universe"),
+          h("div.page-sub", "Every Direct-Growth scheme from official AMFI NAVs · returns & volatility enriched live from mfapi.in · click any scheme for its NAV history")),
+        info),
+      fundTabs("live"),
+      h("div.grid", { style: { gap: "16px" } }, filters, h("div.card.flush", tblWrap),
+        h("div.disclaimer", { style: { border: "none" } }, "Data: AMFI NAVAll (official, free) + mfapi.in histories, cached server-side. Returns are trailing CAGR; “…” means enrichment is still fetching — reopen in a few seconds. Direct plans only. Not investment advice.")));
+  }
+
+  async function liveSchemeModal(f) {
+    const chart = lineChart({ height: 300 });
+    const statsRow = h("div.grid.cols-4", { style: { gap: "8px", marginBottom: "10px" } }, h("div.skeleton", { style: { height: "58px", gridColumn: "1 / -1" } }));
+    window.MF.modal(f.name.replace(/ - Direct.*$/i, ""), h("div",
+      h("div.dim", { style: { fontSize: "12px", marginBottom: "10px" } }, `${f.amc} · ${f.category} · AMFI code ${f.code} · Direct-Growth`),
+      statsRow, chart.el,
+      h("div.disclaimer", "Full NAV history from mfapi.in. Past performance does not guarantee future returns.")), { width: "860px" });
+    try {
+      const d = await api(`/mflive/scheme/${f.code}`);
+      statsRow.innerHTML = "";
+      const m = d.metrics || {};
+      [["NAV", fmtNum(m.nav ?? f.nav)], ["1Y CAGR", m.r1 === null || m.r1 === undefined ? "—" : `${m.r1}%`], ["3Y CAGR", m.r3 === null || m.r3 === undefined ? "—" : `${m.r3}%`], ["5Y CAGR", m.r5 === null || m.r5 === undefined ? "—" : `${m.r5}%`]]
+        .forEach(([k, v]) => statsRow.appendChild(h("div.stat", h("div.s-label", k), h("div.s-value", { style: { fontSize: "16px" } }, v))));
+      chart.addSeries(d.navs.filter((x, i, arr) => i % Math.max(1, Math.floor(arr.length / 1200)) === 0), { color: COLORS.BLUE, title: "NAV" });
+    } catch (e) { toast(`mfapi fetch failed: ${e.message}`, true); }
+  }
+
+  // --------------------------- goal baskets ----------------------------------
+  async function basketsView() {
+    const [list, goals] = await Promise.all([api("/baskets"), api("/goals")]);
+    const wrap = h("div.grid", { style: { gap: "16px" } });
+
+    // create-from-goal card
+    const goalSel = h("select.ctl", goals.map((g) => h("option", { value: g.id }, `${g.icon || "🎯"} ${g.name} (${g.target_year})`)));
+    const lumpsum = h("input.inp", { type: "number", value: 500000, min: 0 });
+    const monthly = h("input.inp", { type: "number", value: 25000, min: 0 });
+    const previewBox = h("div");
+    const createCard = h("div.card",
+      h("div.card-head", h("div", h("div.card-title", "🧺 Create a basket from a goal"),
+        h("div.card-sub", "risk band + years-to-goal → allocation (glide-path capped) → top-ranked live AMFI funds per sleeve"))),
+      goals.length ? h("div", { style: { display: "grid", gridTemplateColumns: "2fr 1fr 1fr auto", gap: "10px", alignItems: "end" } },
+        h("div", h("label.lbl", "Goal"), goalSel),
+        h("div", h("label.lbl", "Lumpsum now (₹)"), lumpsum),
+        h("div", h("label.lbl", "Monthly SIP (₹)"), monthly),
+        h("button.btn.primary", {
+          onclick: async () => {
+            previewBox.innerHTML = "";
+            previewBox.appendChild(h("div.skeleton", { style: { height: "180px", marginTop: "12px" } }));
+            const p = await api("/baskets/preview", { body: { goalId: goalSel.value } });
+            previewBox.innerHTML = "";
+            previewBox.appendChild(h("div", { style: { marginTop: "14px" } },
+              h("div.pill-row", { style: { marginBottom: "10px" } },
+                h("span.chip.violet", `Band: ${p.band}`), h("span.chip.blue", `${p.years} yrs → ${p.alloc.equity}/${p.alloc.debt}/${p.alloc.gold} E/D/G`),
+                h("span.chip", `expected ~${fmtNum(p.expectedReturnPct, 1)}%/yr`)),
+              h("table.tbl",
+                h("thead", h("tr", h("th", "Sleeve"), h("th", "Fund"), h("th", "Source"), h("th", "3Y"), h("th", "Weight"))),
+                h("tbody", p.proposal.map((x) => h("tr",
+                  h("td", x.sleeve), h("td", { style: { whiteSpace: "normal" } }, h("div.sym", x.name.replace(/ - Direct.*$/i, ""))),
+                  h("td", h("span.chip" + (x.source === "amfi-live" ? ".up" : ""), x.source === "amfi-live" ? "AMFI live" : "demo")),
+                  h("td", { class: pctCls(x.r3) }, x.r3 === null ? "—" : fmtPct(x.r3, 1, false)),
+                  h("td.num", `${x.targetWeight}%`))))),
+              h("button.btn.green", { style: { marginTop: "12px" }, onclick: async () => {
+                await api("/baskets/from-goal", { body: { goalId: goalSel.value, lumpsum: +lumpsum.value, monthly: +monthly.value } });
+                toast("Basket created 🧺"); window.MF.dispatch();
+              } }, `💾 Create basket with ${fmtMoney(+lumpsum.value)}`)));
+          },
+        }, "Preview")) : h("div.empty", "Add a goal under Planning → Goals first."),
+      previewBox);
+    wrap.appendChild(createCard);
+
+    for (const b of list) wrap.appendChild(basketCard(b));
+    if (!list.length) wrap.appendChild(h("div.card", h("div.empty", "No baskets yet — create one from a goal above. Baskets track drift against target weights and generate tax-aware rebalancing orders.")));
+
+    return h("div",
+      h("div.page-head",
+        h("div", h("div.page-title", "Goal Baskets & Rebalancing"),
+          h("div.page-sub", "replicates the myfinancial-advisor engine: SEBI-style band → glide-path allocation → live fund selection → drift-triggered, SIP-first rebalancing"))),
+      fundTabs("baskets"), wrap);
+  }
+
+  function basketCard(b) {
+    const rebBox = h("div");
+    return h("div.card",
+      h("div.card-head",
+        h("div", h("div.card-title", `🧺 ${b.name}`),
+          h("div.card-sub", `${b.band} · ${b.years} yrs · target ${b.alloc.equity}/${b.alloc.debt}/${b.alloc.gold} E/D/G · expected ~${fmtNum(b.expectedReturnPct, 1)}%/yr`)),
+        h("div", { style: { textAlign: "right" } },
+          h("div", { style: { fontWeight: 800, fontSize: "18px" } }, fmtMoney(b.value)),
+          h("div", { class: pctCls(b.pnl), style: { fontSize: "12px" } }, `${b.pnl >= 0 ? "+" : ""}${fmtMoney(b.pnl)} (${fmtPct(b.pnlPct, 1)})`))),
+      h("table.tbl",
+        h("thead", h("tr", h("th", "Fund"), h("th", "Sleeve"), h("th", "Units"), h("th", "NAV"), h("th", "Value"), h("th", "Now vs Target"), h("th", "Drift"))),
+        h("tbody", b.holdings.map((x2) => {
+          const drift = Math.round((x2.currentWeight - x2.targetWeight) * 10) / 10;
+          return h("tr",
+            h("td", { style: { whiteSpace: "normal", maxWidth: "300px" } }, h("div.sym", x2.name.replace(/ - Direct.*$/i, "")), h("div.sub", x2.source === "amfi-live" ? "live NAV · AMFI" : "demo NAV")),
+            h("td", h("span.chip", x2.sleeve.split("—")[0].trim())),
+            h("td.num", fmtNum(x2.units)), h("td.num", fmtNum(x2.nav)), h("td.num", fmtMoney(x2.value)),
+            h("td.num", `${x2.currentWeight}% / ${x2.targetWeight}%`),
+            h("td", h("b", { class: Math.abs(drift) > 5 ? "down-t" : Math.abs(drift) > 2 ? "" : "up-t" }, `${drift > 0 ? "+" : ""}${drift}%`)));
+        }))),
+      h("div", { style: { display: "flex", gap: "8px", marginTop: "12px", flexWrap: "wrap" } },
+        h("button.btn.primary.sm", {
+          onclick: async () => {
+            rebBox.innerHTML = "";
+            rebBox.appendChild(h("div.skeleton", { style: { height: "140px", marginTop: "10px" } }));
+            const plan = await api(`/baskets/${b.id}/rebalance`);
+            rebBox.innerHTML = "";
+            rebBox.appendChild(h("div", { style: { marginTop: "12px" } },
+              h("div.card-sub", { style: { marginBottom: "8px" } }, plan.needsRebalance ? "REBALANCING ORDERS (threshold ±5%)" : "WITHIN TOLERANCE — NO ORDERS NEEDED"),
+              plan.needsRebalance ? h("table.tbl",
+                h("thead", h("tr", h("th", "Action"), h("th", "Fund"), h("th", "Drift"), h("th", "Amount"), h("th", "≈ Units"))),
+                h("tbody", plan.orders.filter((o) => o.action !== "HOLD").map((o) => h("tr",
+                  h("td", h("span.vbadge", { class: o.action === "BUY" ? "ACHIEVABLE" : o.action === "SELL" ? "UNREALISTIC" : "AT_RISK" }, o.action.replace("_", " "))),
+                  h("td", { style: { whiteSpace: "normal", maxWidth: "280px" } }, o.name.replace(/ - Direct.*$/i, "")),
+                  h("td", { class: o.driftPct > 0 ? "down-t" : "up-t" }, `${o.driftPct > 0 ? "+" : ""}${o.driftPct}%`),
+                  h("td.num", fmtMoney(o.amount)), h("td.num", fmtNum(o.units)))))) : null,
+              plan.notes.map((n) => h("div.dim", { style: { fontSize: "12px", marginTop: "6px" } }, "💡 ", n))));
+          },
+        }, "⚖️ Rebalancing plan"),
+        h("button.btn.sm", {
+          onclick: async () => {
+            const amt = prompt("Invest additional amount (₹) at target weights:", "100000");
+            if (!amt || !(+amt > 0)) return;
+            await api(`/baskets/${b.id}/invest`, { body: { amount: +amt } });
+            toast("Invested at target weights"); window.MF.dispatch();
+          },
+        }, "+ Invest"),
+        h("button.btn.sm.danger", { style: { marginLeft: "auto" }, onclick: async () => { if (confirm("Delete this basket?")) { await del(`/baskets/${b.id}`); toast("Basket deleted"); window.MF.dispatch(); } } }, "Delete")),
+      rebBox);
   }
 
   // ------------------------------- screener -----------------------------------
@@ -64,8 +246,8 @@
       h("div.page-head",
         h("div", h("div.page-title", "Direct Mutual Funds"),
           h("div.page-sub", "Zero-commission direct plans · multi-factor ranks: Sharpe, Sortino, Jensen's alpha, rolling consistency, cost")),
-        h("div", { style: { display: "flex", gap: "8px", alignItems: "center" } }, count,
-          h("button.btn.primary", { onclick: () => navigate("#/funds/robo") }, "🤖 Robo-Advisory"))),
+        h("div", { style: { display: "flex", gap: "8px", alignItems: "center" } }, count)),
+      fundTabs(""),
       h("div.grid", { style: { gap: "16px" } }, filters, h("div.card.flush", tblWrap),
         h("div.disclaimer", { style: { border: "none" } }, "Rankings are model outputs on synthetic demo NAVs — methodology: 22% Sharpe · 18% Sortino · 20% alpha · 15% 3Y return · 10% rolling-min consistency · 10% cost · 5% tracking error, z-scored within category. Mutual fund investments are subject to market risks; read all scheme-related documents carefully.")));
   }
@@ -160,6 +342,10 @@
       paintSip(sipDefault);
     });
 
+    const plainCard = d.plainEnglish ? h("div.card", { style: { borderLeft: "3px solid var(--blue)" } },
+      h("div.card-title", { style: { marginBottom: "8px" } }, "🗣️ In plain words"),
+      h("div.dim", { style: { fontSize: "13.5px", lineHeight: 1.7 } }, d.plainEnglish)) : null;
+
     return h("div",
       h("div.page-head",
         h("div",
@@ -167,6 +353,7 @@
           h("div.page-sub", `${d.amc} · ${d.categoryName} · Direct — Growth · Benchmark ${d.benchName || "—"}`)),
         h("button.btn", { onclick: () => navigate("#/funds") }, "← All funds")),
       h("div.grid", { style: { gap: "16px" } },
+        plainCard,
         h("div.grid.cols-32", navCard, factCard),
         h("div.grid.cols-3", rollCard, sipCard, peersCard),
         h("div.disclaimer", { style: { border: "none" } }, "Direct plan — no distributor commission. NAVs are synthetic demo data; metrics recompute from the series. Not investment advice.")));
@@ -237,8 +424,8 @@
 
     return h("div",
       h("div.page-head",
-        h("div", h("div.page-title", "Robo-Advisory"), h("div.page-sub", "7-question risk profiling → zero-commission direct fund portfolio")),
-        h("button.btn", { onclick: () => navigate("#/funds") }, "← All funds")),
+        h("div", h("div.page-title", "Robo-Advisory"), h("div.page-sub", "7-question risk profiling → zero-commission direct fund portfolio"))),
+      fundTabs("robo"),
       prog,
       h("div.grid.cols-2", qCards),
       h("div.card", { style: { marginTop: "16px" } },
