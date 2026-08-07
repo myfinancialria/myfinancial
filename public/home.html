@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>myfinancial — The Wealth Operating System for India & NRIs</title>
+<meta name="description" content="Financial planning, direct mutual funds, equity analytics, quantitative screeners, advisory signals and estate planning — engineered for Resident Indians and NRIs." />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='black'/><text x='50' y='72' font-size='62' text-anchor='middle' fill='white' font-family='Georgia'>m</text></svg>" />
+<script>
+if (location.pathname === "/" && location.hash.startsWith("#/")) location.replace("/app" + location.hash);
+if (document.hidden) document.documentElement.classList.add("qa-still"); // background-tab loads render settled
+</script>
+<style>
+/* ================= myfinancial — monochrome landing ===================== */
+:root {
+  --ink: #f4f4f4; --ink-dim: #9a9a9a; --ink-faint: #5c5c5c;
+  --paper: #060606; --paper-2: #0d0d0d; --line: #1f1f1f; --line-2: #2e2e2e;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif;
+  --serif: Georgia, "Times New Roman", serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --ease: cubic-bezier(.22,.8,.24,1);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font); line-height: 1.5; overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+::selection { background: #fff; color: #000; }
+a { color: inherit; text-decoration: none; }
+
+/* film grain */
+body::after { content: ""; position: fixed; inset: -50%; z-index: 90; pointer-events: none; opacity: .05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  animation: grain 9s steps(10) infinite; }
+@keyframes grain { 0%,100%{transform:translate(0,0)} 20%{transform:translate(-3%,2%)} 40%{transform:translate(2%,-3%)} 60%{transform:translate(-2%,-2%)} 80%{transform:translate(3%,3%)} }
+
+/* ------------------------------- nav ----------------------------------- */
+nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between;
+  padding: 18px clamp(20px, 4vw, 56px); background: linear-gradient(180deg, rgba(6,6,6,.92), rgba(6,6,6,.75)); backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line); }
+.wordmark { font-family: var(--serif); font-size: 21px; letter-spacing: -.02em; font-style: italic; }
+.wordmark b { font-style: normal; font-family: var(--font); font-weight: 800; letter-spacing: -.04em; }
+.nav-links { display: flex; gap: clamp(14px, 2.6vw, 34px); font-size: 12.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-dim); }
+.nav-links a { position: relative; padding: 4px 0; transition: color .25s; }
+.nav-links a::after { content: ""; position: absolute; left: 0; bottom: 0; height: 1px; width: 0; background: #fff; transition: width .3s var(--ease); }
+.nav-links a:hover { color: #fff; } .nav-links a:hover::after { width: 100%; }
+.btn { display: inline-flex; align-items: center; gap: 10px; border: 1px solid #fff; background: #fff; color: #000;
+  font-size: 13px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; padding: 12px 22px; cursor: pointer;
+  transition: background .25s var(--ease), color .25s var(--ease), transform .2s; }
+.btn:hover { background: transparent; color: #fff; }
+.btn:active { transform: scale(.97); }
+.btn.ghost { background: transparent; color: #fff; border-color: var(--line-2); }
+.btn.ghost:hover { border-color: #fff; }
+.btn .arr { transition: transform .25s var(--ease); }
+.btn:hover .arr { transform: translateX(5px); }
+
+/* ------------------------------- hero ----------------------------------- */
+.hero { position: relative; min-height: 100vh; display: flex; flex-direction: column; justify-content: center;
+  padding: 140px clamp(20px, 4vw, 56px) 80px; }
+.hero-art { position: absolute; inset: 0; overflow: hidden; z-index: -1; }
+.hero-art svg { position: absolute; right: -4%; bottom: -6%; width: min(1080px, 96vw); opacity: .85; }
+.hero-grid { position: absolute; inset: 0;
+  background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 72px 72px; mask-image: radial-gradient(ellipse 90% 70% at 30% 40%, black 0%, transparent 70%); opacity: .5; }
+.eyebrow { display: inline-flex; align-items: center; gap: 12px; font-family: var(--mono); font-size: 11.5px; letter-spacing: .3em;
+  text-transform: uppercase; color: var(--ink-dim); margin-bottom: 30px; }
+.eyebrow::before { content: ""; width: 44px; height: 1px; background: var(--ink-dim); }
+h1 { font-size: clamp(46px, 8.4vw, 118px); line-height: .98; letter-spacing: -.045em; font-weight: 800; max-width: 12ch; }
+h1 .w { display: inline-block; overflow: hidden; vertical-align: bottom; }
+h1 .w > span { display: inline-block; transform: translateY(110%); animation: rise 1s var(--ease) forwards; }
+h1 em { font-family: var(--serif); font-weight: 400; font-style: italic; letter-spacing: -.02em; }
+@keyframes rise { to { transform: translateY(0); } }
+.hero-sub { margin-top: 34px; max-width: 56ch; color: var(--ink-dim); font-size: clamp(15px, 1.6vw, 18px); line-height: 1.75; }
+.hero-sub b { color: var(--ink); font-weight: 600; }
+.hero-cta { display: flex; gap: 14px; margin-top: 44px; flex-wrap: wrap; }
+.hero-meta { position: absolute; bottom: 34px; left: clamp(20px, 4vw, 56px); right: clamp(20px, 4vw, 56px);
+  display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 11px;
+  letter-spacing: .18em; color: var(--ink-faint); text-transform: uppercase; }
+.scroll-cue { display: inline-block; animation: cue 2.2s ease-in-out infinite; }
+@keyframes cue { 0%,100%{transform:translateY(0);opacity:.5} 50%{transform:translateY(7px);opacity:1} }
+
+/* draw-on-load chart */
+.draw { stroke-dasharray: 2600; stroke-dashoffset: 2600; animation: draw 3.2s 0.4s var(--ease) forwards; }
+.draw2 { stroke-dasharray: 2600; stroke-dashoffset: 2600; animation: draw 3.2s 0.9s var(--ease) forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.candle { opacity: 0; animation: cfade .6s var(--ease) forwards; }
+@keyframes cfade { to { opacity: 1; } }
+.pulse-dot { animation: pulse 2.4s ease-out infinite; transform-origin: center; }
+@keyframes pulse { 0%{opacity:.9} 70%{opacity:.15} 100%{opacity:.9} }
+.orbit { animation: orbit 26s linear infinite; transform-origin: 690px 205px; }
+@keyframes orbit { to { transform: rotate(360deg); } }
+.floaty { animation: floaty 7s ease-in-out infinite; }
+@keyframes floaty { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-14px)} }
+
+/* ----------------------------- marquee ---------------------------------- */
+.marquee { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow: hidden; padding: 17px 0;
+  background: var(--paper-2); white-space: nowrap; }
+.marquee-track { display: inline-flex; gap: 56px; padding-right: 56px; animation: marq 34s linear infinite; will-change: transform; }
+.marquee:hover .marquee-track { animation-play-state: paused; }
+@keyframes marq { to { transform: translateX(-50%); } }
+.mq { font-family: var(--mono); font-size: 12px; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-dim); }
+.mq b { color: #fff; font-weight: 600; }
+.mq::after { content: "✦"; margin-left: 56px; color: var(--ink-faint); }
+
+/* ------------------------------ sections -------------------------------- */
+section { padding: clamp(80px, 11vw, 150px) clamp(20px, 4vw, 56px); position: relative; }
+.shell { max-width: 1240px; margin: 0 auto; }
+.sec-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; margin-bottom: clamp(40px, 6vw, 76px); flex-wrap: wrap; }
+.sec-label { font-family: var(--mono); font-size: 11.5px; letter-spacing: .3em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 18px; display: flex; align-items: center; gap: 12px; }
+.sec-label::before { content: ""; width: 34px; height: 1px; background: var(--ink-faint); }
+h2 { font-size: clamp(32px, 4.6vw, 60px); letter-spacing: -.035em; line-height: 1.04; font-weight: 750; max-width: 20ch; }
+h2 em { font-family: var(--serif); font-weight: 400; font-style: italic; }
+.sec-side { max-width: 40ch; color: var(--ink-dim); font-size: 15px; line-height: 1.75; }
+
+/* reveal-on-scroll */
+.reveal { opacity: 0; transform: translateY(34px); transition: opacity .9s var(--ease), transform .9s var(--ease); transition-delay: var(--d, 0s); }
+.reveal.in { opacity: 1; transform: none; }
+
+/* ------------------------------- stats ---------------------------------- */
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); }
+.stat { padding: clamp(26px, 3.6vw, 48px) clamp(18px, 2.6vw, 40px); border-right: 1px solid var(--line); position: relative; overflow: hidden; }
+.stat:last-child { border-right: none; }
+.stat::before { content: ""; position: absolute; inset: 0; background: #fff; transform: translateY(101%); transition: transform .45s var(--ease); }
+.stat:hover::before { transform: translateY(0); }
+.stat > * { position: relative; transition: color .35s; }
+.stat:hover .num, .stat:hover .lbl, .stat:hover .sub { color: #000; }
+.stat .num { font-size: clamp(38px, 4.8vw, 64px); font-weight: 800; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.stat .num i { font-style: normal; }
+.stat .lbl { margin-top: 8px; font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-dim); }
+.stat .sub { margin-top: 4px; font-size: 12px; color: var(--ink-faint); }
+
+/* ---------------------------- product shot ------------------------------ */
+.shot-wrap { perspective: 1600px; }
+.shot { border: 1px solid var(--line-2); background: var(--paper-2); transform: rotateX(9deg) scale(.985); transform-origin: 50% 0;
+  transition: transform 1.1s var(--ease), box-shadow 1.1s var(--ease); box-shadow: 0 60px 120px -40px rgba(0,0,0,.9); }
+.shot-wrap.in .shot { transform: rotateX(0) scale(1); }
+.shot-bar { display: flex; align-items: center; gap: 8px; padding: 13px 18px; border-bottom: 1px solid var(--line); }
+.dot { width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--line-2); }
+.shot-url { margin-left: 14px; flex: 1; max-width: 380px; border: 1px solid var(--line); padding: 5px 14px; font-family: var(--mono); font-size: 11px; color: var(--ink-faint); letter-spacing: .06em; }
+.shot-body { display: grid; grid-template-columns: 1.25fr .9fr .9fr; gap: 1px; background: var(--line); }
+.shot-cell { background: var(--paper-2); padding: 26px; min-height: 210px; }
+.sc-label { font-family: var(--mono); font-size: 10px; letter-spacing: .26em; color: var(--ink-faint); text-transform: uppercase; }
+.sc-big { font-size: clamp(30px, 3.4vw, 46px); font-weight: 800; letter-spacing: -.04em; margin-top: 10px; }
+.sc-chips { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.sc-chip { font-size: 10.5px; letter-spacing: .1em; padding: 4px 10px; border: 1px solid var(--line-2); color: var(--ink-dim); text-transform: uppercase; }
+.spark { margin-top: 18px; }
+.spark path.line { stroke-dasharray: 700; stroke-dashoffset: 700; }
+.shot-wrap.in .spark path.line { animation: draw 2.4s .5s var(--ease) forwards; }
+.ringrow { display: flex; gap: 20px; margin-top: 16px; align-items: center; flex-wrap: wrap; }
+.gring { position: relative; width: 76px; height: 76px; }
+.gring svg { transform: rotate(-90deg); }
+.gring circle.track { stroke: var(--line-2); }
+.gring circle.arc { stroke: #fff; stroke-linecap: round; stroke-dasharray: 0 999; transition: stroke-dasharray 1.6s .7s var(--ease); }
+.shot-wrap.in .gring circle.arc { stroke-dasharray: var(--arc) 999; }
+.gring .pct { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; }
+.gring .cap { position: absolute; top: 100%; left: 0; right: 0; text-align: center; margin-top: 7px; font-size: 10px; letter-spacing: .12em; color: var(--ink-faint); text-transform: uppercase; white-space: nowrap; }
+.rows { margin-top: 14px; }
+.rw { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 12.5px; }
+.rw:last-child { border-bottom: none; }
+.rw b { font-variant-numeric: tabular-nums; }
+.rw .up::before { content: "▲ "; font-size: 9px; }
+.rw .dn::before { content: "▼ "; font-size: 9px; }
+.rw .up { color: #fff; } .rw .dn { color: var(--ink-faint); }
+.shot-cap { text-align: center; margin-top: 26px; font-family: var(--mono); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-faint); }
+
+/* ------------------------------ modules --------------------------------- */
+.mods { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.mod { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: clamp(26px, 3vw, 42px); position: relative; overflow: hidden; min-height: 300px; display: flex; flex-direction: column; }
+.mod::before { content: ""; position: absolute; inset: 0; background: #fff; transform: scaleY(0); transform-origin: bottom; transition: transform .5s var(--ease); }
+.mod:hover::before { transform: scaleY(1); }
+.mod > * { position: relative; transition: color .4s, border-color .4s, opacity .4s; }
+.mod:hover * { color: #000 !important; border-color: #000 !important; }
+.mod:hover svg * { stroke: #000 !important; }
+.mod-no { font-family: var(--mono); font-size: 11px; letter-spacing: .3em; color: var(--ink-faint); }
+.mod-icon { margin: 26px 0 20px; height: 46px; }
+.mod-icon svg * { stroke: #fff; transition: stroke .4s; }
+.mod h3 { font-size: 21px; letter-spacing: -.02em; font-weight: 700; margin-bottom: 12px; }
+.mod p { color: var(--ink-dim); font-size: 13.5px; line-height: 1.7; flex: 1; }
+.mod .go { margin-top: 22px; font-size: 11.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-dim); display: inline-flex; gap: 8px; align-items: center; }
+
+/* ----------------------------- personas --------------------------------- */
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.half { background: var(--paper); padding: clamp(34px, 4.4vw, 64px); position: relative; overflow: hidden; min-height: 460px; }
+.half .contour { position: absolute; right: -14%; bottom: -20%; width: 130%; opacity: .5; transition: transform 1.2s var(--ease), opacity .8s; }
+.half:hover .contour { transform: scale(1.06) rotate(-2deg); opacity: .85; }
+.half-glyph { position: absolute; right: 26px; top: 14px; font-family: var(--serif); font-size: clamp(120px, 14vw, 210px); line-height: 1; color: transparent;
+  -webkit-text-stroke: 1px var(--line-2); user-select: none; transition: -webkit-text-stroke-color .6s; }
+.half:hover .half-glyph { -webkit-text-stroke-color: #6a6a6a; }
+.half h3 { font-size: clamp(24px, 2.8vw, 36px); letter-spacing: -.03em; margin: 18px 0 14px; }
+.half p { color: var(--ink-dim); font-size: 14.5px; max-width: 44ch; line-height: 1.75; }
+.tagrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px; }
+.tag { border: 1px solid var(--line-2); padding: 6px 12px; font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-dim); transition: all .3s; }
+.half:hover .tag { border-color: #fff; color: #fff; }
+
+/* ----------------------------- assistant -------------------------------- */
+.term { border: 1px solid var(--line-2); background: #000; max-width: 860px; margin: 0 auto; font-family: var(--mono); font-size: 13.5px; }
+.term-bar { display: flex; gap: 7px; padding: 13px 16px; border-bottom: 1px solid var(--line); align-items: center; }
+.term-title { margin-left: 10px; font-size: 10.5px; letter-spacing: .22em; color: var(--ink-faint); text-transform: uppercase; }
+.term-body { padding: 26px 26px 30px; min-height: 250px; line-height: 1.9; }
+.t-q { color: #fff; } .t-q::before { content: "you ▸ "; color: var(--ink-faint); }
+.t-a { color: var(--ink-dim); white-space: pre-wrap; } .t-a::before { content: "myfinancial ▸ "; color: var(--ink-faint); }
+.t-a b { color: #fff; }
+.caret { display: inline-block; width: 8px; height: 15px; background: #fff; vertical-align: -2px; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.t-cites { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+.t-cite { border: 1px dashed var(--line-2); padding: 3px 10px; font-size: 10px; letter-spacing: .1em; color: var(--ink-faint); text-transform: uppercase; }
+
+/* ------------------------------ security -------------------------------- */
+.sec-band { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.sec-cell { background: var(--paper-2); padding: clamp(24px, 3vw, 40px); }
+.sec-cell svg { margin-bottom: 18px; }
+.sec-cell svg * { stroke: #fff; }
+.sec-cell h4 { font-size: 15px; letter-spacing: .02em; margin-bottom: 8px; font-weight: 700; }
+.sec-cell p { color: var(--ink-faint); font-size: 12.5px; line-height: 1.7; }
+
+/* ------------------------------- final ---------------------------------- */
+.final { text-align: center; padding-bottom: clamp(90px, 12vw, 170px); }
+.final h2 { max-width: none; font-size: clamp(54px, 11vw, 150px); font-weight: 800; letter-spacing: -.05em; }
+.final h2 em { position: relative; }
+.final h2 em::after { content: ""; position: absolute; left: 0; right: 0; bottom: .06em; height: .06em; background: #fff; transform: scaleX(0); transform-origin: left; transition: transform 1.1s .4s var(--ease); }
+.final.in h2 em::after { transform: scaleX(1); }
+.final p { color: var(--ink-dim); margin: 26px auto 40px; max-width: 52ch; font-size: 15.5px; line-height: 1.8; }
+
+/* ------------------------------- footer --------------------------------- */
+footer { border-top: 1px solid var(--line); padding: 54px clamp(20px, 4vw, 56px) 40px; }
+.foot-grid { max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 40px; }
+.foot-head { font-size: 11px; letter-spacing: .26em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 16px; }
+.foot-grid a, .foot-grid li { display: block; color: var(--ink-dim); font-size: 13.5px; padding: 4px 0; list-style: none; transition: color .25s; }
+.foot-grid a:hover { color: #fff; }
+.foot-note { max-width: 1240px; margin: 44px auto 0; padding-top: 22px; border-top: 1px dashed var(--line);
+  color: var(--ink-faint); font-size: 11px; line-height: 1.8; display: flex; justify-content: space-between; gap: 30px; flex-wrap: wrap; }
+
+@media (max-width: 1000px) {
+  .stats, .sec-band { grid-template-columns: repeat(2, 1fr); }
+  .stat:nth-child(2n) { border-right: none; } .stat { border-bottom: 1px solid var(--line); }
+  .mods { grid-template-columns: repeat(2, 1fr); }
+  .shot-body { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 680px) {
+  .nav-links { display: none; }
+  .mods, .split, .shot-body, .stats, .sec-band { grid-template-columns: 1fr; }
+  .hero-meta { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .reveal { opacity: 1; transform: none; }
+  h1 .w > span { transform: none; }
+  .draw, .draw2, .spark path.line { stroke-dashoffset: 0 !important; }
+}
+/* hidden/background tabs render settled — motion resumes when visible */
+.qa-still *, .qa-still *::before, .qa-still *::after { animation: none !important; transition: none !important; }
+.qa-still .reveal { opacity: 1 !important; transform: none !important; }
+.qa-still h1 .w > span { transform: none; }
+.qa-still .draw, .qa-still .draw2, .qa-still .spark path.line { stroke-dashoffset: 0 !important; }
+.qa-still .candle { opacity: 1 !important; }
+.qa-still .shot { transform: none !important; }
+.qa-still .gring circle.arc { stroke-dasharray: var(--arc) 999 !important; }
+.qa-still .final h2 em::after { transform: scaleX(1) !important; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="wordmark" href="/"><b>my</b>financial</a>
+  <div class="nav-links">
+    <a href="#platform">Platform</a><a href="#modules">Modules</a><a href="#personas">Personas</a><a href="#security">Security</a><a href="#ai">AI</a>
+  </div>
+  <a class="btn" href="/app">Launch Platform <span class="arr">→</span></a>
+</nav>
+
+<!-- ================================ HERO ================================ -->
+<header class="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-art" id="heroArt">
+    <svg viewBox="0 0 1080 640" fill="none" aria-hidden="true">
+      <!-- orbit ring -->
+      <g class="orbit" opacity=".5">
+        <circle cx="690" cy="205" r="150" stroke="#242424" stroke-dasharray="3 7"/>
+        <circle cx="840" cy="205" r="3.5" fill="#fff"/>
+      </g>
+      <circle cx="690" cy="205" r="96" stroke="#1c1c1c"/>
+      <circle cx="690" cy="205" r="222" stroke="#161616"/>
+      <!-- baseline candles -->
+      <g class="floaty">
+        <g class="candle" style="animation-delay:1.2s"><line x1="470" y1="404" x2="470" y2="332" stroke="#4a4a4a"/><rect x="462" y="348" width="16" height="38" fill="#0d0d0d" stroke="#5b5b5b"/></g>
+        <g class="candle" style="animation-delay:1.35s"><line x1="510" y1="380" x2="510" y2="306" stroke="#4a4a4a"/><rect x="502" y="318" width="16" height="44" fill="#fff"/></g>
+        <g class="candle" style="animation-delay:1.5s"><line x1="550" y1="392" x2="550" y2="318" stroke="#4a4a4a"/><rect x="542" y="330" width="16" height="40" fill="#0d0d0d" stroke="#5b5b5b"/></g>
+        <g class="candle" style="animation-delay:1.65s"><line x1="590" y1="352" x2="590" y2="270" stroke="#4a4a4a"/><rect x="582" y="282" width="16" height="46" fill="#fff"/></g>
+        <g class="candle" style="animation-delay:1.8s"><line x1="630" y1="330" x2="630" y2="252" stroke="#4a4a4a"/><rect x="622" y="262" width="16" height="42" fill="#fff"/></g>
+        <g class="candle" style="animation-delay:1.95s"><line x1="670" y1="342" x2="670" y2="268" stroke="#4a4a4a"/><rect x="662" y="280" width="16" height="40" fill="#0d0d0d" stroke="#5b5b5b"/></g>
+        <g class="candle" style="animation-delay:2.1s"><line x1="710" y1="300" x2="710" y2="222" stroke="#4a4a4a"/><rect x="702" y="232" width="16" height="46" fill="#fff"/></g>
+        <g class="candle" style="animation-delay:2.25s"><line x1="750" y1="268" x2="750" y2="196" stroke="#4a4a4a"/><rect x="742" y="206" width="16" height="42" fill="#fff"/></g>
+      </g>
+      <!-- self-drawing equity curves -->
+      <path class="draw" d="M40 560 C150 545 205 512 280 505 C360 497 400 520 470 486 C560 442 585 460 660 420 C740 377 770 330 850 300 C930 271 985 240 1050 176" stroke="#ffffff" stroke-width="2.2"/>
+      <path class="draw2" d="M40 590 C160 585 240 560 320 556 C420 550 480 566 560 540 C650 510 700 500 780 468 C870 432 950 400 1050 340" stroke="#3d3d3d" stroke-width="1.4" stroke-dasharray="1 6"/>
+      <circle class="pulse-dot" cx="1050" cy="176" r="5" fill="#fff"/>
+      <circle cx="1050" cy="176" r="14" stroke="#5b5b5b" class="pulse-dot" style="animation-delay:.6s"/>
+      <!-- axis ticks -->
+      <g stroke="#242424"><line x1="40" y1="620" x2="1050" y2="620"/><line x1="40" y1="620" x2="40" y2="130"/></g>
+      <g font-family="ui-monospace, Menlo" font-size="10.5" fill="#4c4c4c" letter-spacing="2">
+        <text x="46" y="146">₹ WEALTH</text><text x="960" y="636">2043 →</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="eyebrow">Wealth OS · Resident Indians &amp; NRIs · FY 2025-26 ready</div>
+  <h1 aria-label="Money, planned like an institution.">
+    <span class="w"><span style="animation-delay:.05s">Money,</span></span><br/>
+    <span class="w"><span style="animation-delay:.18s">planned&nbsp;like</span></span><br/>
+    <span class="w"><span style="animation-delay:.31s">an&nbsp;<em>institution.</em></span></span>
+  </h1>
+  <p class="hero-sub">One monochrome cockpit for your entire financial life — <b>goal-based planning</b> with real Monte Carlo mathematics, <b>dual-regime Indian tax</b> computation, zero-commission <b>direct mutual funds</b>, institutional-grade <b>equity screeners</b>, an options desk for HNIs and a Will &amp; vault for what matters after.</p>
+  <div class="hero-cta">
+    <a class="btn" href="/app">Launch Platform <span class="arr">→</span></a>
+    <a class="btn ghost" href="#platform">Explore the product</a>
+  </div>
+  <div class="hero-meta">
+    <span>NSE · BSE · AMFI universes</span>
+    <span class="scroll-cue">▼ scroll</span>
+    <span>Est. 2026 · Mumbai / Dubai</span>
+  </div>
+</header>
+
+<!-- ============================== MARQUEE =============================== -->
+<div class="marquee" aria-hidden="true">
+  <div class="marquee-track" id="mqTrack">
+    <span class="mq"><b>Nifty 50</b> engine</span><span class="mq"><b>2,000-path</b> Monte Carlo</span><span class="mq"><b>FY 2025-26</b> old vs new regime</span><span class="mq"><b>36</b> direct funds ranked</span><span class="mq"><b>RRG</b> sector rotation</span><span class="mq"><b>52-week</b> breakout scans</span><span class="mq"><b>AES-256-GCM</b> vault</span><span class="mq"><b>NRE / NRO / DTAA</b> aware</span><span class="mq"><b>Iron condor</b> desk</span><span class="mq"><b>Dual-RAG</b> assistant</span>
+  </div>
+</div>
+
+<!-- =============================== STATS ================================ -->
+<section id="platform">
+  <div class="shell">
+    <div class="sec-head">
+      <div class="reveal"><div class="sec-label">The platform in numbers</div>
+        <h2>Engineered depth, <em>measured</em> in output.</h2></div>
+      <p class="sec-side reveal" style="--d:.15s">Every figure below is computed by the running engines — nothing is a mock-up. The same code paths power the live dashboards, screeners and the AI assistant.</p>
+    </div>
+    <div class="stats reveal">
+      <div class="stat"><div class="num"><i data-count="6">0</i></div><div class="lbl">Product modules</div><div class="sub">planning → estate</div></div>
+      <div class="stat"><div class="num"><i data-count="60">0</i>+</div><div class="lbl">NSE instruments</div><div class="sub">14 sectors, 11 indices</div></div>
+      <div class="stat"><div class="num"><i data-count="2000">0</i></div><div class="lbl">Monte Carlo paths</div><div class="sub">per goal, correlated 3-asset</div></div>
+      <div class="stat"><div class="num"><i data-count="256">0</i>-bit</div><div class="lbl">Vault encryption</div><div class="sub">AES-GCM, per-user keys</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ PRODUCT SHOT ============================= -->
+<section style="padding-top: 0">
+  <div class="shell">
+    <div class="shot-wrap reveal" id="shotWrap">
+      <div class="shot">
+        <div class="shot-bar">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="shot-url">app.myfinancial.in / dashboard</span>
+        </div>
+        <div class="shot-body">
+          <div class="shot-cell">
+            <div class="sc-label">Real-time net worth</div>
+            <div class="sc-big">₹ 9.47 Cr</div>
+            <div class="sc-chips"><span class="sc-chip">DTI 20% · Healthy</span><span class="sc-chip">Savings 41%</span><span class="sc-chip">Runway 25 mo</span></div>
+            <svg class="spark" viewBox="0 0 320 84" fill="none" width="100%">
+              <path class="line" d="M4 70 C40 66 60 58 90 56 C130 53 150 44 190 38 C230 32 260 24 316 10" stroke="#fff" stroke-width="2"/>
+              <path d="M4 70 C40 66 60 58 90 56 C130 53 150 44 190 38 C230 32 260 24 316 10 V 84 H 4 Z" fill="url(#gfade)"/>
+              <defs><linearGradient id="gfade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".14"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient></defs>
+            </svg>
+          </div>
+          <div class="shot-cell">
+            <div class="sc-label">Goal feasibility · Monte Carlo</div>
+            <div class="ringrow">
+              <div class="gring" style="--arc: 103"><svg width="76" height="76" viewBox="0 0 76 76"><circle class="track" cx="38" cy="38" r="33" fill="none" stroke-width="5"/><circle class="arc" cx="38" cy="38" r="33" fill="none" stroke-width="5"/></svg><div class="pct">48%</div><div class="cap">Retire at 55</div></div>
+              <div class="gring" style="--arc: 160"><svg width="76" height="76" viewBox="0 0 76 76"><circle class="track" cx="38" cy="38" r="33" fill="none" stroke-width="5"/><circle class="arc" cx="38" cy="38" r="33" fill="none" stroke-width="5"/></svg><div class="pct">77%</div><div class="cap">Education</div></div>
+              <div class="gring" style="--arc: 162"><svg width="76" height="76" viewBox="0 0 76 76"><circle class="track" cx="38" cy="38" r="33" fill="none" stroke-width="5"/><circle class="arc" cx="38" cy="38" r="33" fill="none" stroke-width="5"/></svg><div class="pct">78%</div><div class="cap">Sabbatical</div></div>
+            </div>
+            <div style="margin-top: 40px" class="sc-chips"><span class="sc-chip">Required SIP ₹3.26 L</span><span class="sc-chip">Glide path on</span></div>
+          </div>
+          <div class="shot-cell">
+            <div class="sc-label">Tax · FY 2025-26</div>
+            <div class="rows">
+              <div class="rw"><span>NEW regime</span><b>₹27.0 L</b></div>
+              <div class="rw"><span>OLD regime</span><b style="color: var(--ink-faint)">₹28.3 L</b></div>
+              <div class="rw"><span>Verdict</span><b>NEW saves ₹1.23 L</b></div>
+              <div class="rw"><span>LTCG harvest room</span><b>₹1.25 L @ 0%</b></div>
+              <div class="rw"><span>India VIX</span><b class="up">11.7 · normal</b></div>
+              <div class="rw"><span>Swing setups (RR ≥ 2)</span><b class="up">12 live</b></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="shot-cap">Actual engine output · synthetic exchange feed · deterministic &amp; reproducible</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== MODULES =============================== -->
+<section id="modules" style="padding-top: 40px">
+  <div class="shell">
+    <div class="sec-head">
+      <div class="reveal"><div class="sec-label">Six modules · one ledger</div>
+        <h2>Everything a family office runs, <em>in one place.</em></h2></div>
+    </div>
+    <div class="mods">
+      <a class="mod reveal" href="/app#/planning" style="--d:.0s">
+        <span class="mod-no">01</span>
+        <div class="mod-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><path d="M6 38 V 20 M16 38 V 10 M26 38 V 26 M36 38 V 16" stroke-width="2" stroke-linecap="square"/><path d="M4 40 H 40" stroke-width="2"/></svg></div>
+        <h3>Planning, Tax &amp; Goals</h3>
+        <p>Cash-flow ledger, live balance sheet, DTI and insurance audits. Old-vs-new regime computed head-wise with quantified savings moves. Goals stress-tested on 2,000 market paths.</p>
+        <span class="go">Open module →</span>
+      </a>
+      <a class="mod reveal" href="/app#/funds" style="--d:.08s">
+        <span class="mod-no">02</span>
+        <div class="mod-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><circle cx="22" cy="22" r="16" stroke-width="2"/><path d="M22 22 V 6 A 16 16 0 0 1 36 14 Z" stroke-width="2" stroke-linejoin="round"/></svg></div>
+        <h3>Direct Mutual Funds</h3>
+        <p>Zero-commission universe ranked on Sharpe, Sortino, Jensen's alpha, rolling consistency and cost. SIP backtests with true XIRR, and a robo-advisor that maps risk to portfolios.</p>
+        <span class="go">Open module →</span>
+      </a>
+      <a class="mod reveal" href="/app#/equities" style="--d:.16s">
+        <span class="mod-no">03</span>
+        <div class="mod-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><path d="M6 34 L 16 22 L 24 28 L 38 10" stroke-width="2" stroke-linecap="square"/><path d="M29 10 H 38 V 19" stroke-width="2" stroke-linecap="square"/></svg></div>
+        <h3>Equity Analytics</h3>
+        <p>Eight-year fundamentals, peer benchmarking against sector medians, automated SWOT and an AI executive summary where every sentence traces to a computed number.</p>
+        <span class="go">Open module →</span>
+      </a>
+      <a class="mod reveal" href="/app#/equities/screeners/rrg" style="--d:.0s">
+        <span class="mod-no">04</span>
+        <div class="mod-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><path d="M22 6 A 16 16 0 1 1 6 22" stroke-width="2" stroke-linecap="square"/><path d="M6 14 V 22 H 14" stroke-width="2" stroke-linecap="square"/><circle cx="22" cy="22" r="3.5" stroke-width="2"/></svg></div>
+        <h3>Quant Screeners</h3>
+        <p>Relative Rotation Graphs with sector drill-down, five chart-pattern detectors with measured-move targets, 52-week breakout scans with volume gates, Darvas boxes.</p>
+        <span class="go">Open module →</span>
+      </a>
+      <a class="mod reveal" href="/app#/advisory" style="--d:.08s">
+        <span class="mod-no">05</span>
+        <div class="mod-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><path d="M8 36 C 8 22 16 20 22 20 C 28 20 36 22 36 36" stroke-width="2"/><path d="M14 20 L 22 6 L 30 20" stroke-width="2" stroke-linejoin="bevel"/><line x1="6" y1="38" x2="38" y2="38" stroke-width="2"/></svg></div>
+        <h3>Advisory &amp; Signals</h3>
+        <p>Long-term QARP theses, swing setups only above 1:2 risk-reward, disciplined intraday picks — and an HNI desk pricing condors, strangles and covered calls off live Greeks.</p>
+        <span class="go">Open module →</span>
+      </a>
+      <a class="mod reveal" href="/app#/estate" style="--d:.16s">
+        <span class="mod-no">06</span>
+        <div class="mod-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><rect x="8" y="18" width="28" height="20" stroke-width="2"/><path d="M14 18 V 12 A 8 8 0 0 1 30 12 V 18" stroke-width="2"/><circle cx="22" cy="28" r="3" stroke-width="2"/></svg></div>
+        <h3>Will &amp; Vault</h3>
+        <p>A guided Indian Will wizard with live legal-draft preview, succession readiness checklist, and an AES-256-GCM encrypted vault for deeds, policies and returns.</p>
+        <span class="go">Open module →</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== PERSONAS ============================== -->
+<section id="personas">
+  <div class="shell">
+    <div class="sec-head">
+      <div class="reveal"><div class="sec-label">Two residencies · one platform</div>
+        <h2>Built for Bandra <em>and</em> Business Bay.</h2></div>
+      <p class="sec-side reveal" style="--d:.15s">Residency changes everything — slabs, rebates, account types, repatriation, treaties. The platform is residency-aware end-to-end, not a toggle bolted on.</p>
+    </div>
+    <div class="split reveal">
+      <div class="half">
+        <svg class="contour" viewBox="0 0 600 400" fill="none" aria-hidden="true">
+          <g stroke="#232323" stroke-width="1">
+            <path d="M0 320 C 120 300 180 340 300 320 C 420 300 480 340 600 320"/>
+            <path d="M0 280 C 120 255 200 300 320 275 C 440 250 500 290 600 270"/>
+            <path d="M0 240 C 130 210 220 255 340 228 C 460 200 520 240 600 220"/>
+            <path d="M0 200 C 140 165 240 210 360 180 C 470 152 540 190 600 170"/>
+            <path d="M0 160 C 150 120 260 165 380 132 C 480 105 550 140 600 120"/>
+            <path d="M0 120 C 160 75 280 120 400 84 C 490 58 560 90 600 70"/>
+          </g>
+        </svg>
+        <div class="half-glyph">₹</div>
+        <div class="sec-label" style="margin: 0">Resident · Retail &amp; HNI</div>
+        <h3>The Mumbai founder-VP with ESOPs and a home loan.</h3>
+        <p>Old-vs-new regime with 24(b) and 80C interplay, F&amp;O treated correctly as business income, LTCG harvesting up to ₹1.25 lakh tax-free every year, and an options desk when the book gets large enough to hedge.</p>
+        <div class="tagrow"><span class="tag">FY 2025-26 slabs</span><span class="tag">87A + marginal relief</span><span class="tag">80C · 80D · NPS</span><span class="tag">F&amp;O audit rules</span><span class="tag">HNI options desk</span></div>
+      </div>
+      <div class="half">
+        <svg class="contour" viewBox="0 0 600 400" fill="none" aria-hidden="true">
+          <g stroke="#232323" stroke-width="1">
+            <circle cx="470" cy="210" r="40"/><circle cx="470" cy="210" r="80"/><circle cx="470" cy="210" r="120"/>
+            <circle cx="470" cy="210" r="160"/><circle cx="470" cy="210" r="200"/><circle cx="470" cy="210" r="240"/>
+            <path d="M0 380 L 600 40" stroke-dasharray="4 6"/>
+          </g>
+        </svg>
+        <div class="half-glyph">$</div>
+        <div class="sec-label" style="margin: 0">Non-Resident Indian</div>
+        <h3>The Dubai consultant investing back home, correctly.</h3>
+        <p>NRE interest kept exempt, NRO TDS anticipated, USD-1M repatriation tracked with 15CA/CB, DTAA treaty rates applied with TRC + Form 10F, and an RNOR plan ready for the eventual move back. Balances viewable in AED, USD, SGD, GBP or EUR.</p>
+        <div class="tagrow"><span class="tag">NRE / NRO split</span><span class="tag">FEMA rails</span><span class="tag">DTAA · TRC · 10F</span><span class="tag">RNOR planning</span><span class="tag">5-currency view</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== ASSISTANT ============================= -->
+<section id="ai" style="background: var(--paper-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line)">
+  <div class="shell">
+    <div class="sec-head">
+      <div class="reveal"><div class="sec-label">Module 06 · Agentic AI</div>
+        <h2>An assistant that <em>computes</em>, not guesses.</h2></div>
+      <p class="sec-side reveal" style="--d:.15s">Dual retrieval: a SEBI/tax/FEMA knowledge base for the rules, your own ledger for the numbers. Every answer runs the real engines and cites its sources.</p>
+    </div>
+    <div class="term reveal" id="terminal">
+      <div class="term-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="term-title">myfinancial · assistant — grounded session</span></div>
+      <div class="term-body">
+        <div class="t-q" id="tQ"></div>
+        <div class="t-a" id="tA" style="margin-top: 14px"></div>
+        <div class="t-cites" id="tC" style="opacity: 0; transition: opacity .8s">
+          <span class="t-cite">Goal-based planning &amp; Monte Carlo</span>
+          <span class="t-cite">Capital gains post 23-Jul-2024</span>
+          <span class="t-cite">Client ledger · computed live</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== SECURITY ============================== -->
+<section id="security">
+  <div class="shell">
+    <div class="sec-head">
+      <div class="reveal"><div class="sec-label">Trust architecture</div>
+        <h2>Private by construction.</h2></div>
+    </div>
+    <div class="sec-band reveal">
+      <div class="sec-cell">
+        <svg width="34" height="34" viewBox="0 0 34 34" fill="none"><rect x="5" y="14" width="24" height="16" stroke-width="1.8"/><path d="M10 14 V 10 a 7 7 0 0 1 14 0 v 4" stroke-width="1.8"/></svg>
+        <h4>AES-256-GCM vault</h4><p>Authenticated encryption with per-user scrypt-derived keys. Tampered ciphertext refuses to decrypt. KMS envelope path documented for production.</p>
+      </div>
+      <div class="sec-cell">
+        <svg width="34" height="34" viewBox="0 0 34 34" fill="none"><path d="M17 4 L 29 9 V 17 C 29 25 24 29 17 31 C 10 29 5 25 5 17 V 9 Z" stroke-width="1.8" stroke-linejoin="bevel"/><path d="M12 17 l 4 4 l 7 -8" stroke-width="1.8"/></svg>
+        <h4>DPDP-aligned</h4><p>Consent-scoped processing, right to erasure, breach-notification duty and no third-party data sales — India's DPDP Act, 2023 as the baseline.</p>
+      </div>
+      <div class="sec-cell">
+        <svg width="34" height="34" viewBox="0 0 34 34" fill="none"><circle cx="17" cy="17" r="13" stroke-width="1.8"/><path d="M4 17 H 30 M 17 4 C 21 9 21 25 17 30 C 13 25 13 9 17 4" stroke-width="1.8"/></svg>
+        <h4>TLS 1.3 transport</h4><p>Modern ciphers at the edge, strict security headers, HMAC-integrity sessions, and no-store caching on every API response.</p>
+      </div>
+      <div class="sec-cell">
+        <svg width="34" height="34" viewBox="0 0 34 34" fill="none"><path d="M6 28 V 6 H 28" stroke-width="1.8"/><path d="M11 22 L 17 15 L 21 18 L 28 9" stroke-width="1.8"/></svg>
+        <h4>SEBI-clear boundaries</h4><p>Model outputs are information, not advice — the distinction is printed on every signal, ranking and AI answer, per the IA Regulations, 2013.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================ FINAL ================================ -->
+<section class="final reveal" id="finalSec">
+  <h2>Plan the <em>decades.</em></h2>
+  <p>Two demo personas ship with the platform — a Mumbai HNI and a Dubai NRI — so every module is explorable in one click, no signup, no data entry.</p>
+  <a class="btn" style="font-size: 15px; padding: 16px 34px" href="/app">Launch the Platform <span class="arr">→</span></a>
+</section>
+
+<!-- ================================ FOOTER =============================== -->
+<footer>
+  <div class="foot-grid">
+    <div>
+      <a class="wordmark" href="/"><b>my</b>financial</a>
+      <p style="color: var(--ink-faint); font-size: 12.5px; margin-top: 14px; max-width: 34ch; line-height: 1.8">The wealth operating system for Resident Indians &amp; NRIs. An engineering demonstration built end-to-end — engines, data, UI.</p>
+    </div>
+    <div><div class="foot-head">Product</div>
+      <a href="/app#/dashboard">Dashboard</a><a href="/app#/planning">Planning &amp; Tax</a><a href="/app#/funds">Mutual Funds</a><a href="/app#/equities">Equities</a><a href="/app#/advisory">Advisory</a><a href="/app#/estate">Will &amp; Vault</a>
+    </div>
+    <div><div class="foot-head">Screeners</div>
+      <a href="/app#/equities/screeners/rrg">RRG Rotation</a><a href="/app#/equities/screeners/patterns">Chart Patterns</a><a href="/app#/equities/screeners/breakouts">52-Week Breakouts</a><a href="/app#/equities/screeners/darvas">Darvas Boxes</a>
+    </div>
+    <div><div class="foot-head">Trust</div>
+      <a href="#security">Security</a><a href="#ai">AI Grounding</a><a href="/app#/planning/fema">NRI &amp; FEMA</a>
+    </div>
+  </div>
+  <div class="foot-note">
+    <span>© 2026 myfinancial · Educational demo. Market data is synthetically generated. All analytics, signals and AI outputs are informational only — not investment advice under SEBI (Investment Advisers) Regulations, 2013. Investments are subject to market risks.</span>
+    <span style="white-space: nowrap">Mumbai · Dubai · Singapore</span>
+  </div>
+</footer>
+
+<script>
+(() => {
+  "use strict";
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // direct-position load (deep links & visual QA): /?jump=<px> · /?fit=<zoom>
+  const qs = new URLSearchParams(location.search);
+  const jump = qs.get("jump");
+  if (jump) { document.documentElement.style.scrollBehavior = "auto"; requestAnimationFrame(() => scrollTo(0, +jump)); scrollTo(0, +jump); }
+  const fit = qs.get("fit");
+  if (fit) document.body.style.zoom = +fit;
+
+  // duplicate marquee for seamless loop
+  const track = document.getElementById("mqTrack");
+  track.innerHTML += track.innerHTML;
+
+  // reveal on scroll
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+  }, { threshold: 0.16 });
+  document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
+  // resilience: background tabs throttle IO/rAF — never leave content invisible
+  const revealAll = () => {
+    document.querySelectorAll(".reveal:not(.in)").forEach((el) => el.classList.add("in"));
+    document.querySelectorAll("[data-count]").forEach((el) => { el.textContent = (+el.dataset.count).toLocaleString("en-IN"); });
+    document.getElementById("finalSec")?.classList.add("in");
+  };
+  const settleHidden = () => {
+    if (!document.hidden) return;
+    revealAll();
+    document.documentElement.classList.add("qa-still");
+    if (!started) {
+      started = true;
+      tQ.innerHTML = render(Q, false);
+      tA.innerHTML = render(A, true);
+      tC.style.opacity = 1;
+    }
+  };
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) settleHidden();
+    else document.documentElement.classList.remove("qa-still");
+  });
+
+  // animated counters
+  const fmtIN = (n) => n.toLocaleString("en-IN");
+  const cio = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      cio.unobserve(e.target);
+      const el = e.target, target = +el.dataset.count, t0 = performance.now(), dur = 1600;
+      if (reduced || document.hidden) { el.textContent = fmtIN(target); continue; }
+      const tick = (t) => {
+        if (document.hidden || document.documentElement.classList.contains("qa-still")) { el.textContent = fmtIN(target); return; }
+        const p = Math.min(1, (t - t0) / dur), eased = 1 - Math.pow(1 - p, 4);
+        el.textContent = fmtIN(Math.round(target * eased));
+        if (p < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }
+  }, { threshold: 0.6 });
+  document.querySelectorAll("[data-count]").forEach((el) => cio.observe(el));
+
+  // hero parallax
+  const art = document.getElementById("heroArt");
+  if (art && !reduced) {
+    addEventListener("mousemove", (e) => {
+      const dx = (e.clientX / innerWidth - 0.5), dy = (e.clientY / innerHeight - 0.5);
+      art.style.transform = `translate(${dx * -16}px, ${dy * -10}px)`;
+    }, { passive: true });
+  }
+
+  // terminal typewriter
+  const Q = "Can I achieve ₹5 crore in 12 years with my current SIPs?";
+  const A = "Running 2,000 Monte Carlo paths on your 65/25/10 allocation…\n\nGoal Feasibility Index: 100% — ACHIEVABLE.\nInflation-adjusted target ₹5.00 Cr · median outcome ₹11.08 Cr\nPessimistic (P10) ₹8.26 Cr · Optimistic (P90) ₹15.34 Cr\n\nYou are comfortably placed — consider de-risking the final 3 years toward debt to protect the outcome.";
+  const tQ = document.getElementById("tQ"), tA = document.getElementById("tA"), tC = document.getElementById("tC");
+  let started = false;
+  const type = (el, text, speed, bold) => new Promise((res) => {
+    if (reduced) { el.innerHTML = render(text, bold); return res(); }
+    let i = 0;
+    const caret = document.createElement("span"); caret.className = "caret";
+    const step = () => {
+      i += 1 + (Math.random() < 0.25 ? 1 : 0);
+      el.innerHTML = render(text.slice(0, i), bold);
+      el.appendChild(caret);
+      if (i < text.length) setTimeout(step, speed + Math.random() * 26);
+      else { caret.remove(); res(); }
+    };
+    step();
+  });
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const render = (s, bold) => {
+    let out = esc(s);
+    if (bold) for (const b of ["100% — ACHIEVABLE", "₹11.08 Cr", "Goal Feasibility Index"]) out = out.replaceAll(b, `<b>${b}</b>`);
+    return out.replace(/\n/g, "<br/>");
+  };
+  const tio = new IntersectionObserver(async (entries) => {
+    if (!entries.some((e) => e.isIntersecting) || started) return;
+    started = true;
+    tio.disconnect();
+    await type(tQ, Q, 34, false);
+    await new Promise((r) => setTimeout(r, 420));
+    await type(tA, A, 11, true);
+    tC.style.opacity = 1;
+  }, { threshold: 0.45 });
+  tio.observe(document.getElementById("terminal"));
+
+  // final underline
+  const fio = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting && e.target.classList.add("in")), { threshold: 0.5 });
+  fio.observe(document.getElementById("finalSec"));
+
+  settleHidden(); // synchronous: background-tab loads paint fully settled on frame one
+})();
+</script>
+</body>
+</html>

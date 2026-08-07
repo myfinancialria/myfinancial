@@ -1,0 +1,14 @@
+# dependencies
+node_modules/
+
+# runtime data (SQLite DB re-seeds on first boot)
+var/
+
+# logs & OS noise
+*.log
+.DS_Store
+npm-debug.log*
+
+# local env
+.env
+.env.local
