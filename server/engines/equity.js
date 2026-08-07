@@ -5,7 +5,9 @@
 // sentence traces to a number the user can see on the page.
 // ---------------------------------------------------------------------------
 import { STOCKS, STOCK_MAP, SECTORS } from "../data/universe.js";
+import { SUBSECTOR_OF, INDUSTRY, POLICY, PRODUCTS, SECTOR_PRODUCT_TEMPLATE } from "../data/sectorIntel.js";
 import { fundamentals, quote, daily } from "./market.js";
+import { sectorContext } from "./screeners.js";
 import { mean, round2, round1, rsiSeries } from "../lib/util.js";
 
 const fmtCr = (cr) => (cr >= 100000 ? `₹${(cr / 100000).toFixed(2)} lakh crore` : `₹${Math.round(cr).toLocaleString("en-IN")} crore`);
@@ -141,17 +143,68 @@ export function executiveSummary(symbol) {
   return { paragraphs: [para1, para2, para3], generatedAt: new Date().toISOString(), disclaimer: "AI-generated from platform data for information only — not SEBI-registered investment advice." };
 }
 
+/** Industry snapshot: curated narrative + live sector-index stats. */
+export function industryAnalysis(sector) {
+  const info = INDUSTRY[sector];
+  if (!info) return null;
+  const ctx = sectorContext(sector);
+  const members = STOCKS.filter((s) => s.sector === sector);
+  let above50 = 0;
+  for (const m of members) {
+    const bars = daily(m.symbol, 60);
+    const closes = bars.map((b) => b.close);
+    const ma = closes.slice(-50).reduce((a, b) => a + b, 0) / Math.min(50, closes.length);
+    if (closes[closes.length - 1] > ma) above50++;
+  }
+  return {
+    sector, sectorName: SECTORS[sector]?.name, ...info,
+    live: ctx ? { ...ctx, breadthPct: Math.round((above50 / Math.max(1, members.length)) * 100), memberCount: members.length } : null,
+    asOf: "curated Aug 2026 · live stats computed now",
+  };
+}
+
+/** Government support & budget provisions for the sector. */
+export const policyFor = (sector) => POLICY[sector]
+  ? { sector, sectorName: SECTORS[sector]?.name, ...POLICY[sector], disclaimer: "Policy/budget summaries curated as of Union Budget FY26 (Feb 2025) and later announcements — verify current status before acting." }
+  : null;
+
+/** Hero products with market position. Curated for covered names. */
+export function productsOf(symbol) {
+  const curated = PRODUCTS[symbol];
+  if (curated) return { curated: true, items: curated.map(([name, share, note]) => ({ name, share, note })) };
+  const s = STOCK_MAP[symbol];
+  const tpl = SECTOR_PRODUCT_TEMPLATE[s?.sector];
+  return { curated: false, items: [], note: tpl ? `Detailed product intelligence is curated for covered companies. ${symbol} operates in ${tpl}.` : "Product intelligence not yet curated for this company." };
+}
+
 export function stockPage(symbol) {
   const s = STOCK_MAP[symbol];
-  if (!s) return null;
+  const f = fundamentals(symbol);                 // works for full-NSE extras too
+  if (!f) return null;
+  if (!s) {
+    // basic coverage for non-curated NSE-listed symbols
+    const qt = quote(symbol);
+    return {
+      coverage: "basic",
+      profile: { symbol, name: qt?.name || symbol, sector: "OTHER", sectorName: "Broader Market (NSE listed)", sub: null, fno: false },
+      quote: qt, fundamentals: f, health: null, peers: null, swot: null,
+      summary: { paragraphs: [`${qt?.name || symbol} is an NSE-listed company outside our curated 60-stock deep-coverage universe. Price history, quotes and modelled fundamentals are available; connect a broker feed (Upstox/FYERS) for live prices. Deep coverage — peers, SWOT, AI summary, hero products — is curated progressively.`], disclaimer: "Basic coverage · modelled data." },
+      industry: null, policy: null, products: productsOf(symbol), sectorCtx: null,
+    };
+  }
   return {
-    profile: { symbol, name: s.name, sector: s.sector, sectorName: SECTORS[s.sector].name, fno: s.fno },
+    coverage: "full",
+    profile: { symbol, name: s.name, sector: s.sector, sectorName: SECTORS[s.sector].name, sub: SUBSECTOR_OF[symbol] || null, fno: s.fno },
     quote: quote(symbol),
-    fundamentals: fundamentals(symbol),
+    fundamentals: f,
     health: healthScore(symbol),
     peers: peerComparison(symbol),
     swot: swot(symbol),
     summary: executiveSummary(symbol),
+    industry: industryAnalysis(s.sector),
+    policy: policyFor(s.sector),
+    products: productsOf(symbol),
+    sectorCtx: sectorContext(s.sector),
   };
 }
 

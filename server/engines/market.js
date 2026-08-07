@@ -44,8 +44,34 @@ export function marketStatus(now = new Date()) {
 // ---------------------------------------------------------------------------
 const seriesCache = new Map();
 
+// full NSE list: hash-derived characteristics for non-curated listed symbols
+import * as nselist from "../providers/nselist.js";
+export const loadNseMaster = () => nselist.load();
+export const nseCount = () => nselist.countSync();
+
 function spec(symbol) {
-  return STOCK_MAP[symbol] || INDEX_MAP[symbol] || null;
+  const curated = STOCK_MAP[symbol] || INDEX_MAP[symbol];
+  if (curated) return curated;
+  const x = nselist.get(symbol);
+  if (!x) return null;
+  const hsh = hash32(`nse:${symbol}`);
+  const r = mulberry32(hsh);
+  return {
+    symbol, name: x.name, sector: "OTHER", base: Math.round((20 + r() * 2400) * 20) / 20,
+    drift: 0.06 + r() * 0.10, vol: 0.22 + r() * 0.22, mcap: Math.round(400 + r() * 30000),
+    quality: 0.3 + r() * 0.5, growth: 0.3 + r() * 0.5, valuation: 0.3 + r() * 0.5, fno: false, extra: true,
+  };
+}
+export function searchAll(q, limit = 12) {
+  const ql = String(q).toUpperCase();
+  if (!ql) return [];
+  const out = [];
+  for (const s of STOCKS) if (s.symbol.includes(ql) || s.name.toUpperCase().includes(ql)) out.push({ symbol: s.symbol, name: s.name, sector: s.sector, curated: true });
+  for (const [sym, x] of Object.entries(nselist.allSync())) {
+    if (out.length >= limit + 8) break;
+    if ((sym.includes(ql) || x.name.toUpperCase().includes(ql)) && !STOCK_MAP[sym]) out.push({ symbol: sym, name: x.name, sector: "OTHER", curated: false });
+  }
+  return out.sort((a, b) => (b.curated ? 1 : 0) - (a.curated ? 1 : 0) || a.symbol.length - b.symbol.length).slice(0, limit);
 }
 
 function synth(symbol) {
@@ -372,7 +398,7 @@ const fundCache = new Map();
 
 export function fundamentals(symbol) {
   if (fundCache.has(symbol)) return fundCache.get(symbol);
-  const s = STOCK_MAP[symbol];
+  const s = STOCK_MAP[symbol] || (spec(symbol)?.extra ? spec(symbol) : null);
   if (!s) return null;
   const r = rng(`fund:${symbol}`);
   const years = [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]; // FY ending March
@@ -412,14 +438,42 @@ export function fundamentals(symbol) {
   const cagr3 = Math.pow(last.revenue / annual[annual.length - 4].revenue, 1 / 3) - 1;
   const patCagr3 = Math.pow(Math.max(1, last.pat) / Math.max(1, annual[annual.length - 4].pat), 1 / 3) - 1;
   const eps = last.eps;
+  const rx = rng(`ratiox:${symbol}`);
+  const mcapNow = Math.round((price / s.base) * s.mcap);
+  const pe = round2(price / Math.max(0.1, eps));
+  const netDebt = isBank ? null : (last.debtToEquity ?? 0) * 0.3 * s.mcap;
   const ratios = {
-    marketCap: Math.round((price / s.base) * s.mcap), price,
-    pe: round2(price / Math.max(0.1, eps)),
-    pb: round2((price / Math.max(0.1, eps)) * (last.roe / 100)),
-    evEbitda: last.ebitda ? round2(((price / s.base) * s.mcap + (last.debtToEquity ?? 0) * 0.3 * s.mcap) / last.ebitda) : null,
+    marketCap: mcapNow, price,
+    pe,
+    pb: round2(pe * (last.roe / 100)),
+    evEbitda: last.ebitda ? round2((mcapNow + netDebt) / last.ebitda) : null,
     dividendYieldPct: round2(clamp(0.2 + s.quality * 1.6 - s.growth * 1.0, 0, 4.5)),
     revCagr3Pct: round2(cagr3 * 100), patCagr3Pct: round2(patCagr3 * 100),
     revGrowthPct: last.growthPct, patGrowthPct: round2(((last.pat - prev.pat) / Math.max(1, prev.pat)) * 100),
+    // ---- deeper valuation ----
+    evSales: round2((mcapNow + (netDebt ?? 0)) / Math.max(1, last.revenue)),
+    peg: patCagr3 > 0.02 ? round2(pe / (patCagr3 * 100)) : null,
+    priceToFcf: last.fcf ? round2(mcapNow / last.fcf) : null,
+    bookValuePerShare: round2((last.pat * 1e7 / (last.roe / 100)) / shares),
+    earningsYieldPct: round2((1 / Math.max(1, pe)) * 100),
+    // ---- profitability & efficiency ----
+    grossMarginPct: isBank ? null : round2(clamp((last.ebitdaMarginPct ?? 20) + 18 + s.quality * 10, 18, 78)),
+    opMarginPct: isBank ? null : round2(clamp((last.ebitdaMarginPct ?? 20) - 4, 3, 42)),
+    roa: round2(isBank ? clamp(0.6 + s.quality * 1.4, 0.3, 2.4) : clamp(last.roe * (0.45 + s.quality * 0.25), 2, 30)),
+    assetTurnover: isBank ? null : round2(clamp(0.5 + s.growth * 1.2 - (s.sector === "METAL" || s.sector === "ENERGY" ? 0.25 : 0), 0.25, 3)),
+    workingCapitalDays: isBank ? null : Math.round(clamp(15 + (1 - s.quality) * 90 + (s.sector === "INFRA" ? 60 : s.sector === "FMCG" ? -25 : 0), -30, 180)),
+    // ---- balance sheet & coverage ----
+    currentRatio: isBank ? null : round2(clamp(0.9 + s.quality * 1.4 + rx.next() * 0.3, 0.7, 3.4)),
+    quickRatio: isBank ? null : round2(clamp(0.6 + s.quality * 1.1 + rx.next() * 0.25, 0.4, 2.6)),
+    interestCoverage: isBank ? null : round2(clamp(2 + s.quality * 18 - (last.debtToEquity ?? 0) * 6, 0.8, 45)),
+    netDebtEbitda: isBank || !last.ebitda ? null : round2(clamp(netDebt / last.ebitda, -1.5, 5.5)),
+    dividendPayoutPct: round2(clamp(8 + s.quality * 42 - s.growth * 22, 0, 85)),
+    promoterHoldingPct: round2(clamp(35 + rx.next() * 38, 26, 75)),
+    // ---- bank/NBFC asset quality (null for non-financials) ----
+    casaPct: s.sector === "BANK" ? round2(clamp(28 + s.quality * 22, 25, 52)) : null,
+    gnpaPct: isBank ? round2(clamp(4.2 - s.quality * 3.4 + rx.next() * 0.5, 0.4, 6)) : null,
+    nnpaPct: isBank ? round2(clamp(1.3 - s.quality * 1.05 + rx.next() * 0.2, 0.1, 2.5)) : null,
+    costToIncomePct: isBank ? round2(clamp(52 - s.quality * 14 + rx.next() * 4, 32, 62)) : null,
   };
   // quarterly split of the last FY with mild seasonality
   const rq = rng(`qtr:${symbol}`);

@@ -23,6 +23,7 @@ export const SECTORS = {
   CDUR:      { name: "Consumer Durables",      cycle: 0.55, beta: 1.05 },
   TELECOM:   { name: "Telecom",                cycle: 0.15, beta: 0.85 },
   DEFENCE:   { name: "Defence & Aerospace",    cycle: 0.40, beta: 1.30 },
+  OTHER:     { name: "Broader Market",         cycle: 0.50, beta: 1.00 },
 };
 
 // Listed equity universe. base = anchor price (₹), drift = long-run annual

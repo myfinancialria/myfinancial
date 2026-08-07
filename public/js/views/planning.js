@@ -108,7 +108,7 @@
           h("div.kv", h("span.dim", "Emergency runway"), h("b", { class: ratios.emergencyMonths >= 6 ? "up-t" : "down-t" }, `${fmtNum(ratios.emergencyMonths, 1)} months`))),
         h("div.card",
           h("div.card-title", { style: { marginBottom: "12px" } }, "Mix by class"),
-          donut(Object.entries(nw.byClass).map(([k, v], i) => ({ label: k.replace(/_/g, " "), value: v, color: ["#ffffff", "#d9d9d9", "#b8b8b8", "#989898", "#7a7a7a", "#616161", "#4d4d4d", "#3c3c3c", "#2e2e2e", "#232323"][i % 10] }))))));
+          donut(Object.entries(nw.byClass).map(([k, v], i) => ({ label: k.replace(/_/g, " "), value: v, color: COLORS.CAT[i % COLORS.CAT.length] }))))));
   }
 
   // ------------------------------ tax centre ----------------------------------

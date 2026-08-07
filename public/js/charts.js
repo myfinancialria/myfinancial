@@ -6,18 +6,42 @@
   "use strict";
   const { h } = window.MF;
 
-  // monochrome chart language: up/primary = white, down/secondary = grays
-  const THEME = {
-    layout: { background: { type: "solid", color: "transparent" }, textColor: "#8a8a8a", fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace", fontSize: 10 },
-    grid: { vertLines: { color: "rgba(255,255,255,.05)" }, horzLines: { color: "rgba(255,255,255,.05)" } },
-    rightPriceScale: { borderColor: "#2a2a2a" },
-    timeScale: { borderColor: "#2a2a2a", timeVisible: false },
-    crosshair: { vertLine: { color: "#ffffff", width: 1, style: 2, labelBackgroundColor: "#ffffff" }, horzLine: { color: "#ffffff", width: 1, style: 2, labelBackgroundColor: "#ffffff" } },
+  // theme-aware palette: every colour resolves from CSS custom properties at
+  // call time, so charts re-render correctly after a light/dark toggle.
+  const cssv = (n, fb) => (getComputedStyle(document.documentElement).getPropertyValue(n) || "").trim() || fb;
+  const PAL = {
+    get UP() { return cssv("--up", "#22c55e"); },
+    get DOWN() { return cssv("--down", "#f43f5e"); },
+    get BLUE() { return cssv("--blue", "#3b82f6"); },
+    get GOLD() { return cssv("--gold", "#f59e0b"); },
+    get VIOLET() { return cssv("--violet", "#a78bfa"); },
+    get CYAN() { return cssv("--cyan", "#22d3ee"); },
+    get TEXT() { return cssv("--chart-text", "#8a8a8a"); },
+    get GRID() { return cssv("--chart-grid", "rgba(255,255,255,.06)"); },
+    get INK() { return cssv("--text", "#f4f4f4"); },
+    get MUTED() { return cssv("--muted", "#5f5f5f"); },
+    get BG() { return cssv("--bg", "#060606"); },
+    /** categorical palette for donuts / multi-series */
+    get CAT() { return [this.BLUE, this.UP, this.GOLD, this.VIOLET, this.CYAN, "#ec4899", "#84cc16", "#f97316", "#64748b", "#14b8a6"]; },
   };
-  const UP = "#ffffff", DOWN = "#6f6f6f", BLUE = "#e6e6e6", GOLD = "#b3b3b3", VIOLET = "#8f8f8f", CYAN = "#d2d2d2";
+  const alpha = (hex, a) => {
+    const h = hex.replace("#", "");
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+    return `rgba(${r},${g},${b},${a})`;
+  };
+  const theme = () => ({
+    layout: { background: { type: "solid", color: "transparent" }, textColor: PAL.TEXT, fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace", fontSize: 10 },
+    grid: { vertLines: { color: PAL.GRID }, horzLines: { color: PAL.GRID } },
+    rightPriceScale: { borderColor: PAL.GRID },
+    timeScale: { borderColor: PAL.GRID, timeVisible: false },
+    crosshair: { vertLine: { color: PAL.BLUE, width: 1, style: 2, labelBackgroundColor: PAL.BLUE }, horzLine: { color: PAL.BLUE, width: 1, style: 2, labelBackgroundColor: PAL.BLUE } },
+  });
+  // legacy aliases used across this file — resolve live
+  const UP_ = () => PAL.UP, DOWN_ = () => PAL.DOWN;
+  const BLUE = PAL.BLUE, GOLD = PAL.GOLD, VIOLET = PAL.VIOLET, CYAN = PAL.CYAN; // snapshot fallbacks
 
   function baseChart(el, height, extra = {}) {
-    const chart = LightweightCharts.createChart(el, { height, autoSize: true, ...THEME, ...extra });
+    const chart = LightweightCharts.createChart(el, { height, autoSize: true, ...theme(), ...extra });
     const ro = new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth }));
     ro.observe(el);
     return chart;
@@ -29,8 +53,8 @@
     let chart, candles, volume;
     const init = () => {
       chart = baseChart(el, height);
-      // hero-art convention: risen days solid white, fallen days hollow (dark fill, gray border)
-      candles = chart.addCandlestickSeries({ upColor: "#ffffff", downColor: "#0a0a0a", borderVisible: true, borderUpColor: "#ffffff", borderDownColor: "#8a8a8a", wickUpColor: "#cfcfcf", wickDownColor: "#5f5f5f" });
+      // colour-coded: green bullish candles, red bearish candles
+      candles = chart.addCandlestickSeries({ upColor: PAL.UP, downColor: PAL.DOWN, borderVisible: false, wickUpColor: alpha(PAL.UP, .75), wickDownColor: alpha(PAL.DOWN, .75) });
       volume = chart.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "vol" });
       chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
     };
@@ -39,7 +63,7 @@
       setBars(bars) {
         if (!chart) init();
         candles.setData(bars);
-        volume.setData(bars.map((b) => ({ time: b.time, value: b.volume, color: b.close >= b.open ? "rgba(255,255,255,.32)" : "rgba(255,255,255,.10)" })));
+        volume.setData(bars.map((b) => ({ time: b.time, value: b.volume, color: b.close >= b.open ? alpha(PAL.UP, .38) : alpha(PAL.DOWN, .34) })));
         chart.timeScale().fitContent();
       },
       update(bar) { candles?.update(bar); },
@@ -144,12 +168,12 @@
     const span = Math.max(2.2, ...xs.map((x) => Math.abs(x - 100)), ...ys.map((y) => Math.abs(y - 100))) * 1.15;
     const X = (v) => 50 + ((v - 100) / span) * 46;
     const Y = (v) => 50 - ((v - 100) / span) * 46;
-    // quadrant fills — grayscale ramp, position carries the meaning
+    // classic quadrant colours: green leading, amber weakening, red lagging, blue improving
     const quads = [
-      { x: 50, y: 0, c: "rgba(255,255,255,.085)", label: "LEADING", lx: 96, ly: 6, anchor: "end", col: "#ffffff" },
-      { x: 50, y: 50, c: "rgba(255,255,255,.045)", label: "WEAKENING", lx: 96, ly: 97, anchor: "end", col: "#bdbdbd" },
-      { x: 0, y: 50, c: "rgba(255,255,255,.015)", label: "LAGGING", lx: 4, ly: 97, anchor: "start", col: "#616161" },
-      { x: 0, y: 0, c: "rgba(255,255,255,.06)", label: "IMPROVING", lx: 4, ly: 6, anchor: "start", col: "#8f8f8f" },
+      { x: 50, y: 0, c: alpha(PAL.UP, .10), label: "LEADING", lx: 96, ly: 6, anchor: "end", col: PAL.UP },
+      { x: 50, y: 50, c: alpha(PAL.GOLD, .09), label: "WEAKENING", lx: 96, ly: 97, anchor: "end", col: PAL.GOLD },
+      { x: 0, y: 50, c: alpha(PAL.DOWN, .08), label: "LAGGING", lx: 4, ly: 97, anchor: "start", col: PAL.DOWN },
+      { x: 0, y: 0, c: alpha(PAL.BLUE, .10), label: "IMPROVING", lx: 4, ly: 6, anchor: "start", col: PAL.BLUE },
     ];
     for (const q of quads) {
       svg.appendChild(svgEl("rect", { x: q.x, y: q.y, width: 50, height: 50, fill: q.c }));
@@ -157,9 +181,9 @@
       t.textContent = q.label;
       svg.appendChild(t);
     }
-    svg.appendChild(svgEl("line", { x1: 50, y1: 0, x2: 50, y2: 100, stroke: "rgba(255,255,255,.28)", "stroke-width": 0.35 }));
-    svg.appendChild(svgEl("line", { x1: 0, y1: 50, x2: 100, y2: 50, stroke: "rgba(255,255,255,.28)", "stroke-width": 0.35 }));
-    const QCOL = { LEADING: "#ffffff", WEAKENING: "#bdbdbd", LAGGING: "#616161", IMPROVING: "#8f8f8f" };
+    svg.appendChild(svgEl("line", { x1: 50, y1: 0, x2: 50, y2: 100, stroke: alpha(PAL.INK, .3), "stroke-width": 0.35 }));
+    svg.appendChild(svgEl("line", { x1: 0, y1: 50, x2: 100, y2: 50, stroke: alpha(PAL.INK, .3), "stroke-width": 0.35 }));
+    const QCOL = { LEADING: PAL.UP, WEAKENING: PAL.GOLD, LAGGING: PAL.DOWN, IMPROVING: PAL.BLUE };
     for (const it of items) {
       const col = QCOL[it.quadrant];
       // trail
@@ -169,8 +193,8 @@
       // head
       const cx0 = X(it.x), cy0 = Y(it.y);
       const g = svgEl("g", { style: onPick ? "cursor:pointer" : "" });
-      g.appendChild(svgEl("circle", { cx: cx0, cy: cy0, r: 1.7, fill: col, stroke: "#060606", "stroke-width": 0.4 }));
-      const label = svgEl("text", { x: cx0 + 2.3, y: cy0 + 1, "font-size": 2.9, fill: "#f4f4f4", "font-weight": 600 });
+      g.appendChild(svgEl("circle", { cx: cx0, cy: cy0, r: 1.7, fill: col, stroke: PAL.BG, "stroke-width": 0.4 }));
+      const label = svgEl("text", { x: cx0 + 2.3, y: cy0 + 1, "font-size": 2.9, fill: PAL.INK, "font-weight": 600 });
       label.textContent = it.symbol.replace("NIFTY", "");
       g.appendChild(label);
       g.appendChild(svgEl("title")).textContent = `${it.name} — ${it.quadrant} (RS ${it.x}, Mom ${it.y})`;
@@ -178,8 +202,8 @@
       svg.appendChild(g);
     }
     // axes labels
-    const ax = svgEl("text", { x: 50, y: 99.5, "font-size": 2.6, fill: "#5f5f5f", "text-anchor": "middle" }); ax.textContent = "JdK RS-Ratio →";
-    const ay = svgEl("text", { x: 1.4, y: 50, "font-size": 2.6, fill: "#5f5f5f", transform: "rotate(-90 1.4 50)", "text-anchor": "middle" }); ay.textContent = "JdK RS-Momentum →";
+    const ax = svgEl("text", { x: 50, y: 99.5, "font-size": 2.6, fill: PAL.MUTED, "text-anchor": "middle" }); ax.textContent = "JdK RS-Ratio →";
+    const ay = svgEl("text", { x: 1.4, y: 50, "font-size": 2.6, fill: PAL.MUTED, transform: "rotate(-90 1.4 50)", "text-anchor": "middle" }); ay.textContent = "JdK RS-Momentum →";
     svg.appendChild(ax); svg.appendChild(ay);
     wrap.appendChild(svg);
     return wrap;
@@ -195,7 +219,7 @@
     const X = (v) => ((v - xmin) / (xmax - xmin)) * (w - 20) + 10;
     const Y = (v) => hgt / 2 - (v / ymax) * (hgt / 2 - 12);
     // zero line
-    svg.appendChild(svgEl("line", { x1: 0, y1: Y(0), x2: w, y2: Y(0), stroke: "rgba(255,255,255,.28)", "stroke-width": 1 }));
+    svg.appendChild(svgEl("line", { x1: 0, y1: Y(0), x2: w, y2: Y(0), stroke: alpha(PAL.INK, .3), "stroke-width": 1 }));
     // profit/loss areas
     let dUp = "", dDn = "";
     pts.forEach((p, i) => {
@@ -203,11 +227,11 @@
       const cmd2 = `${i === 0 ? "M" : "L"} ${X(p.s)} ${Y(Math.min(0, p.pnl))}`;
       dUp += cmd + " "; dDn += cmd2 + " ";
     });
-    svg.appendChild(svgEl("path", { d: `${dUp} L ${X(xmax)} ${Y(0)} L ${X(xmin)} ${Y(0)} Z`, fill: "rgba(255,255,255,.17)" }));
-    svg.appendChild(svgEl("path", { d: `${dDn} L ${X(xmax)} ${Y(0)} L ${X(xmin)} ${Y(0)} Z`, fill: "rgba(255,255,255,.04)" }));
+    svg.appendChild(svgEl("path", { d: `${dUp} L ${X(xmax)} ${Y(0)} L ${X(xmin)} ${Y(0)} Z`, fill: alpha(PAL.UP, .20) }));
+    svg.appendChild(svgEl("path", { d: `${dDn} L ${X(xmax)} ${Y(0)} L ${X(xmin)} ${Y(0)} Z`, fill: alpha(PAL.DOWN, .18) }));
     // pnl line
     const line = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${X(p.s)} ${Y(p.pnl)}`).join(" ");
-    svg.appendChild(svgEl("path", { d: line, fill: "none", stroke: "#ffffff", "stroke-width": 1.8 }));
+    svg.appendChild(svgEl("path", { d: line, fill: "none", stroke: PAL.INK, "stroke-width": 1.8 }));
     for (const be of breakevens) {
       svg.appendChild(svgEl("line", { x1: X(be), y1: 8, x2: X(be), y2: hgt - 8, stroke: GOLD, "stroke-width": 1, "stroke-dasharray": "4 3" }));
       const t = svgEl("text", { x: X(be), y: 10, "font-size": 9.5, fill: GOLD, "text-anchor": "middle" }); t.textContent = Math.round(be).toLocaleString("en-IN");
@@ -229,9 +253,9 @@
       const ceW = (r.ce.oi / maxOI) * 100, peW = (r.pe.oi / maxOI) * 100;
       wrap.appendChild(h("div", { style: { display: "grid", gridTemplateColumns: "1fr 74px 1fr", alignItems: "center", gap: "8px", fontSize: "11px" } },
         h("div", { style: { display: "flex", justifyContent: "flex-end" } },
-          h("div", { title: `CALL OI ${(r.ce.oi / 1e5).toFixed(1)}L (${r.ce.oiChg >= 0 ? "+" : ""}${(r.ce.oiChg / 1e5).toFixed(1)}L)`, style: { width: `${Math.max(1.5, ceW)}%`, height: "13px", boxSizing: "border-box", border: "1px solid #9a9a9a", background: r.ce.oiChg >= 0 ? "rgba(255,255,255,.14)" : "rgba(255,255,255,.04)" } })),
-        h("div", { style: { textAlign: "center", fontFamily: "var(--mono)", fontWeight: r.strike === atm ? 800 : 400, color: r.strike === atm ? "#ffffff" : "var(--text2)", textDecoration: r.strike === atm ? "underline" : "none" } }, String(r.strike)),
-        h("div", h("div", { title: `PUT OI ${(r.pe.oi / 1e5).toFixed(1)}L (${r.pe.oiChg >= 0 ? "+" : ""}${(r.pe.oiChg / 1e5).toFixed(1)}L)`, style: { width: `${Math.max(1.5, peW)}%`, height: "13px", background: r.pe.oiChg >= 0 ? "rgba(255,255,255,.92)" : "rgba(255,255,255,.45)" } }))));
+          h("div", { title: `CALL OI ${(r.ce.oi / 1e5).toFixed(1)}L (${r.ce.oiChg >= 0 ? "+" : ""}${(r.ce.oiChg / 1e5).toFixed(1)}L)`, style: { width: `${Math.max(1.5, ceW)}%`, height: "13px", background: r.ce.oiChg >= 0 ? alpha(PAL.DOWN, .8) : alpha(PAL.DOWN, .35) } })),
+        h("div", { style: { textAlign: "center", fontFamily: "var(--mono)", fontWeight: r.strike === atm ? 800 : 400, color: r.strike === atm ? "var(--gold)" : "var(--text2)" } }, String(r.strike)),
+        h("div", h("div", { title: `PUT OI ${(r.pe.oi / 1e5).toFixed(1)}L (${r.pe.oiChg >= 0 ? "+" : ""}${(r.pe.oiChg / 1e5).toFixed(1)}L)`, style: { width: `${Math.max(1.5, peW)}%`, height: "13px", background: r.pe.oiChg >= 0 ? alpha(PAL.UP, .8) : alpha(PAL.UP, .35) } }))));
     }
     return wrap;
   }
@@ -250,8 +274,8 @@
       for (let i = n - 1; i >= 0; i--) d += `L ${X(i)} ${Y(loArr[i])} `;
       svg.appendChild(svgEl("path", { d: d + "Z", fill }));
     };
-    band(bands.p10, bands.p90, "rgba(255,255,255,.08)");
-    band(bands.p25, bands.p75, "rgba(255,255,255,.15)");
+    band(bands.p10, bands.p90, alpha(PAL.BLUE, .12));
+    band(bands.p25, bands.p75, alpha(PAL.BLUE, .22));
     const median = bands.p50.map((v, i) => `${i === 0 ? "M" : "L"} ${X(i)} ${Y(v)}`).join(" ");
     svg.appendChild(svgEl("path", { d: median, fill: "none", stroke: BLUE, "stroke-width": 2 }));
     // target line
@@ -279,16 +303,16 @@
   function ring(pct, { size = 74, color = null, label = "" } = {}) {
     const col = color || (pct >= 75 ? UP : pct >= 45 ? GOLD : DOWN);
     const svg = svgEl("svg", { viewBox: "0 0 42 42", width: size, height: size });
-    svg.appendChild(svgEl("circle", { cx: 21, cy: 21, r: 17, fill: "none", stroke: "#242424", "stroke-width": 4.4 }));
+    svg.appendChild(svgEl("circle", { cx: 21, cy: 21, r: 17, fill: "none", stroke: alpha(PAL.INK, .12), "stroke-width": 4.4 }));
     const c = 2 * Math.PI * 17;
     svg.appendChild(svgEl("circle", {
       cx: 21, cy: 21, r: 17, fill: "none", stroke: col, "stroke-width": 4.4, "stroke-linecap": "round",
       "stroke-dasharray": `${(pct / 100) * c} ${c}`, transform: "rotate(-90 21 21)",
     }));
-    const t = svgEl("text", { x: 21, y: 22.5, "text-anchor": "middle", "font-size": 9.6, fill: "#f4f4f4", "font-weight": 700 });
+    const t = svgEl("text", { x: 21, y: 22.5, "text-anchor": "middle", "font-size": 9.6, fill: PAL.INK, "font-weight": 700 });
     t.textContent = `${Math.round(pct)}%`;
     svg.appendChild(t);
-    if (label) { const l = svgEl("text", { x: 21, y: 30, "text-anchor": "middle", "font-size": 4.6, fill: "#8a8a8a" }); l.textContent = label; svg.appendChild(l); }
+    if (label) { const l = svgEl("text", { x: 21, y: 30, "text-anchor": "middle", "font-size": 4.6, fill: PAL.MUTED }); l.textContent = label; svg.appendChild(l); }
     return svg;
   }
 
@@ -299,9 +323,9 @@
       h("div",
         h("div", { style: { display: "flex", justifyContent: "space-between", fontSize: "12px", marginBottom: "4px" } },
           h("span.dim", it.label), h("b", it.display ?? it.value)),
-        h("div.bar", h("i", { style: { width: `${Math.min(100, (Math.abs(it.value) / mx) * 100)}%`, background: it.color || "#ffffff" } })),
+        h("div.bar", h("i", { style: { width: `${Math.min(100, (Math.abs(it.value) / mx) * 100)}%`, background: it.color || PAL.BLUE } })),
         it.note ? h("div", { style: { fontSize: "10.5px", color: "var(--muted)", marginTop: "3px" } }, it.note) : null)));
   }
 
-  window.MFC = { candleChart, lineChart, donut, radar, rrgPlot, payoffChart, oiHistogram, fanChart, ring, hbars, COLORS: { UP, DOWN, BLUE, GOLD, VIOLET, CYAN } };
+  window.MFC = { candleChart, lineChart, donut, radar, rrgPlot, payoffChart, oiHistogram, fanChart, ring, hbars, COLORS: PAL, alpha };
 })();

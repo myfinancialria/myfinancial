@@ -159,6 +159,16 @@ api.post("/robo/profile", requireAuth, wrap((req, res) => {
 
 // ------------------------------ equities -------------------------------------
 api.get("/equity/list", wrap((req, res) => ok(res, equity.listStocks())));
+api.get("/equity/search", wrap((req, res) => ok(res, { results: market.searchAll(String(req.query.q || ""), 14), nseListed: market.nseCount() })));
+api.get("/equity/sector-heat", wrap((req, res) => {
+  const bySector = {};
+  for (const q2 of market.quotes()) {
+    (bySector[q2.sector] ??= { sector: q2.sector, sum: 0, n: 0, gainers: 0 });
+    bySector[q2.sector].sum += q2.changePct; bySector[q2.sector].n++;
+    if (q2.changePct > 0) bySector[q2.sector].gainers++;
+  }
+  ok(res, Object.values(bySector).map((s) => ({ sector: s.sector, avgChangePct: Math.round((s.sum / s.n) * 100) / 100, gainers: s.gainers, count: s.n })).sort((a, b) => b.avgChangePct - a.avgChangePct));
+}));
 api.get("/equity/:symbol", wrap((req, res) => {
   const page = equity.stockPage(req.params.symbol.toUpperCase());
   if (!page) return res.status(404).json({ ok: false, error: "Unknown symbol" });
@@ -166,10 +176,15 @@ api.get("/equity/:symbol", wrap((req, res) => {
 }));
 
 // ------------------------------ screeners ------------------------------------
-api.get("/screeners/rrg", wrap((req, res) => ok(res, screeners.rrg({ scope: req.query.scope === "stocks" ? "stocks" : "sectors", sector: req.query.sector || null, benchmark: req.query.benchmark || "NIFTY" }))));
+api.get("/screeners/rrg", wrap((req, res) => ok(res, screeners.rrg({
+  scope: ["stocks", "subsectors", "sectors"].includes(req.query.scope) ? req.query.scope : "sectors",
+  sector: req.query.sector || null, sub: req.query.sub || null, benchmark: req.query.benchmark || "NIFTY",
+}))));
+api.get("/screeners/subsectors", wrap((req, res) => ok(res, screeners.subsectorsOf(req.query.sector || null))));
 api.get("/screeners/patterns", wrap((req, res) => ok(res, screeners.scanPatterns())));
 api.get("/screeners/breakouts52w", wrap((req, res) => ok(res, screeners.scan52wBreakouts(Number(req.query.volx || 2)))));
 api.get("/screeners/darvas", wrap((req, res) => ok(res, screeners.scanDarvas())));
+api.get("/screeners/weinstein", wrap((req, res) => ok(res, screeners.scanWeinstein())));
 
 // ------------------------------- signals -------------------------------------
 api.get("/signals/longterm", wrap((req, res) => ok(res, signals.longTermIdeas())));

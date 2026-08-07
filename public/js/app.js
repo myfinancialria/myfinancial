@@ -70,6 +70,16 @@
         h("div.top-right",
           h("div.mkt-pill", h("span.mkt-dot", { id: "mktDot" }), h("span", { id: "mktPhase" }, "…"), h("span.clock", { id: "istClock" })),
           ccySel,
+          h("button.theme-toggle", {
+            title: "Toggle light / dark theme",
+            onclick: (e) => {
+              const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+              document.documentElement.dataset.theme = next;
+              localStorage.setItem("myfin.theme", next);
+              e.target.textContent = next === "light" ? "☾" : "☀︎";
+              dispatch();               // charts re-render with the new palette
+            },
+          }, document.documentElement.dataset.theme === "light" ? "☾" : "☀︎"),
           h("div.avatar", { title: `${u.name} · click to switch persona`, onclick: () => { if (confirm("Switch persona / sign out?")) logout(); } }, initials)))));
 
     app.appendChild(h("div.ticker-strip", h("div.ticker-inner", { id: "tickerStrip" }, h("span.tick-item", "loading market strip…"))));

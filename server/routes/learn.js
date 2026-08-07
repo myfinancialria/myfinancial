@@ -52,35 +52,36 @@ function mdToHtml(md) {
 }
 
 const CSS = `
-:root{--paper:#060606;--ink:#f4f4f4;--dim:#9a9a9a;--faint:#5c5c5c;--line:#1f1f1f;--line2:#2e2e2e}
+:root{--paper:#060606;--ink:#f4f4f4;--dim:#9a9a9a;--faint:#5c5c5c;--line:#1f1f1f;--line2:#2e2e2e;--inv-bg:#fff;--inv-fg:#000;--body:#c9c9c9;--codebg:#141414;--thbg:#101010;--hovbg:#0d0d0d}
+:root[data-theme="light"]{--paper:#f6f5f2;--ink:#151515;--dim:#55544f;--faint:#96958f;--line:#e0dfda;--line2:#c9c8c2;--inv-bg:#151515;--inv-fg:#f6f5f2;--body:#3c3b38;--codebg:#eceae5;--thbg:#eceae5;--hovbg:#efeee9}
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--paper);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif;line-height:1.75;-webkit-font-smoothing:antialiased}
 a{color:inherit}
-nav{position:sticky;top:0;z-index:50;display:flex;justify-content:space-between;align-items:center;padding:16px clamp(20px,4vw,56px);background:rgba(6,6,6,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+nav{position:sticky;top:0;z-index:50;display:flex;justify-content:space-between;align-items:center;padding:16px clamp(20px,4vw,56px);background:color-mix(in srgb,var(--paper) 90%,transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
 .wordmark{font-family:Georgia,serif;font-style:italic;font-size:20px;text-decoration:none}
 .wordmark b{font-style:normal;font-family:inherit;font-weight:800}
 .navlinks{display:flex;gap:22px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
 .navlinks a{text-decoration:none}
-.navlinks a:hover{color:#fff}
-.btn{border:1px solid #fff;background:#fff;color:#000;font-size:12px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;padding:10px 18px;text-decoration:none}
-.btn:hover{background:transparent;color:#fff}
+.navlinks a:hover{color:var(--ink)}
+.btn{border:1px solid var(--inv-bg);background:var(--inv-bg);color:var(--inv-fg);font-size:12px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;padding:10px 18px;text-decoration:none}
+.btn:hover{background:transparent;color:var(--ink)}
 main{max-width:780px;margin:0 auto;padding:60px clamp(20px,4vw,40px) 90px}
 .crumb{font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--faint);margin-bottom:26px}
-.crumb a{color:var(--faint);text-decoration:none}.crumb a:hover{color:#fff}
+.crumb a{color:var(--faint);text-decoration:none}.crumb a:hover{color:var(--ink)}
 h1{font-size:clamp(30px,5vw,46px);line-height:1.12;letter-spacing:-.03em;font-weight:800;margin-bottom:14px}
 .meta{color:var(--faint);font-size:12.5px;margin-bottom:38px;padding-bottom:22px;border-bottom:1px solid var(--line)}
 article h2{font-size:24px;letter-spacing:-.02em;margin:40px 0 12px;font-weight:750}
 article h3{font-size:18px;margin:28px 0 10px}
-article p{color:#c9c9c9;margin:12px 0;font-size:16px}
-article li{color:#c9c9c9;margin:7px 0 7px 20px;font-size:15.5px}
-article strong{color:#fff}
-article code{background:#141414;border:1px solid var(--line);padding:1px 7px;border-radius:4px;font-size:13.5px}
+article p{color:var(--body);margin:12px 0;font-size:16px}
+article li{color:var(--body);margin:7px 0 7px 20px;font-size:15.5px}
+article strong{color:var(--ink)}
+article code{background:var(--codebg);border:1px solid var(--line);padding:1px 7px;border-radius:4px;font-size:13.5px}
 article hr{border:none;border-top:1px dashed var(--line);margin:34px 0}
 article em{color:var(--dim)}
 .tbl-wrap{overflow-x:auto;margin:18px 0;border:1px solid var(--line2)}
 table{border-collapse:collapse;width:100%;font-size:14px}
-th{background:#101010;text-align:left;padding:10px 14px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--line2)}
-td{padding:10px 14px;border-bottom:1px solid var(--line);color:#d6d6d6}
+th{background:var(--thbg);text-align:left;padding:10px 14px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--line2)}
+td{padding:10px 14px;border-bottom:1px solid var(--line);color:var(--body)}
 tr:last-child td{border-bottom:none}
 .faq{margin-top:50px;border-top:1px solid var(--line);padding-top:30px}
 .faq h2{font-size:22px;margin-bottom:16px}
@@ -88,10 +89,10 @@ details{border:1px solid var(--line);margin-bottom:10px}
 summary{cursor:pointer;padding:14px 18px;font-weight:650;font-size:15px;list-style:none}
 summary::before{content:"+ ";color:var(--faint)}
 details[open] summary::before{content:"− "}
-details p{padding:0 18px 16px;color:#c9c9c9;font-size:14.5px}
+details p{padding:0 18px 16px;color:var(--body);font-size:14.5px}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
 .cardl{background:var(--paper);padding:26px;text-decoration:none;display:block;transition:background .2s}
-.cardl:hover{background:#0d0d0d}
+.cardl:hover{background:var(--hovbg)}
 .cardl .cat{font-family:ui-monospace,Menlo,monospace;font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--faint)}
 .cardl h3{font-size:18px;line-height:1.35;margin:10px 0;letter-spacing:-.01em}
 .cardl p{color:var(--dim);font-size:13px;line-height:1.6}
@@ -121,6 +122,7 @@ ${keywords ? `<meta name="keywords" content="${esc(keywords)}"/>` : ""}
 <meta name="twitter:title" content="${esc(title)}"/>
 <meta name="twitter:description" content="${esc(metaDescription)}"/>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='black'/><text x='50' y='72' font-size='62' text-anchor='middle' fill='white' font-family='Georgia'>m</text></svg>"/>
+<script>document.documentElement.dataset.theme = localStorage.getItem("myfin.theme") || "dark";</script>
 ${jsonLd.map((o) => `<script type="application/ld+json">${JSON.stringify(o)}</script>`).join("\n")}
 <style>${CSS}</style>
 </head>
@@ -128,7 +130,8 @@ ${jsonLd.map((o) => `<script type="application/ld+json">${JSON.stringify(o)}</sc
 <nav>
   <a class="wordmark" href="/"><b>my</b>financial</a>
   <div class="navlinks"><a href="/learn">Insights</a><a href="/#modules">Platform</a><a href="/#personas">Personas</a></div>
-  <a class="btn" href="/app">Launch App</a>
+  <div style="display:flex;gap:10px;align-items:center"><button onclick="const n=document.documentElement.dataset.theme==='light'?'dark':'light';document.documentElement.dataset.theme=n;localStorage.setItem('myfin.theme',n);this.textContent=n==='light'?'☾':'☀︎'" style="width:38px;height:38px;border:1px solid var(--line2);background:transparent;color:var(--ink);font-size:15px;cursor:pointer">☀︎</button>
+  <a class="btn" href="/app">Launch App</a></div>
 </nav>
 ${body}
 <footer>© ${new Date().getFullYear()} myfinancial · Educational content, not investment advice under SEBI (Investment Advisers) Regulations, 2013. Mutual funds are subject to market risks.<br/>Live NAVs from AMFI · scheme histories via mfapi.in · market data adapters for Upstox &amp; FYERS.</footer>

@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 
 import { seedIfEmpty } from "./lib/db.js";
-import { startTicker, marketStatus, startLiveFeed } from "./engines/market.js";
+import { startTicker, marketStatus, startLiveFeed, loadNseMaster } from "./engines/market.js";
 import { api } from "./routes/api.js";
 import { learn } from "./routes/learn.js";
 import { seedArticles } from "./engines/seo.js";
@@ -64,6 +64,7 @@ startTicker(broadcast);
 startLiveFeed();               // no-op unless MYFIN_PROVIDER=upstox|fyers + tokens set
 seedArticles().catch((e) => console.log("  seo seed:", e.message));
 amfiWarmup().catch(() => {});   // background: real returns for the live MF screener & baskets
+loadNseMaster().catch(() => {}); // background: full NSE symbol master (~2,000 listed companies)
 
 server.listen(PORT, () => {
   console.log(`\n  myfinancial ▸ http://localhost:${PORT}`);

@@ -27,6 +27,19 @@ Node ≥ 22 required (uses built-in `node:sqlite`). No build step, no external s
 
 **Try the spec's own question** in the assistant: *“Can I achieve ₹5 crore in 12 years with my current SIPs?”* — it runs the Monte Carlo engine and answers with the feasibility index, percentile bands and required SIP, with knowledge-base citations.
 
+## Equity intelligence & screeners
+
+- **Light / dark theme** across the marketing site, app and /learn pages (☀︎/☾ toggle, shared via localStorage) with full colour semantics: **green = bullish, red = bearish**, everywhere from candles to heatmaps.
+- **All NSE-listed stocks** (~2,000+): the official NSE symbol master is fetched & cached at boot; every symbol is searchable, chartable and quotable. The curated 60 get deep coverage; the rest get basic coverage until curated.
+- **30+ ratios per company**: PEG, EV/Sales, Price/FCF, earnings yield, ROA, gross/operating margins, current/quick ratios, interest coverage, net-debt/EBITDA, working-capital days, promoter holding — plus bank-specific GNPA/NNPA/CASA/cost-to-income.
+- **Industry Pulse** per sector: curated FY26 situation analysis (outlook, tailwinds, headwinds) fused with live stats (cycle quadrant, 1M/3M/1Y index moves, % of members above the 50-DMA).
+- **Government Support & Budget** section per sector: PLI schemes, missions and Union Budget FY26 provisions, curated with a verification disclaimer.
+- **Hero Products**: flagship products per covered company with indicative market share (Maruti's Brezza ~41% PV share, Fevicol ~70% adhesives, HAL's Tejas order book…).
+- **Cyclical Graph** (evolved from RRG): sectors → **42 sub-sectors** (equal-weight composites) → constituent stocks, with multi-select sector filters and click-to-drill-down.
+- **Chart patterns with confirmation stack**: every detection is scored 0–100 on breakout volume (≥1.5× 20-day), position vs **50-DMA and 200-DMA**, MA alignment — and validated against the stock's **sector cycle quadrant**.
+- **Weinstein Stage Analysis** screener: weekly closes vs the 30-week MA classify every stock into Stage 1–4 with weeks-in-stage, MA slope and volume ratios.
+- **Sector heatmap** and colour-coded dashboards throughout.
+
 ## Personas
 
 | | Arjun Mehta | Meera Krishnan |

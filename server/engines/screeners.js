@@ -8,6 +8,7 @@
 //   • Darvas box consolidations with pre-breakout volume signature
 // ---------------------------------------------------------------------------
 import { STOCKS, INDICES, SECTORS, STOCK_MAP } from "../data/universe.js";
+import { SUBSECTOR_OF } from "../data/sectorIntel.js";
 import { daily, weekly, quote } from "./market.js";
 import { mean, stdev, smaAt, round2, round1 } from "../lib/util.js";
 
@@ -42,17 +43,82 @@ function rrgSeries(symbol, benchmark = "NIFTY", weeks = 80, win = 14) {
 
 const quadrantOf = (x, y) => (x >= 100 && y >= 100 ? "LEADING" : x >= 100 ? "WEAKENING" : y >= 100 ? "IMPROVING" : "LAGGING");
 
-/** RRG for all sector indices (or constituents of one sector) vs benchmark. */
-export function rrg({ scope = "sectors", sector = null, benchmark = "NIFTY", trail = 8 } = {}) {
+// ---- subsector composites: equal-weight normalised weekly closes -----------
+export function subsectorsOf(sector = null) {
+  const map = {};
+  for (const s of STOCKS) {
+    const sub = SUBSECTOR_OF[s.symbol] || `${SECTORS[s.sector]?.name || s.sector} — General`;
+    if (sector && s.sector !== sector) continue;
+    (map[sub] ??= { sub, sector: s.sector, members: [] }).members.push(s.symbol);
+  }
+  return Object.values(map).sort((a, b) => a.sub.localeCompare(b.sub));
+}
+
+const compositeCache = new Map();
+function compositeWeekly(members, key, weeks = 110) {
+  const ck = `${key}:${weeks}`;
+  const hit = compositeCache.get(ck);
+  if (hit && Date.now() - hit.at < 10 * 60_000) return hit.bars;
+  const series = members.map((m) => weekly(m, weeks)).filter((w) => w.length > 30);
+  if (!series.length) return null;
+  const n = Math.min(...series.map((s) => s.length));
+  const bars = [];
+  for (let i = 0; i < n; i++) {
+    let sum = 0;
+    for (const s of series) {
+      const arr = s.slice(-n);
+      sum += arr[i].close / arr[0].close;                    // normalise each member to 1.0
+    }
+    const ref = series[0].slice(-n);
+    bars.push({ time: ref[i].time, close: (sum / series.length) * 100 });
+  }
+  compositeCache.set(ck, { at: Date.now(), bars });
+  return bars;
+}
+
+function rrgSeriesFromBars(a, benchmark = "NIFTY", win = 14) {
+  const b = weekly(benchmark, a.length + win + 12);
+  const n = Math.min(a.length, b.length);
+  if (n < win + 12) return null;
+  const rs = [];
+  for (let i = 0; i < n; i++) rs.push((a[a.length - n + i].close / b[b.length - n + i].close) * 100);
+  const ratio = [];
+  for (let i = 0; i < rs.length; i++) {
+    if (i < win) { ratio.push(null); continue; }
+    const w = rs.slice(i - win, i + 1);
+    const m = mean(w), sd = stdev(w) || 1e-9;
+    ratio.push(100 + ((rs[i] - m) / sd));
+  }
+  const mom = [];
+  const roc = ratio.map((v, i) => (v === null || ratio[i - 1] == null ? null : v - ratio[i - 1]));
+  for (let i = 0; i < roc.length; i++) {
+    if (roc[i] === null || i < win + 5) { mom.push(null); continue; }
+    const w = roc.slice(Math.max(0, i - 9), i + 1).filter((x) => x !== null);
+    const m = mean(w), sd = stdev(w) || 1e-9;
+    mom.push(100 + ((roc[i] - m) / sd) * 1.4);
+  }
+  return { ratio, mom, times: a.slice(a.length - n).map((x) => x.time) };
+}
+
+/**
+ * Cyclical rotation graph (JdK RS-Ratio × RS-Momentum vs benchmark).
+ * scope: "sectors" | "subsectors" | "stocks" (stocks within one sector/subsector)
+ */
+export function rrg({ scope = "sectors", sector = null, sub = null, benchmark = "NIFTY", trail = 8 } = {}) {
   let items;
   if (scope === "sectors") {
     items = INDICES.filter((i) => i.members && i.members.length).map((i) => ({ symbol: i.symbol, name: i.name, kind: "SECTOR", sectorKey: i.members[0] }));
+  } else if (scope === "subsectors") {
+    items = subsectorsOf(sector).map((g) => ({ symbol: g.sub, name: g.sub, kind: "SUBSECTOR", sectorKey: g.sector, members: g.members }));
   } else {
-    items = STOCKS.filter((s) => s.sector === sector).map((s) => ({ symbol: s.symbol, name: s.name, kind: "STOCK", sectorKey: s.sector }));
+    items = STOCKS.filter((s) => (sub ? (SUBSECTOR_OF[s.symbol] || "").startsWith(sub) : s.sector === sector))
+      .map((s) => ({ symbol: s.symbol, name: s.name, kind: "STOCK", sectorKey: s.sector }));
   }
   const out = [];
   for (const it of items) {
-    const se = rrgSeries(it.symbol, benchmark);
+    const se = it.kind === "SUBSECTOR"
+      ? (() => { const cb = compositeWeekly(it.members, it.symbol); return cb ? rrgSeriesFromBars(cb, benchmark) : null; })()
+      : rrgSeries(it.symbol, benchmark);
     if (!se) continue;
     const pts = [];
     for (let i = se.ratio.length - trail; i < se.ratio.length; i++) {
@@ -61,9 +127,23 @@ export function rrg({ scope = "sectors", sector = null, benchmark = "NIFTY", tra
     }
     if (!pts.length) continue;
     const lastPt = pts[pts.length - 1];
-    out.push({ ...it, trail: pts, x: lastPt.x, y: lastPt.y, quadrant: quadrantOf(lastPt.x, lastPt.y), heading: pts.length > 1 ? round2(lastPt.y - pts[pts.length - 2].y) : 0 });
+    out.push({ ...it, members: undefined, memberCount: it.members?.length, trail: pts, x: lastPt.x, y: lastPt.y, quadrant: quadrantOf(lastPt.x, lastPt.y), heading: pts.length > 1 ? round2(lastPt.y - pts[pts.length - 2].y) : 0 });
   }
-  return { benchmark, scope, sector, sectorName: sector ? SECTORS[sector]?.name : null, items: out };
+  return { benchmark, scope, sector, sub, sectorName: sector ? SECTORS[sector]?.name : null, items: out };
+}
+
+/** Quadrant of a stock's own SECTOR index — used to validate breakouts. */
+export function sectorContext(sector) {
+  const idx = INDICES.find((i) => i.members?.[0] === sector);
+  if (!idx) return null;
+  const se = rrgSeries(idx.symbol, "NIFTY");
+  if (!se) return null;
+  let x = null, y = null;
+  for (let i = se.ratio.length - 1; i >= 0; i--) if (se.ratio[i] !== null && se.mom[i] !== null) { x = se.ratio[i]; y = se.mom[i]; break; }
+  if (x === null) return null;
+  const d = daily(idx.symbol, 260);
+  const perf = (n) => d.length > n ? round2((d[d.length - 1].close / d[d.length - 1 - n].close - 1) * 100) : null;
+  return { index: idx.symbol, name: idx.name, quadrant: quadrantOf(x, y), x: round2(x), y: round2(y), m1: perf(21), m3: perf(63), y1: perf(252) };
 }
 
 // ---------------------------------------------------------------------------
@@ -260,12 +340,14 @@ let patternCache = { at: 0, data: null };
 export function scanPatterns() {
   if (patternCache.data && Date.now() - patternCache.at < 120_000) return patternCache.data;
   const hits = [];
+  const sectorCtxCache = {};
   for (const s of STOCKS) {
-    const bars = daily(s.symbol, 210);
-    if (bars.length < 80) continue;
-    const pv = pivots(bars);
+    const bars = daily(s.symbol, 320);
+    if (bars.length < 220) continue;
+    const pv = pivots(bars.slice(-210));
+    const recent = bars.slice(-210);
     for (const det of [detectDoubleBottom, detectHeadShoulders, detectFlag, detectCupHandle, detectAscTriangle]) {
-      const hit = det(bars, pv);
+      const hit = det(recent, pv);
       if (hit) {
         const qt = quote(s.symbol);
         const riskDist = hit.bias === "BULLISH" ? hit.entry - hit.stop : hit.stop - hit.entry;
@@ -274,13 +356,95 @@ export function scanPatterns() {
           ? (hit.target2 - hit.entry) / riskDist
           : (hit.entry - hit.target2) / riskDist;
         if (rr < 0.8 || rr > 12) continue;                    // sanity band on risk-reward
-        hits.push({ symbol: s.symbol, name: s.name, sector: s.sector, ltp: qt.ltp, changePct: qt.changePct, ...hit, riskReward: round2(rr) });
+
+        // ---- confirmation stack: volume, 50/200-DMA structure, sector cycle ----
+        const closes = bars.map((b) => b.close);
+        const vols = bars.map((b) => b.volume);
+        const i = bars.length - 1;
+        const volX = round2(vols[i] / Math.max(1, smaAt(vols, i - 1, 20) ?? vols[i]));
+        const ma50 = smaAt(closes, i, 50), ma200 = smaAt(closes, i, 200);
+        const above50 = ma50 !== null && closes[i] > ma50;
+        const above200 = ma200 !== null && closes[i] > ma200;
+        const maAligned = ma50 !== null && ma200 !== null && (hit.bias === "BULLISH" ? ma50 > ma200 : ma50 < ma200);
+        const volConfirmed = volX >= 1.5;
+        let conf = 0;
+        conf += volConfirmed ? 40 : volX >= 1.15 ? 20 : 0;
+        conf += (hit.bias === "BULLISH" ? above50 : !above50) ? 20 : 0;
+        conf += (hit.bias === "BULLISH" ? above200 : !above200) ? 20 : 0;
+        conf += maAligned ? 20 : 0;
+        const sctx = (sectorCtxCache[s.sector] ??= sectorContext(s.sector));
+        const sectorSupports = sctx && (hit.bias === "BULLISH"
+          ? sctx.quadrant === "LEADING" || sctx.quadrant === "IMPROVING"
+          : sctx.quadrant === "LAGGING" || sctx.quadrant === "WEAKENING");
+        hits.push({
+          symbol: s.symbol, name: s.name, sector: s.sector, ltp: qt.ltp, changePct: qt.changePct, ...hit, riskReward: round2(rr),
+          confirm: {
+            volX, volConfirmed, ma50: round2(ma50 ?? 0), ma200: round2(ma200 ?? 0),
+            above50, above200, maAligned, score: conf,
+            grade: conf >= 80 ? "STRONG" : conf >= 50 ? "GOOD" : "WEAK",
+          },
+          sectorCtx: sctx ? { ...sctx, supports: !!sectorSupports } : null,
+        });
       }
     }
   }
-  hits.sort((a, b) => (b.status === "BREAKOUT" || b.status === "BREAKDOWN" ? 1 : 0) - (a.status === "BREAKOUT" || a.status === "BREAKDOWN" ? 1 : 0) || b.riskReward - a.riskReward);
+  hits.sort((a, b) => (b.confirm?.score ?? 0) - (a.confirm?.score ?? 0) || b.riskReward - a.riskReward);
   patternCache = { at: Date.now(), data: hits };
   return hits;
+}
+
+// ---------------------------------------------------------------------------
+// Weinstein Stage Analysis — weekly closes vs the 30-week MA
+//   Stage 1 basing · Stage 2 advancing · Stage 3 topping · Stage 4 declining
+// ---------------------------------------------------------------------------
+export function scanWeinstein() {
+  const out = [];
+  for (const s of STOCKS) {
+    const w = weekly(s.symbol, 90);
+    if (w.length < 45) continue;
+    const closes = w.map((b) => b.close);
+    const vols = w.map((b) => b.volume);
+    const i = closes.length - 1;
+    const ma30 = smaAt(closes, i, 30);
+    const ma30Prev = smaAt(closes, i - 6, 30);
+    if (!ma30 || !ma30Prev) continue;
+    const slopePct = round2(((ma30 - ma30Prev) / ma30Prev) * 100);        // 6-week MA slope
+    const pctFromMa = round2(((closes[i] - ma30) / ma30) * 100);
+    const ret26w = round2((closes[i] / closes[Math.max(0, i - 26)] - 1) * 100);
+    const volRatio = round2((smaAt(vols, i, 4) ?? 1) / Math.max(1, smaAt(vols, i, 26) ?? 1));
+
+    const FLAT = 0.7;                                                    // % slope band treated as flat
+    let stage, note;
+    if (closes[i] > ma30 && slopePct > FLAT) {
+      stage = 2; note = "Advancing — price above a rising 30-week MA. Weinstein's only buy stage; dips to the MA are the classic add points.";
+    } else if (closes[i] < ma30 && slopePct < -FLAT) {
+      stage = 4; note = "Declining — price below a falling 30-week MA. The avoid/short stage; rallies into the MA tend to fail.";
+    } else if (ret26w < 0) {
+      stage = 1; note = "Basing — the MA is flattening after a decline. Watch for a volume breakout above the base to signal Stage 2.";
+    } else {
+      stage = 3; note = "Topping — momentum stalling after an advance; MA flattening. Tighten stops; breakdowns from here begin Stage 4.";
+    }
+    // how long the current stage has roughly persisted
+    let weeksInStage = 0;
+    for (let k = i; k > 30; k--) {
+      const m = smaAt(closes, k, 30), mp = smaAt(closes, k - 6, 30);
+      if (!m || !mp) break;
+      const sl = ((m - mp) / mp) * 100;
+      const st = closes[k] > m && sl > FLAT ? 2 : closes[k] < m && sl < -FLAT ? 4 : (closes[k] / closes[Math.max(0, k - 26)] - 1) < 0 ? 1 : 3;
+      if (st !== stage) break;
+      weeksInStage++;
+    }
+    const qt = quote(s.symbol);
+    out.push({
+      symbol: s.symbol, name: s.name, sector: s.sector, ltp: qt.ltp, changePct: qt.changePct,
+      stage, weeksInStage, ma30: round2(ma30), pctFromMa, ma30SlopePct: slopePct,
+      volRatio, ret26wPct: ret26w, note,
+      action: stage === 2 ? "BUY/HOLD" : stage === 1 ? "WATCH" : stage === 3 ? "TIGHTEN" : "AVOID",
+    });
+  }
+  const dist = { 1: 0, 2: 0, 3: 0, 4: 0 };
+  out.forEach((r) => dist[r.stage]++);
+  return { distribution: dist, rows: out.sort((a, b) => a.stage - b.stage || b.weeksInStage - a.weeksInStage) };
 }
 
 /**
