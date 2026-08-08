@@ -74,7 +74,13 @@ export function connectionsStatus() {
   const val = (k) => cfg(k);
   return {
     provider: val("MYFIN_PROVIDER") || "synthetic",
-    upstox: { configured: !!val("UPSTOX_ACCESS_TOKEN"), token: mask(val("UPSTOX_ACCESS_TOKEN")), fromEnv: !!process.env.UPSTOX_ACCESS_TOKEN },
+    upstox: {
+      configured: !!val("UPSTOX_ACCESS_TOKEN"), token: mask(val("UPSTOX_ACCESS_TOKEN")), fromEnv: !!process.env.UPSTOX_ACCESS_TOKEN,
+      apiKey: val("UPSTOX_API_KEY") || null,                 // public client id — safe to show
+      appConfigured: !!(val("UPSTOX_API_KEY") && val("UPSTOX_API_SECRET")),
+      secret: mask(val("UPSTOX_API_SECRET")),
+      redirectUri: val("UPSTOX_REDIRECT_URI") || null,
+    },
     fyers: { configured: !!(val("FYERS_APP_ID") && val("FYERS_ACCESS_TOKEN")), appId: val("FYERS_APP_ID") || null, token: mask(val("FYERS_ACCESS_TOKEN")), fromEnv: !!process.env.FYERS_ACCESS_TOKEN },
     aimlapi: { configured: !!val("AIMLAPI_KEY"), key: mask(val("AIMLAPI_KEY")), model: val("AIMLAPI_MODEL") || "gpt-4o-mini", fromEnv: !!process.env.AIMLAPI_KEY },
   };

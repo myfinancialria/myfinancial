@@ -163,6 +163,16 @@ Stock pages carry genuine filed company data, not modelled figures — every pag
 | **Yahoo Finance** (backup) | Ratios and 4 years of statements for anything Upstox does not cover | none — automatic |
 | **Modelled engine** (last resort) | Fills only the individual metrics neither source publishes | built in |
 
+**Setup, once:** open ⚙ **Connections** in the app, paste your Upstox **API key** and **API secret** (account.upstox.com → Apps → your app), and register this **Redirect URI** on that same Upstox app page:
+
+```
+http://localhost:5599/upstox/callback
+```
+
+**Then, once a day:** click **🔄 Reconnect Upstox**. It opens the Upstox login, and the app exchanges the returned code itself at `/upstox/callback`, saves the token encrypted, restarts the live feed and begins caching fundamentals — no copy-paste, no terminal. (Deploying elsewhere? Use `https://your-app/upstox/callback` as the redirect on both sides.)
+
+A terminal equivalent exists if you prefer it:
+
 ```bash
 npm run login:upstox
 ```

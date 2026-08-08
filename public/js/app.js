@@ -70,7 +70,36 @@
         chip(st.fyers.configured, `FYERS ${st.fyers.token || ""}`),
         chip(st.aimlapi.configured, `AIMLAPI ${st.aimlapi.key || ""} · ${st.aimlapi.model}`)),
       h2("div.field", h2("label.lbl", "Market data provider"), provSel),
-      fld("Upstox access token (expires daily — regenerate via your Upstox app's login flow)", "cx-upstox", st.upstox.configured ? "saved — paste to replace" : "eyJ…", ""),
+      // ---- Upstox: save the app credentials once, then one click per day ----
+      h2("div.field", { style: { border: "1px solid var(--line)", padding: "13px 14px", marginBottom: "12px" } },
+        h2("label.lbl", { style: { marginBottom: "8px" } }, "Upstox — live prices + REAL company fundamentals"),
+        h2("div.grid.cols-2", { style: { gap: "10px" } },
+          fld("API key (App ID)", "cx-up-key", st.upstox.apiKey ? "saved" : "from account.upstox.com → Apps", st.upstox.apiKey, "text"),
+          fld("API secret", "cx-up-sec", st.upstox.appConfigured ? "saved — paste to replace" : "app secret", "")),
+        fld("Redirect URI — must match the one registered on your Upstox app exactly", "cx-up-redir",
+          `${location.origin}/upstox/callback`, st.upstox.redirectUri || `${location.origin}/upstox/callback`, "text"),
+        h2("div", { style: { display: "flex", gap: "9px", alignItems: "center", flexWrap: "wrap", marginTop: "9px" } },
+          h2("button.btn" + (st.upstox.appConfigured ? ".primary" : ""), {
+            onclick: async (e) => {
+              const val = (id) => document.getElementById(id).value.trim();
+              const body = {};
+              if (val("cx-up-key")) body.UPSTOX_API_KEY = val("cx-up-key");
+              if (val("cx-up-sec")) body.UPSTOX_API_SECRET = val("cx-up-sec");
+              if (val("cx-up-redir")) body.UPSTOX_REDIRECT_URI = val("cx-up-redir");
+              try {
+                if (Object.keys(body).length) await api2("/settings/connections", { body });
+                const r = await api2("/upstox/auth-url");
+                if (!r.ready) return toast(r.reason, true);
+                window.open(r.url, "_blank", "noopener");
+                toast("Upstox login opened — sign in there and you'll land back here connected.");
+              } catch (err) { toast(err.message, true); }
+            },
+          }, st.upstox.configured ? "🔄 Reconnect Upstox (daily)" : "🔗 Save & connect Upstox"),
+          h2("span.dim", { style: { fontSize: "11.5px" } },
+            st.upstox.configured ? `token ${st.upstox.token} · expires ~3:30 AM IST` : "one login per day — Upstox issues no refresh token")),
+        h2("div.disclaimer", { style: { marginTop: "9px" } },
+          "Saved once, the button above is the entire daily routine: it opens the Upstox login and the app exchanges the code itself on the way back — no copy-paste. Your secret is AES-256-GCM encrypted at rest and never sent back to the browser.")),
+      fld("…or paste an Upstox access token directly (optional)", "cx-upstox", st.upstox.configured ? "saved — paste to replace" : "eyJ…", ""),
       h2("div.grid.cols-2", { style: { gap: "10px" } },
         fld("FYERS App ID", "cx-fyers-id", "XXXXXXXX-100", st.fyers.appId, "text"),
         fld("FYERS access token", "cx-fyers-tok", st.fyers.configured ? "saved — paste to replace" : "eyJ…", "")),
@@ -84,6 +113,9 @@
             const val = (id) => document.getElementById(id).value.trim();
             const body = { MYFIN_PROVIDER: provSel.value, AIMLAPI_MODEL: val("cx-aiml-model") };
             if (val("cx-upstox")) body.UPSTOX_ACCESS_TOKEN = val("cx-upstox");
+            if (val("cx-up-key")) body.UPSTOX_API_KEY = val("cx-up-key");
+            if (val("cx-up-sec")) body.UPSTOX_API_SECRET = val("cx-up-sec");
+            if (val("cx-up-redir")) body.UPSTOX_REDIRECT_URI = val("cx-up-redir");
             if (val("cx-fyers-id")) body.FYERS_APP_ID = val("cx-fyers-id");
             if (val("cx-fyers-tok")) body.FYERS_ACCESS_TOKEN = val("cx-fyers-tok");
             if (val("cx-aiml")) body.AIMLAPI_KEY = val("cx-aiml");

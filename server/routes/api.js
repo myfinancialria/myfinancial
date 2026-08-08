@@ -22,7 +22,7 @@ import * as amfi from "../providers/amfi.js";
 import * as baskets from "../engines/baskets.js";
 import * as seo from "../engines/seo.js";
 import * as live from "../providers/live.js";
-import { setCfg, connectionsStatus } from "../lib/config.js";
+import { setCfg, cfg, connectionsStatus } from "../lib/config.js";
 
 export const api = Router();
 const ok = (res, data) => res.json({ ok: true, data });
@@ -239,6 +239,17 @@ api.get("/providers/status", wrap(async (req, res) => {
       yahoo: { configured: true, cached: yf.cachedCount() },
     },
   });
+}));
+
+// Upstox one-click connect: build the authorize URL from the stored app creds.
+api.get("/upstox/auth-url", requireAuth, wrap((req, res) => {
+  const key = cfg("UPSTOX_API_KEY");
+  if (!key) return ok(res, { ready: false, reason: "Save your Upstox API key and secret first." });
+  if (!cfg("UPSTOX_API_SECRET")) return ok(res, { ready: false, reason: "Upstox API secret is missing." });
+  const origin = `${req.protocol}://${req.get("host")}`;
+  const redirect = cfg("UPSTOX_REDIRECT_URI") || `${origin}/upstox/callback`;
+  const url = `https://api.upstox.com/v2/login/authorization/dialog?client_id=${encodeURIComponent(key)}&redirect_uri=${encodeURIComponent(redirect)}&response_type=code&state=myfinancial`;
+  ok(res, { ready: true, url, redirect });
 }));
 
 // -------------------- connections (Upstox / FYERS / AIMLAPI) -----------------
