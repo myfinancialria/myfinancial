@@ -1,0 +1,46 @@
+# ---------------------------------------------------------------------------
+# Daily Market Brief → GitHub Pages
+# Rebuilds https://myfinancialria.github.io/myfinancial/ with REAL data
+# (AMFI NAVs, mfapi return histories, index closes) every market weekday at
+# 17:00 IST (11:30 UTC — IST has no DST, so this never drifts).
+# ---------------------------------------------------------------------------
+name: Daily market brief (GitHub Pages)
+
+on:
+  schedule:
+    - cron: "30 11 * * 1-5"      # 17:00 IST, Monday–Friday
+  workflow_dispatch: {}           # manual refresh any time
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build brief from live AMFI / mfapi / Yahoo data
+        run: node scripts/build_pages.mjs
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -7,6 +7,8 @@ npm install
 npm start          # → http://localhost:5599
 ```
 
+**📈 Live public page:** [myfinancialria.github.io/myfinancial](https://myfinancialria.github.io/myfinancial/) — the **Daily Market Brief**, rebuilt automatically **every market weekday at 5:00 PM IST** by [`pages-daily.yml`](.github/workflows/pages-daily.yml) with real data: official AMFI NAVs for all ~2,400 Direct-Growth schemes (searchable), category leaders by real 3-year CAGR (mfapi.in), and index closes (Yahoo Finance). No keys, no server — pure GitHub Actions → GitHub Pages.
+
 Node ≥ 22 required (uses built-in `node:sqlite`). No build step, no external services, no API keys needed to run.
 
 ---

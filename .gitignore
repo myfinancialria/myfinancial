@@ -12,3 +12,4 @@ npm-debug.log*
 # local env
 .env
 .env.local
+dist/
