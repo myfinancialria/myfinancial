@@ -47,11 +47,12 @@ async function http(url, timeoutMs = 10000) {
   } finally { clearTimeout(t); }
 }
 
-/** Daily candles oldest → newest in the engine's bar shape. */
+/** Daily candles oldest → newest in the engine's bar shape.
+ *  FYERS caps a single D-resolution request at ~366 calendar days. */
 export async function daily(symbol, days = 400) {
   const sym = toFyers(symbol);
   const to = new Date().toISOString().slice(0, 10);
-  const from = new Date(Date.now() - days * 1.6 * 86400_000).toISOString().slice(0, 10);
+  const from = new Date(Date.now() - Math.min(days * 1.6, 364) * 86400_000).toISOString().slice(0, 10);
   const url = `${DATA_BASE}/history?symbol=${encodeURIComponent(sym)}&resolution=D&date_format=1&range_from=${from}&range_to=${to}&cont_flag=1`;
   const json = await http(url, 12000);
   return (json.candles || []).map((c) => ({
