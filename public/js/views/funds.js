@@ -349,8 +349,10 @@
     });
 
     const plainCard = d.plainEnglish ? h("div.card", { style: { borderLeft: "3px solid var(--blue)" } },
-      h("div.card-title", { style: { marginBottom: "8px" } }, "🗣️ In plain words"),
-      h("div.dim", { style: { fontSize: "13.5px", lineHeight: 1.7 } }, d.plainEnglish)) : null;
+      h("div", { style: { display: "flex", justifyContent: "space-between", gap: "10px", marginBottom: "8px", flexWrap: "wrap" } },
+        h("div.card-title", "🗣️ In plain words"),
+        d.plainEnglishGenerator && d.plainEnglishGenerator.startsWith("aimlapi") ? h("span.chip.up", `✨ written by ${d.plainEnglishGenerator.split(":")[1]}`) : h("span.chip", "grounded composer")),
+      h("div.dim", { style: { fontSize: "13.5px", lineHeight: 1.7, whiteSpace: "pre-line" } }, d.plainEnglish)) : null;
 
     return h("div",
       h("div.page-head",

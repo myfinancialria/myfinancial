@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
+import { cfg } from "../lib/config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const VAR = path.join(__dirname, "..", "..", "var");
@@ -39,12 +40,12 @@ const INDEX_KEYS = {
 let keyBySymbol = null;         // NSE trading symbol → instrument_key
 
 export function configured() {
-  return !!process.env.UPSTOX_ACCESS_TOKEN;
+  return !!cfg("UPSTOX_ACCESS_TOKEN");
 }
 
 const headers = () => ({
   Accept: "application/json",
-  Authorization: `Bearer ${process.env.UPSTOX_ACCESS_TOKEN}`,
+  Authorization: `Bearer ${cfg("UPSTOX_ACCESS_TOKEN")}`,
 });
 
 async function http(url, opts = {}, timeoutMs = 10000) {

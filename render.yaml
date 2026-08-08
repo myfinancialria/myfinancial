@@ -1,0 +1,20 @@
+# One-click public deployment on Render (free tier works).
+# 1. Push this repo to GitHub (done)  2. render.com → New → Blueprint → pick the repo
+# 3. Set MYFIN_SECRET when prompted. Add broker/AI keys later from the in-app ⚙ panel.
+services:
+  - type: web
+    name: myfinancial
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /robots.txt
+    envVars:
+      - key: MYFIN_SECRET
+        generateValue: true          # session HMAC + settings/vault encryption master
+      - key: PORT
+        value: "10000"
+      # Optional — can also be pasted into the in-app ⚙ Connections panel:
+      # - key: MYFIN_PROVIDER        # upstox | fyers
+      # - key: UPSTOX_ACCESS_TOKEN
+      # - key: AIMLAPI_KEY

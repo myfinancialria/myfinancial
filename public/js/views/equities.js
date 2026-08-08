@@ -374,7 +374,8 @@
       products.curated ? h("div.disclaimer", "Market-share figures are indicative public estimates — verify with company filings.") : null);
 
     const aiCard = summary ? h("div.card",
-      h("div.card-head", h("div", h("div.card-title", "✨ AI Executive Summary"), h("div.card-sub", "generated from platform fundamentals")), h("span.chip.violet", "AI")),
+      h("div.card-head", h("div", h("div.card-title", "✨ AI Executive Summary"), h("div.card-sub", "grounded in platform fundamentals")),
+        summary.generator && summary.generator.startsWith("aimlapi") ? h("span.chip.up", `✨ written by ${summary.generator.split(":")[1]}`) : h("span.chip.violet", "grounded composer")),
       summary.paragraphs.map((p) => h("p", { style: { fontSize: "13.5px", color: "var(--text2)", marginBottom: "10px", lineHeight: 1.65 } }, p)),
       summary.disclaimer ? h("div.disclaimer", summary.disclaimer) : null) : null;
 

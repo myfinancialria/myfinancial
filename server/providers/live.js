@@ -12,6 +12,7 @@
 // meet the first live bar, then genuine broker candles — so 10-year lookbacks
 // keep working while the recent tape is real.
 // ---------------------------------------------------------------------------
+import { cfg } from "../lib/config.js";
 import * as upstox from "./upstox.js";
 import * as fyers from "./fyers.js";
 
@@ -79,9 +80,22 @@ async function syncQuotes() {
   } catch (e) { state.lastError = `${p.name} quotes: ${String(e.message).slice(0, 120)}`; }
 }
 
-/** Boot the live layer. No-op unless MYFIN_PROVIDER + credentials are set. */
+let lastSymbols = null;
+
+/** Tear down and re-init after a Connections change — takes effect live. */
+export function restart() {
+  for (const t of state.timers) if (t) clearInterval(t);
+  state.timers = [];
+  state.mode = "synthetic"; state.provider = null; state.lastError = null;
+  state.barsBySymbol.clear(); state.quotesBySymbol.clear(); state.version++;
+  if (lastSymbols) start(lastSymbols);
+  return status();
+}
+
+/** Boot the live layer. No-op unless a provider + credentials are configured. */
 export function start(symbols) {
-  const want = String(process.env.MYFIN_PROVIDER || "synthetic").toLowerCase();
+  lastSymbols = symbols;
+  const want = String(cfg("MYFIN_PROVIDER") || "synthetic").toLowerCase();
   const p = PROVIDERS[want];
   if (!p) { if (want !== "synthetic") console.log(`  live: unknown provider "${want}" — using synthetic`); return; }
   if (!p.configured()) {

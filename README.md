@@ -7,6 +7,10 @@ npm install
 npm start          # → http://localhost:5599
 ```
 
+**🌐 All pages public:** the app runs in **public mode** — no login gate; visitors land straight on the dashboard as the demo persona (avatar → switch persona). To put the whole platform on the public internet, use the included [`render.yaml`](render.yaml): push → render.com → *New → Blueprint* → select this repo → live URL in ~2 minutes (free tier). Connect **Upstox/FYERS/AIMLAPI** afterwards from the in-app **⚙ Connections** panel — keys are AES-256-GCM encrypted at rest, applied live without restart, and env vars still take precedence.
+
+**✨ AI-written interpretations:** with an AIMLAPI key connected, the AI Executive Summary on stock pages and the "In plain words" box on fund pages are written by the LLM from platform-computed facts (numbers contractually locked in the prompt, 12-hour cache, deterministic composer as instant fallback). A "✨ written by <model>" badge shows which engine produced each text.
+
 **📈 Live public page:** [myfinancialria.github.io/myfinancial](https://myfinancialria.github.io/myfinancial/) — the **Daily Market Brief**, rebuilt automatically **every market weekday at 5:00 PM IST** by [`pages-daily.yml`](.github/workflows/pages-daily.yml) with real data: official AMFI NAVs for all ~2,400 Direct-Growth schemes (searchable), category leaders by real 3-year CAGR (mfapi.in), and index closes (Yahoo Finance). No keys, no server — pure GitHub Actions → GitHub Pages.
 
 Node ≥ 22 required (uses built-in `node:sqlite`). No build step, no external services, no API keys needed to run.

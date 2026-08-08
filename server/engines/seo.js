@@ -18,6 +18,7 @@ import * as tax from "./tax.js";
 import * as market from "./market.js";
 import * as amfi from "../providers/amfi.js";
 import { round1 } from "../lib/util.js";
+import { cfg } from "../lib/config.js";
 
 const INR = (x) => "₹" + Math.round(x).toLocaleString("en-IN");
 const L = (x) => `₹${(x / 1e5).toFixed(x >= 1e6 ? 0 : 1)} lakh`;
@@ -25,7 +26,7 @@ const CR = (x) => `₹${(x / 1e7).toFixed(2)} crore`;
 
 // ------------------------------ AIMLAPI adapter ------------------------------
 export async function aimlapiChat(messages, { maxTokens = 1800 } = {}) {
-  const key = process.env.AIMLAPI_KEY;
+  const key = cfg("AIMLAPI_KEY");
   if (!key) return null;
   try {
     const ctrl = new AbortController();
@@ -35,7 +36,7 @@ export async function aimlapiChat(messages, { maxTokens = 1800 } = {}) {
       signal: ctrl.signal,
       headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
       body: JSON.stringify({
-        model: process.env.AIMLAPI_MODEL || "gpt-4o-mini",
+        model: cfg("AIMLAPI_MODEL") || "gpt-4o-mini",
         max_tokens: maxTokens,
         temperature: 0.6,
         messages,
@@ -441,12 +442,12 @@ export async function generateArticle(spec, { useLLM = true } = {}) {
   const grounded = spec.compose(facts);
   let body = grounded.body;
   let generator = "grounded-composer";
-  if (useLLM && process.env.AIMLAPI_KEY) {
+  if (useLLM && cfg("AIMLAPI_KEY")) {
     const llm = await aimlapiChat([
       { role: "system", content: AIML_SYSTEM },
       { role: "user", content: `Title: ${spec.title}\nTarget keywords: ${spec.keywords}\n\nFACTS (verbatim, do not alter numbers):\n${grounded.body}\n\nRewrite/expand this into a richer 900-1200 word article for the same audience. Keep every number and fund name exactly as given. Keep the tables.` },
     ]);
-    if (llm && llm.length > 400) { body = llm; generator = `aimlapi:${process.env.AIMLAPI_MODEL || "gpt-4o-mini"}`; }
+    if (llm && llm.length > 400) { body = llm; generator = `aimlapi:${cfg("AIMLAPI_MODEL") || "gpt-4o-mini"}`; }
   }
   const now = Date.now();
   const row = {
@@ -467,7 +468,7 @@ export async function seedArticles({ force = false } = {}) {
   for (const spec of SPECS) {
     try { await generateArticle(spec, { useLLM: false }); n++; } catch (e) { console.log("  seo: seed failed", spec.slug, e.message); }
   }
-  console.log(`  seo: ${n} articles ready at /learn${process.env.AIMLAPI_KEY ? " (POST /api/seo/regenerate to enhance with AIMLAPI)" : " (set AIMLAPI_KEY to enhance with LLM copy)"}`);
+  console.log(`  seo: ${n} articles ready at /learn${cfg("AIMLAPI_KEY") ? " (POST /api/seo/regenerate to enhance with AIMLAPI)" : " (set AIMLAPI_KEY to enhance with LLM copy)"}`);
   return { seeded: n, total: q.one("SELECT COUNT(*) AS c FROM articles").c };
 }
 
@@ -487,6 +488,35 @@ export function getArticle(slug) {
   return a ? { ...a, faq: JSON.parse(a.faq || "[]") } : null;
 }
 export const specsMeta = () => SPECS.map((s) => ({ slug: s.slug, title: s.title, category: s.category }));
+
+// ---------------------- LLM interpretation service ---------------------------
+// Grounded facts in → richer plain-English prose out. Numbers are contractually
+// locked in the prompt; 12h cache bounds cost; instant fallback when no key.
+const interpCache = new Map(); // cacheKey → { text, generator, at }
+const INTERP_TTL = 12 * 3600_000;
+
+const INTERP_SYSTEM = `You are myfinancial's interpreter for ordinary Indian investors. You receive verified FACTS about a stock, fund or sector. Write a clear, warm interpretation in plain English:
+- NEVER change, invent or extrapolate a number. Every figure you mention must appear in the FACTS.
+- Explain jargon in brackets on first use. Use ₹ examples where natural.
+- 2-3 short paragraphs, no headings, no bullet lists, no hype words.
+- You are informational, not advisory — no buy/sell language.`;
+
+export async function interpret(kind, cacheKey, facts, fallbackText) {
+  const ck = `${kind}:${cacheKey}`;
+  const hit = interpCache.get(ck);
+  if (hit && Date.now() - hit.at < INTERP_TTL) return hit;
+  let out = { text: fallbackText, generator: "grounded-composer", at: Date.now() };
+  if (cfg("AIMLAPI_KEY")) {
+    const llm = await aimlapiChat([
+      { role: "system", content: INTERP_SYSTEM },
+      { role: "user", content: `Interpret this ${kind} for a first-time Indian investor.\n\nFACTS (verbatim, source of truth):\n${facts}\n\nOur draft (improve on it without changing any number):\n${fallbackText}` },
+    ], { maxTokens: 550 });
+    if (llm && llm.length > 120) out = { text: llm.trim(), generator: `aimlapi:${cfg("AIMLAPI_MODEL") || "gpt-4o-mini"}`, at: Date.now() };
+  }
+  interpCache.set(ck, out);
+  return out;
+}
+export const interpConfigured = () => !!cfg("AIMLAPI_KEY");
 
 // --------------------- plain-English interpreters ----------------------------
 /** One-paragraph plain-language read of a fund's metrics (for detail pages). */

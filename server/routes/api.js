@@ -21,6 +21,8 @@ import * as assistant from "../engines/assistant.js";
 import * as amfi from "../providers/amfi.js";
 import * as baskets from "../engines/baskets.js";
 import * as seo from "../engines/seo.js";
+import * as live from "../providers/live.js";
+import { setCfg, connectionsStatus } from "../lib/config.js";
 
 export const api = Router();
 const ok = (res, data) => res.json({ ok: true, data });
@@ -37,6 +39,13 @@ api.post("/login", wrap((req, res) => {
   ok(res, { token: issueSession(user.id), user });
 }));
 api.get("/me", requireAuth, wrap((req, res) => ok(res, { ...req.user, meta: JSON.parse(req.user.meta || "{}") })));
+// public mode: every page viewable without a login gate — issues a session for
+// the default demo persona. It's demo data; the avatar menu still switches.
+api.get("/public-session", wrap((req, res) => {
+  const user = q.one("SELECT * FROM users WHERE id = 'u_arjun'");
+  if (!user) return res.status(500).json({ ok: false, error: "Demo data not seeded" });
+  ok(res, { token: issueSession(user.id), user });
+}));
 
 // ------------------------------ market --------------------------------------
 api.get("/market/overview", wrap((req, res) => ok(res, {
@@ -141,10 +150,13 @@ api.get("/funds/screen", wrap((req, res) => ok(res, fundsE.screen({
   minAum: Number(req.query.minAum || 0), maxEr: Number(req.query.maxEr || 99),
   minRating: Number(req.query.minRating || 0), sort: req.query.sort || "score", dir: req.query.dir || "desc",
 }))));
-api.get("/funds/:code", wrap((req, res) => {
+api.get("/funds/:code", wrap(async (req, res) => {
   const d = fundsE.fundDetail(req.params.code, Math.min(Number(req.query.years || 10), 10));
   if (!d) return res.status(404).json({ ok: false, error: "Unknown fund" });
-  ok(res, { ...d, plainEnglish: seo.plainEnglishFund(d) });
+  const fallback = seo.plainEnglishFund(d);
+  const facts = `Fund: ${d.name} (${d.amc}, ${d.categoryName}, direct plan). NAV ₹${d.nav}. Returns: 1Y ${d.returns["1Y"]}%, 3Y ${d.returns["3Y"]}%, 5Y ${d.returns["5Y"]}% CAGR. Sharpe ${d.sharpe}, Sortino ${d.sortino}, alpha ${d.alpha}%, beta ${d.beta}, volatility ${d.stdDev}%, max 3Y drawdown ${d.maxDrawdown}%, expense ratio ${d.expenseRatio}%, category rank ${d.categoryRank}/${d.categoryCount} (${d.rating} stars).`;
+  const interp = await seo.interpret("mutual fund", `${d.code}:${new Date().toISOString().slice(0, 10)}`, facts, fallback);
+  ok(res, { ...d, plainEnglish: interp.text, plainEnglishGenerator: interp.generator });
 }));
 api.get("/funds/:code/sip", wrap((req, res) => ok(res, fundsE.sipBacktest(req.params.code, Number(req.query.monthly || 10000), Number(req.query.years || 5)))));
 
@@ -169,8 +181,8 @@ api.get("/equity/sector-heat", wrap((req, res) => {
   }
   ok(res, Object.values(bySector).map((s) => ({ sector: s.sector, avgChangePct: Math.round((s.sum / s.n) * 100) / 100, gainers: s.gainers, count: s.n })).sort((a, b) => b.avgChangePct - a.avgChangePct));
 }));
-api.get("/equity/:symbol", wrap((req, res) => {
-  const page = equity.stockPage(req.params.symbol.toUpperCase());
+api.get("/equity/:symbol", wrap(async (req, res) => {
+  const page = await equity.stockPage(req.params.symbol.toUpperCase());
   if (!page) return res.status(404).json({ ok: false, error: "Unknown symbol" });
   ok(res, page);
 }));
@@ -217,7 +229,16 @@ api.get("/vault/doc/:id", requireAuth, wrap((req, res) => {
 api.delete("/vault/doc/:id", requireAuth, wrap((req, res) => ok(res, vault.deleteDoc(req.user.id, req.params.id))));
 
 // --------------------------- live data providers -----------------------------
-api.get("/providers/status", wrap((req, res) => ok(res, { market: market.liveStatus(), mf: amfi.statusSync() })));
+api.get("/providers/status", wrap((req, res) => ok(res, { market: market.liveStatus(), mf: amfi.statusSync(), connections: connectionsStatus() })));
+
+// -------------------- connections (Upstox / FYERS / AIMLAPI) -----------------
+api.get("/settings/connections", requireAuth, wrap((req, res) => ok(res, connectionsStatus())));
+api.post("/settings/connections", requireAuth, wrap(async (req, res) => {
+  const allowed = ["MYFIN_PROVIDER", "UPSTOX_ACCESS_TOKEN", "FYERS_APP_ID", "FYERS_ACCESS_TOKEN", "AIMLAPI_KEY", "AIMLAPI_MODEL"];
+  for (const k of allowed) if (k in (req.body || {})) setCfg(k, req.body[k]);
+  const liveStatus2 = live.restart();                     // broker change takes effect immediately
+  ok(res, { saved: true, connections: connectionsStatus(), market: liveStatus2 });
+}));
 
 // ----------------------- live MF universe (AMFI/mfapi) -----------------------
 api.get("/mflive/buckets", wrap((req, res) => ok(res, Object.entries(amfi.CATEGORIES).map(([key, [assetClass, expReturn, expVol, label]]) => ({ key, assetClass, label })))));

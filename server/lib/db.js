@@ -86,6 +86,10 @@ CREATE TABLE IF NOT EXISTS baskets (
   monthly_sip REAL DEFAULT 0, invested REAL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY, value TEXT, updated INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS articles (
   slug TEXT PRIMARY KEY, title TEXT, meta_description TEXT, keywords TEXT,
   category TEXT, body_md TEXT, faq TEXT DEFAULT '[]',

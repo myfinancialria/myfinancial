@@ -8,6 +8,7 @@ import { STOCKS, STOCK_MAP, SECTORS } from "../data/universe.js";
 import { SUBSECTOR_OF, INDUSTRY, POLICY, PRODUCTS, SECTOR_PRODUCT_TEMPLATE, SECTOR_VALUATION } from "../data/sectorIntel.js";
 import { fundamentals, quote, daily } from "./market.js";
 import { sectorContext } from "./screeners.js";
+import { interpret, interpConfigured } from "./seo.js";
 import { mean, round2, round1, rsiSeries } from "../lib/util.js";
 
 const fmtCr = (cr) => (cr >= 100000 ? `₹${(cr / 100000).toFixed(2)} lakh crore` : `₹${Math.round(cr).toLocaleString("en-IN")} crore`);
@@ -238,7 +239,7 @@ export function sectorScorecard(symbol) {
   return { sector: s.sector, sectorName: SECTORS[s.sector].name, intro: fw.intro, rows, summary, peerCount: peers.length };
 }
 
-export function stockPage(symbol) {
+export async function stockPage(symbol) {
   const s = STOCK_MAP[symbol];
   const f = fundamentals(symbol);                 // works for full-NSE extras too
   if (!f) return null;
@@ -253,20 +254,42 @@ export function stockPage(symbol) {
       industry: null, policy: null, products: productsOf(symbol), sectorCtx: null,
     };
   }
+  const summary = executiveSummary(symbol);
+  const valuation = sectorScorecard(symbol);
+  const hs = healthScore(symbol);
+
+  // AIMLAPI interpretation layer: the same grounded facts, richer prose.
+  if (interpConfigured() && summary) {
+    const qt = quote(symbol);
+    const last = f.annual[f.annual.length - 1];
+    const facts = [
+      `Company: ${s.name} (${symbol}), sector ${SECTORS[s.sector].name}.`,
+      `Price ₹${qt.ltp}, day change ${qt.changePct}%, 52-week range ₹${qt.week52Low}–₹${qt.week52High}.`,
+      `FY26: revenue ₹${last.revenue} crore (growth ${last.growthPct}%), PAT ₹${last.pat} crore (margin ${last.patMarginPct}%), EPS ₹${last.eps}, ROE ${last.roe}%${last.roce ? `, ROCE ${last.roce}%` : ""}.`,
+      `3-year CAGR: revenue ${f.ratios.revCagr3Pct}%, profit ${f.ratios.patCagr3Pct}%.`,
+      `Valuation: P/E ${f.ratios.pe}×, P/B ${f.ratios.pb}×${f.ratios.evEbitda ? `, EV/EBITDA ${f.ratios.evEbitda}×` : ""}, dividend yield ${f.ratios.dividendYieldPct}%.`,
+      `Health score ${hs.score}/100 (${hs.grade}).`,
+      valuation?.summary ? `Sector standing: ${valuation.summary}` : "",
+    ].filter(Boolean).join("\n");
+    const r = await interpret("stock", `${symbol}:${new Date().toISOString().slice(0, 10)}`, facts, summary.paragraphs.join("\n\n"));
+    summary.paragraphs = r.text.split(/\n{2,}/).filter((p) => p.trim());
+    summary.generator = r.generator;
+  } else if (summary) summary.generator = "grounded-composer";
+
   return {
     coverage: "full",
     profile: { symbol, name: s.name, sector: s.sector, sectorName: SECTORS[s.sector].name, sub: SUBSECTOR_OF[symbol] || null, fno: s.fno },
     quote: quote(symbol),
     fundamentals: f,
-    health: healthScore(symbol),
+    health: hs,
     peers: peerComparison(symbol),
     swot: swot(symbol),
-    summary: executiveSummary(symbol),
+    summary,
     industry: industryAnalysis(s.sector),
     policy: policyFor(s.sector),
     products: productsOf(symbol),
     sectorCtx: sectorContext(s.sector),
-    valuation: sectorScorecard(symbol),
+    valuation,
   };
 }
 

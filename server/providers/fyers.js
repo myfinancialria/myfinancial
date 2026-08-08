@@ -9,6 +9,8 @@
 //
 // Symbols are deterministic — "NSE:RELIANCE-EQ", indices "NSE:NIFTY50-INDEX".
 // ---------------------------------------------------------------------------
+import { cfg } from "../lib/config.js";
+
 const DATA_BASE = "https://api-t1.fyers.in/data";
 
 const INDEX_SYMBOLS = {
@@ -27,10 +29,10 @@ const INDEX_SYMBOLS = {
 };
 
 export function configured() {
-  return !!(process.env.FYERS_APP_ID && process.env.FYERS_ACCESS_TOKEN);
+  return !!(cfg("FYERS_APP_ID") && cfg("FYERS_ACCESS_TOKEN"));
 }
 
-const authHeader = () => ({ Authorization: `${process.env.FYERS_APP_ID}:${process.env.FYERS_ACCESS_TOKEN}` });
+const authHeader = () => ({ Authorization: `${cfg("FYERS_APP_ID")}:${cfg("FYERS_ACCESS_TOKEN")}` });
 const toFyers = (symbol) => INDEX_SYMBOLS[symbol] || `NSE:${symbol.replace("&", "%26")}-EQ`;
 
 async function http(url, timeoutMs = 10000) {

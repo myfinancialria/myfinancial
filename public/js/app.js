@@ -35,11 +35,67 @@
       const { token, user } = await api("/login", { body: { userId } });
       store.token = token; store.user = user;
       localStorage.setItem("myfin.token", token);
+      localStorage.removeItem("myfin.forcePicker");
       if (user.residency === "NRI" && localStorage.getItem("myfin.ccy") === null) {
         store.currency = user.currency; localStorage.setItem("myfin.ccy", user.currency);
       }
       boot();
     } catch (e) { toast(e.message, true); }
+  }
+
+  /** Public mode: no login gate — auto-enter as the demo persona. */
+  async function publicSession() {
+    const { token, user } = await api("/public-session");
+    store.token = token; store.user = user;
+    localStorage.setItem("myfin.token", token);
+    return user;
+  }
+
+  // ---------------------- Connections (Upstox / FYERS / AIMLAPI) -------------
+  async function connectionsModal() {
+    const { h: h2, modal, api: api2 } = window.MF;
+    const box = h2("div", h2("div.skeleton", { style: { height: "220px" } }));
+    const m = modal("🔌 Data & AI Connections", box, { width: "680px" });
+    const st = await api2("/settings/connections");
+    const fld = (label, id, ph, value, type = "password") => h2("div.field",
+      h2("label.lbl", label), h2("input.inp", { id, placeholder: ph, type, value: value || "", autocomplete: "off" }));
+    const chip = (on, label) => h2("span.chip" + (on ? ".up" : ""), `${on ? "✓" : "○"} ${label}`);
+    const provSel = h2("select.ctl", { id: "cx-provider", style: { width: "100%" } },
+      [["synthetic", "Synthetic demo feed (no keys)"], ["upstox", "Upstox (live NSE)"], ["fyers", "FYERS (live NSE)"]].map(([v, l]) =>
+        h2("option", { value: v, selected: v === st.provider ? "" : null }, l)));
+    box.innerHTML = "";
+    box.appendChild(h2("div",
+      h2("div.pill-row", { style: { marginBottom: "14px" } },
+        chip(st.upstox.configured, `Upstox ${st.upstox.token || ""}`),
+        chip(st.fyers.configured, `FYERS ${st.fyers.token || ""}`),
+        chip(st.aimlapi.configured, `AIMLAPI ${st.aimlapi.key || ""} · ${st.aimlapi.model}`)),
+      h2("div.field", h2("label.lbl", "Market data provider"), provSel),
+      fld("Upstox access token (expires daily — regenerate via your Upstox app's login flow)", "cx-upstox", st.upstox.configured ? "saved — paste to replace" : "eyJ…", ""),
+      h2("div.grid.cols-2", { style: { gap: "10px" } },
+        fld("FYERS App ID", "cx-fyers-id", "XXXXXXXX-100", st.fyers.appId, "text"),
+        fld("FYERS access token", "cx-fyers-tok", st.fyers.configured ? "saved — paste to replace" : "eyJ…", "")),
+      h2("div.grid.cols-2", { style: { gap: "10px" } },
+        fld("AIMLAPI key — writes stock/fund interpretations & /learn articles", "cx-aiml", st.aimlapi.configured ? "saved — paste to replace" : "sk-…", ""),
+        fld("AIMLAPI model", "cx-aiml-model", "gpt-4o-mini", st.aimlapi.model, "text")),
+      h2("div", { style: { display: "flex", gap: "10px", marginTop: "6px", alignItems: "center", flexWrap: "wrap" } },
+        h2("button.btn.primary", {
+          onclick: async (e) => {
+            e.target.disabled = true;
+            const val = (id) => document.getElementById(id).value.trim();
+            const body = { MYFIN_PROVIDER: provSel.value, AIMLAPI_MODEL: val("cx-aiml-model") };
+            if (val("cx-upstox")) body.UPSTOX_ACCESS_TOKEN = val("cx-upstox");
+            if (val("cx-fyers-id")) body.FYERS_APP_ID = val("cx-fyers-id");
+            if (val("cx-fyers-tok")) body.FYERS_ACCESS_TOKEN = val("cx-fyers-tok");
+            if (val("cx-aiml")) body.AIMLAPI_KEY = val("cx-aiml");
+            try {
+              const r = await api2("/settings/connections", { body });
+              toast(`Saved · market feed: ${r.market.mode}${r.market.lastError ? " (check token)" : ""}`);
+              m.remove(); dispatch();
+            } catch (err) { toast(err.message, true); e.target.disabled = false; }
+          },
+        }, "Save & apply live"),
+        h2("button.btn", { onclick: async () => { const s2 = await api2("/providers/status"); toast(`Feed: ${s2.market.mode} · live bars ${s2.market.symbolsWithLiveBars} · ${s2.market.lastError || "no errors"}`); } }, "Test status")),
+      h2("div.disclaimer", "Secrets are AES-256-GCM encrypted at rest and never returned to the browser after saving (masked previews only). Environment variables, if set, take precedence. Broker tokens expire daily by design — the feed falls back to the synthetic engine gracefully when they lapse. On a public deployment, restrict who can open this panel.")));
   }
 
   // ------------------------------- shell -------------------------------------
@@ -80,7 +136,8 @@
               dispatch();               // charts re-render with the new palette
             },
           }, document.documentElement.dataset.theme === "light" ? "☾" : "☀︎"),
-          h("div.avatar", { title: `${u.name} · click to switch persona`, onclick: () => { if (confirm("Switch persona / sign out?")) logout(); } }, initials)))));
+          h("button.theme-toggle", { title: "Data & AI connections (Upstox · FYERS · AIMLAPI)", onclick: connectionsModal }, "⚙"),
+          h("div.avatar", { title: `${u.name} · click to switch persona`, onclick: () => { if (confirm("Switch persona?")) { localStorage.setItem("myfin.forcePicker", "1"); logout(); } } }, initials)))));
 
     app.appendChild(h("div.ticker-strip", h("div.ticker-inner", { id: "tickerStrip" }, h("span.tick-item", "loading market strip…"))));
     app.appendChild(h("main.page", h("div", { id: "view" })));
@@ -121,11 +178,18 @@
 
   // ------------------------------- boot ---------------------------------------
   async function boot() {
-    if (!store.token) return renderLogin();
+    if (localStorage.getItem("myfin.forcePicker")) return renderLogin();
+    if (!store.token) {
+      try { await publicSession(); }                 // public mode: no login gate
+      catch { return renderLogin(); }
+    }
     try {
       store.user = await api("/me");
       store.fx = await api("/fx");
-    } catch { return renderLogin(); }
+    } catch {
+      try { await publicSession(); store.user = await api("/me"); store.fx = await api("/fx"); }
+      catch { return renderLogin(); }
+    }
 
     shell();
     startClock();
