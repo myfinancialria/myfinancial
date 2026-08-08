@@ -27,6 +27,7 @@ const TTL = 3 * 86400_000;
 const BASE = "https://api.upstox.com/v2/fundamentals";
 
 let isinBySymbol = null;
+let symbolByIsin = null;
 let inFlight = 0;
 let coolDownUntil = 0;                       // set on 429 / 401 so we stop hammering
 
@@ -38,13 +39,22 @@ const headers = () => ({ Accept: "application/json", Authorization: `Bearer ${cf
 async function isinOf(symbol) {
   if (!isinBySymbol) {
     const map = await loadInstruments();     // trading_symbol → "NSE_EQ|INE..."
-    isinBySymbol = {};
+    isinBySymbol = {}; symbolByIsin = {};
     for (const [sym, key] of Object.entries(map)) {
       const isin = String(key).split("|")[1];
-      if (isin && /^INE|^INF|^IN[0-9]/.test(isin)) isinBySymbol[sym] = isin;
+      if (isin && /^INE|^INF|^IN[0-9]/.test(isin)) {
+        isinBySymbol[sym] = isin;
+        if (!symbolByIsin[isin]) symbolByIsin[isin] = sym;
+      }
     }
   }
   return isinBySymbol[symbol] || null;
+}
+
+/** ISIN → NSE trading symbol, so a peer can be linked to its own page. */
+export async function symbolOf(isin) {
+  if (!symbolByIsin) await isinOf("RELIANCE");   // builds both directions
+  return symbolByIsin[isin] || null;
 }
 
 async function get(url) {
@@ -433,6 +443,19 @@ export async function fundamentals(symbol) {
     const lastBs = balanceSheet[balanceSheet.length - 1];
     if (lastBs?.netWorth) ratios.bookValueCr = lastBs.netWorth;
 
+    // Peers: resolve each to its NSE symbol (so the UI can link straight to
+    // that company's own page) and pull its headline ratios for comparison.
+    const peers = buildCompetitors(cp);
+    await Promise.all(peers.map(async (c) => {
+      if (!c.isin) return;
+      c.symbol = await symbolOf(c.isin);
+      const kr = await get(`${BASE}/${c.isin}/key-ratios`).catch(() => null);
+      for (const row of Array.isArray(kr) ? kr : kr?.key_ratios || []) {
+        const k = ratioKeyOf(row.name), v = pnum(row.company_value);
+        if (k && v !== null) c[k] = v;
+      }
+    }));
+
     const out = {
       symbol, isin, source: "upstox", asOf: new Date().toISOString().slice(0, 10),
       name: null,
@@ -445,7 +468,7 @@ export async function fundamentals(symbol) {
       } : null,
       ratios, sectorBenchmarks, holdings,
       corporateActions: buildActions(ca),
-      competitors: buildCompetitors(cp),
+      competitors: peers,
       statements: {
         bankFormat: false, real: true, source: "upstox",
         units: inc?.units_in || bs?.units_in || "crore",

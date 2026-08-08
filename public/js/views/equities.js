@@ -517,20 +517,43 @@
         h("div.disclaimer", "The ex-date is the cut-off: you must already own the share before that date to receive the dividend or bonus."));
     }
 
-    // ---- competitors named by the exchange data feed (real) ----
+    // ---- competitors named by the exchange data feed (real), fully comparable ----
     let rivalsCard = null;
     if (rx && rx.competitors && rx.competitors.length) {
-      const rows = rx.competitors.map((c) => h("tr",
-        h("td", h("div.sym", c.name)),
-        h("td.num", c.marketCap === null || c.marketCap === undefined ? "—" : fmtNum(c.marketCap, 0)),
-        h("td.num", c.pe === null || c.pe === undefined ? "—" : c.pe)));
+      const n = (v, suf) => (v === null || v === undefined ? "—" : fmtNum(v) + (suf || ""));
+      const self = { name: profile.name, symbol, pe: rt.pe, pb: rt.pb, roe: rt.roe, roce: rt.roce, roa: rt.roa, evEbitda: rt.evEbitda, self: true };
+      const all = [self, ...rx.competitors];
+      const rows = all.map((c) => {
+        const clickable = !c.self && c.symbol;
+        const nameCell = h("td",
+          clickable
+            ? h("a", { href: `#/equities/${encodeURIComponent(c.symbol)}`, style: { color: "var(--text)", fontWeight: 650, textDecoration: "none", borderBottom: "1px solid var(--border2)" }, title: `Open full analysis of ${c.symbol}` }, c.name + " ↗")
+            : h("div.sym", c.name),
+          c.self ? h("div.sub", "— this company") : c.symbol ? h("div.sub", c.symbol) : h("div.sub", "not NSE-listed"));
+        return h("tr" + (clickable ? ".click" : ""), {
+          style: c.self ? { background: "var(--blue-bg)" } : {},
+          onclick: clickable ? () => navigate(`#/equities/${encodeURIComponent(c.symbol)}`) : null,
+        },
+          nameCell,
+          h("td.num", { style: { textAlign: "right" } }, n(c.pe, "×")),
+          h("td.num", { style: { textAlign: "right" } }, n(c.pb, "×")),
+          h("td.num", { style: { textAlign: "right" } }, n(c.evEbitda, "×")),
+          h("td.num", { style: { textAlign: "right" } }, n(c.roe, "%")),
+          h("td.num", { style: { textAlign: "right" } }, n(c.roce, "%")),
+          h("td.num", { style: { textAlign: "right" } }, n(c.roa, "%")));
+      });
+      const linked = rx.competitors.filter((c) => c.symbol).length;
       rivalsCard = h("div.card.flush",
         h("div.card-head",
-          h("div", h("div.card-title", "⚔️ Who It Competes With"), h("div.card-sub", "rival companies in the same business")),
+          h("div", h("div.card-title", "⚔️ Rivals — Side by Side"), h("div.card-sub", `${rx.competitors.length} competitors named by the exchange feed · click any row to open its full analysis`)),
           h("span.chip.up", "REAL ✓")),
-        h("div.tbl-scroll", { style: { maxHeight: "300px" } }, h("table.tbl",
-          h("thead", h("tr", h("th", "Company"), h("th", "MCap ₹Cr"), h("th", "P/E"))),
-          h("tbody", rows))));
+        h("div.tbl-scroll", { style: { maxHeight: "340px" } }, h("table.tbl",
+          h("thead", h("tr", h("th", "Company"),
+            h("th", { style: { textAlign: "right" } }, "P/E"), h("th", { style: { textAlign: "right" } }, "P/B"),
+            h("th", { style: { textAlign: "right" } }, "EV/EBITDA"), h("th", { style: { textAlign: "right" } }, "ROE"),
+            h("th", { style: { textAlign: "right" } }, "ROCE"), h("th", { style: { textAlign: "right" } }, "ROA"))),
+          h("tbody", rows))),
+        h("div.disclaimer", `Every ratio here is real filed data. ${linked} of ${rx.competitors.length} rivals are NSE-listed and open in full — a lower P/E than peers means the market is paying less for each rupee of profit, which is worth investigating rather than assuming is a bargain.`));
     }
 
     const peersCard = peers ? h("div.card.flush",

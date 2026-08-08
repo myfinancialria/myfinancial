@@ -154,21 +154,34 @@ export async function getUniverse() {
   building = (async () => {
     const text = await navAllText();
     const rows = parseNavAll(text);
+    // AMFI's file still carries wound-up schemes whose NAV stopped updating
+    // years ago. Anything more than 15 days behind the file's own latest date
+    // is marked stale so it never poses as a live, investable fund.
+    const dates = rows.map((r) => parseAmfiDate(r.navDate)).filter(Boolean);
+    const latestNav = dates.length ? Math.max(...dates) : null;
+    let staleCount = 0;
     const funds = rows.map((r, i) => {
       const bucket = bucketOf(r.rawCat, r.name);
       const [assetClass, expReturn, expVol, catLabel] = CATEGORIES[bucket];
       const e = enrichCache[r.code];
+      const d = parseAmfiDate(r.navDate);
+      const stale = !!(latestNav && d && latestNav - d > 15 * 86400_000);
+      if (stale) staleCount++;
       return {
         id: `A${String(i).padStart(5, "0")}`, code: r.code, name: r.name, amc: r.amc,
         bucket, assetClass, category: catLabel, expReturn, expVol,
-        nav: r.nav, navDate: r.navDate,
+        nav: r.nav, navDate: r.navDate, stale,
+        staleDays: stale ? Math.round((latestNav - d) / 86400_000) : 0,
         r1: e?.r1 ?? null, r3: e?.r3 ?? null, r5: e?.r5 ?? null, vol: e?.vol ?? null,
         enriched: !!e,
       };
     });
     rankUniverse(funds);
-    universe = { builtAt: Date.now(), navDate: rows[0]?.navDate || null, source: "amfi", count: funds.length, funds };
-    console.log(`  amfi: parsed ${funds.length} Direct-Growth schemes (NAV date ${universe.navDate})`);
+    const navDate = latestNav
+      ? rows.find((r) => parseAmfiDate(r.navDate) === latestNav)?.navDate
+      : rows[0]?.navDate || null;
+    universe = { builtAt: Date.now(), navDate, source: "amfi", count: funds.length, staleCount, funds };
+    console.log(`  amfi: parsed ${funds.length} Direct-Growth schemes (NAV date ${navDate})${staleCount ? ` · ${staleCount} wound-up/stale flagged` : ""}`);
     return universe;
   })().finally(() => { building = null; });
   return building;
@@ -227,9 +240,17 @@ export async function enrich(code) {
   finally { enrichInFlight--; }
 }
 
-const parseDMY = (s) => {
+const parseDMY = (s) => {                        // mfapi history: 02-05-2025
   const [d, m, y] = String(s).split("-").map(Number);
   return d && m && y ? Date.UTC(y, m - 1, d) : null;
+};
+
+const AMFI_MON = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+const parseAmfiDate = (s) => {                   // AMFI NAVAll: 02-May-2025
+  const m = String(s || "").trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
+  if (!m) return null;
+  const mon = AMFI_MON[m[2].toLowerCase()];
+  return mon === undefined ? null : Date.UTC(Number(m[3]), mon, Number(m[1]));
 };
 
 /** Full NAV history for charts. */
@@ -241,20 +262,26 @@ export async function schemeHistory(code) {
 }
 
 /** Screener over the live universe. */
-export async function screen({ q = "", bucket = "", assetClass = "", minStars = 0, sort = "r3", dir = "desc", limit = 200, enrichTop = 0 } = {}) {
+export async function screen({ q = "", bucket = "", assetClass = "", minStars = 0, sort = "r3", dir = "desc", limit = 200, enrichTop = 0, includeStale = false, withReturnsOnly = false } = {}) {
   const u = await getUniverse();
   const ql = q.toLowerCase();
   let rows = u.funds.filter((f) =>
     (!ql || f.name.toLowerCase().includes(ql) || f.amc.toLowerCase().includes(ql)) &&
     (!bucket || f.bucket === bucket) &&
     (!assetClass || f.assetClass === assetClass) &&
+    (includeStale || !f.stale) &&
+    (!withReturnsOnly || f.enriched) &&
     (f.stars ?? 0) >= minStars);
   const key = ["r1", "r3", "r5", "vol", "nav", "stars"].includes(sort) ? sort : "r3";
   rows.sort((a, b) => (dir === "asc" ? (a[key] ?? 1e9) - (b[key] ?? 1e9) : (b[key] ?? -1e9) - (a[key] ?? -1e9)));
   const out = rows.slice(0, limit);
   // opportunistically enrich the top visible unenriched rows (fire & forget)
   if (enrichTop > 0) out.filter((f) => !f.enriched).slice(0, enrichTop).forEach((f) => enrich(f.code));
-  return { navDate: u.navDate, total: rows.length, count: out.length, funds: out };
+  const enrichedCount = u.funds.filter((f) => f.enriched).length;
+  return {
+    navDate: u.navDate, total: rows.length, count: out.length, funds: out,
+    coverage: { universe: u.count, live: u.count - (u.staleCount || 0), stale: u.staleCount || 0, withReturns: enrichedCount },
+  };
 }
 
 /** Top-ranked live funds for a set of buckets (basket construction). */
@@ -297,5 +324,32 @@ export async function warmup({ perBucket = 8 } = {}) {
       await new Promise((r) => setTimeout(r, 450));
     }
     console.log(`  amfi: warmup done (${Object.keys(enrichCache).length} schemes enriched total)`);
+    enrichAll().catch(() => {});                     // then keep going, whole universe
   } catch (e) { console.log("  amfi: warmup skipped —", String(e.message).slice(0, 80)); }
+}
+
+/**
+ * Full-universe sweep: every scheme still publishing a NAV gets real 1/3/5-year
+ * returns and volatility. mfapi.in is a free community service, so this is
+ * deliberately slow (~3 calls/second, resumable via the 3-day disk cache) and
+ * runs long after boot rather than competing with first paint.
+ */
+let sweeping = false;
+export async function enrichAll({ spacingMs = 320 } = {}) {
+  if (sweeping) return;
+  sweeping = true;
+  try {
+    const u = await getUniverse();
+    const todo = u.funds.filter((f) => !f.enriched && !f.stale);
+    if (!todo.length) return;
+    console.log(`  amfi: enriching remaining ${todo.length} schemes (background, ~${Math.round((todo.length * spacingMs) / 60000)} min)…`);
+    let done = 0, ok = 0;
+    for (const f of todo) {
+      if (await enrich(f.code)) ok++;
+      if (++done % 250 === 0) console.log(`  amfi: enriched ${ok}/${done} of ${todo.length}…`);
+      await new Promise((r) => setTimeout(r, spacingMs));
+    }
+    console.log(`  amfi: full sweep done — ${Object.keys(enrichCache).length}/${u.funds.length} schemes carry real returns`);
+  } catch (e) { console.log("  amfi: sweep stopped —", String(e.message).slice(0, 80));
+  } finally { sweeping = false; }
 }
