@@ -224,7 +224,7 @@ api.get("/mflive/buckets", wrap((req, res) => ok(res, Object.entries(amfi.CATEGO
 api.get("/mflive/screen", wrap(async (req, res) => ok(res, await amfi.screen({
   q: req.query.q || "", bucket: req.query.bucket || "", assetClass: req.query.assetClass || "",
   minStars: Number(req.query.minStars || 0), sort: req.query.sort || "r3", dir: req.query.dir || "desc",
-  limit: Math.min(Number(req.query.limit || 150), 400), enrichTop: 8,
+  limit: Math.min(Number(req.query.limit || 200), 3000), enrichTop: 8,
 }))));
 api.get("/mflive/scheme/:code", wrap(async (req, res) => {
   const [hist, met] = await Promise.all([amfi.schemeHistory(req.params.code), amfi.enrich(req.params.code)]);

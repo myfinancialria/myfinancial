@@ -383,43 +383,74 @@
       hbars(health.pillars.map((p) => ({ label: p.name, value: p.score, display: `${p.score}/100`, color: p.score >= 70 ? COLORS.UP : p.score >= 45 ? COLORS.GOLD : COLORS.DOWN, note: p.note })), { max: 100 })) : null;
 
     let finCard = null;
-    if (f.annual) {
-      let mode = "annual";
+    if (f.annual && f.statements) {
+      const st = f.statements;
+      const YEARS = 5;
+      // generic line-item renderer: rows down, last N fiscal years across
+      const stmtTable = (data, rowSpecs) => {
+        const cols = data.slice(-YEARS);
+        const headRow = h("tr", h("th", "₹ Cr"), cols.map((c) => h("th", { style: { textAlign: "right" } }, c.fy)));
+        const bodyRows = rowSpecs.filter((r) => cols.some((c) => c[r.k] !== undefined && c[r.k] !== null)).map((r) => h("tr",
+          h("td", { style: r.strong ? { fontWeight: 750 } : {} }, r.label),
+          cols.map((c) => {
+            const v = c[r.k];
+            const disp = v === undefined || v === null ? "—" : r.k === "eps" ? "₹" + fmtNum(v) : fmtNum(v, 0);
+            return h("td.num", { style: { textAlign: "right", fontWeight: r.strong ? 700 : 400, borderTop: r.strong ? "1px solid var(--border2)" : "" }, class: r.signed && v < 0 ? "down-t" : r.signed && v > 0 ? "up-t" : "" }, r.signed && v > 0 ? "+" + disp : disp);
+          })));
+        return h("div.tbl-scroll", h("table.tbl", h("thead", headRow), h("tbody", bodyRows)));
+      };
+
+      const PNL_ROWS = st.bankFormat
+        ? [{ k: "interestEarned", label: "Interest earned" }, { k: "interestExpended", label: "Interest expended" }, { k: "nii", label: "Net interest income", strong: true }, { k: "otherIncome", label: "Other income" }, { k: "operatingExpenses", label: "Operating expenses" }, { k: "prePpop", label: "Pre-provision profit", strong: true }, { k: "provisions", label: "Provisions" }, { k: "pbt", label: "Profit before tax", strong: true }, { k: "tax", label: "Tax" }, { k: "pat", label: "Net profit (PAT)", strong: true }, { k: "eps", label: "EPS" }]
+        : [{ k: "revenue", label: "Revenue" }, { k: "otherIncome", label: "Other income" }, { k: "materials", label: "Material costs" }, { k: "employee", label: "Employee costs" }, { k: "otherExpenses", label: "Other expenses" }, { k: "ebitda", label: "EBITDA", strong: true }, { k: "depreciation", label: "Depreciation" }, { k: "ebit", label: "EBIT", strong: true }, { k: "interest", label: "Interest" }, { k: "pbt", label: "Profit before tax", strong: true }, { k: "tax", label: "Tax" }, { k: "pat", label: "Net profit (PAT)", strong: true }, { k: "eps", label: "EPS" }];
+
+      const BS_ROWS = st.bankFormat
+        ? [{ k: "shareCapital", label: "Share capital" }, { k: "reservesSurplus", label: "Reserves & surplus" }, { k: "netWorth", label: "Net worth", strong: true }, { k: "deposits", label: "Deposits" }, { k: "borrowings", label: "Borrowings" }, { k: "otherLiabilities", label: "Other liabilities" }, { k: "totalLiabilities", label: "TOTAL LIABILITIES", strong: true }, { k: "cashWithRBI", label: "Cash & RBI balances" }, { k: "investments", label: "Investments" }, { k: "advances", label: "Advances (loans)" }, { k: "fixedAndOther", label: "Fixed & other assets" }, { k: "totalAssets", label: "TOTAL ASSETS", strong: true }]
+        : [{ k: "shareCapital", label: "Share capital" }, { k: "reservesSurplus", label: "Reserves & surplus" }, { k: "netWorth", label: "Net worth", strong: true }, { k: "totalDebt", label: "Total debt" }, { k: "otherLiabilities", label: "Other liabilities" }, { k: "totalLiabilities", label: "TOTAL LIABILITIES", strong: true }, { k: "netFixedAssets", label: "Net fixed assets" }, { k: "cwip", label: "Capital WIP" }, { k: "investments", label: "Investments" }, { k: "inventory", label: "Inventory" }, { k: "receivables", label: "Receivables" }, { k: "cashAndBank", label: "Cash & bank" }, { k: "otherAssets", label: "Other assets" }, { k: "totalAssets", label: "TOTAL ASSETS", strong: true }];
+
+      const CF_ROWS = st.bankFormat
+        ? [{ k: "cfo", label: "Operating cash flow", strong: true, signed: true }, { k: "cfi", label: "Investing cash flow", signed: true }, { k: "cff", label: "Financing cash flow", signed: true }, { k: "netChange", label: "Net change in cash", strong: true, signed: true }, { k: "closingCash", label: "Closing cash & RBI" }]
+        : [{ k: "cfo", label: "Operating cash flow", strong: true, signed: true }, { k: "capex", label: "Capex", signed: true }, { k: "cfi", label: "Investing cash flow", signed: true }, { k: "dividendsPaid", label: "Dividends paid", signed: true }, { k: "debtChange", label: "Debt raised / (repaid)", signed: true }, { k: "cff", label: "Financing cash flow", signed: true }, { k: "netChange", label: "Net change in cash", strong: true, signed: true }, { k: "closingCash", label: "Closing cash" }, { k: "fcf", label: "Free cash flow (CFO − capex)", strong: true, signed: true }];
+
+      let mode = "pnl";
       const finBody = h("div");
       const paintFin = () => {
         finBody.innerHTML = "";
-        let tableEl;
-        if (mode === "annual") {
-          const headRow = h("tr", h("th", "FY"), h("th", "Revenue ₹Cr"), h("th", "Growth"), h("th", f.annual[0].ebitda ? "EBITDA %" : "NIM %"), h("th", "PAT ₹Cr"), h("th", "PAT %"), h("th", "EPS"), h("th", "ROE"), h("th", "ROCE"), h("th", "D/E"), h("th", "FCF ₹Cr"));
-          const rows = f.annual.map((a) => h("tr",
-            h("td", h("b", a.fy)),
-            h("td.num", fmtNum(a.revenue, 0)),
-            h("td", { class: pctCls(a.growthPct) }, fmtPct(a.growthPct, 1)),
-            h("td.num", a.ebitdaMarginPct ?? a.nim ?? "—"),
-            h("td.num", fmtNum(a.pat, 0)),
-            h("td.num", a.patMarginPct),
-            h("td.num", a.eps),
-            h("td.num", a.roe),
-            h("td.num", a.roce ?? "—"),
-            h("td.num", a.debtToEquity ?? "—"),
-            h("td.num", a.fcf ? fmtNum(a.fcf, 0) : "—")));
-          tableEl = h("table.tbl", h("thead", headRow), h("tbody", rows));
-        } else {
+        if (mode === "pnl") finBody.appendChild(stmtTable(st.pnl, PNL_ROWS));
+        else if (mode === "bs") finBody.appendChild(stmtTable(st.balanceSheet, BS_ROWS));
+        else if (mode === "cf") finBody.appendChild(stmtTable(st.cashFlow, CF_ROWS));
+        else {
           const rows = f.quarters.map((qr) => h("tr",
-            h("td", h("b", qr.q)),
-            h("td.num", fmtNum(qr.revenue, 0)),
-            h("td.num", fmtNum(qr.pat, 0)),
-            h("td.num", `${qr.patMarginPct}%`)));
-          tableEl = h("table.tbl", h("thead", h("tr", h("th", "Quarter"), h("th", "Revenue ₹Cr"), h("th", "PAT ₹Cr"), h("th", "PAT margin"))), h("tbody", rows));
+            h("td", h("b", qr.q)), h("td.num", { style: { textAlign: "right" } }, fmtNum(qr.revenue, 0)),
+            h("td.num", { style: { textAlign: "right" } }, fmtNum(qr.pat, 0)), h("td.num", { style: { textAlign: "right" } }, `${qr.patMarginPct}%`)));
+          finBody.appendChild(h("div.tbl-scroll", h("table.tbl", h("thead", h("tr", h("th", "Quarter"), h("th", { style: { textAlign: "right" } }, "Revenue ₹Cr"), h("th", { style: { textAlign: "right" } }, "PAT ₹Cr"), h("th", { style: { textAlign: "right" } }, "PAT margin"))), h("tbody", rows))));
         }
-        finBody.appendChild(h("div.tbl-scroll", tableEl));
+        finBody.appendChild(h("div.disclaimer", { style: { margin: "10px 18px 14px" } }, st.note));
       };
       paintFin();
       finCard = h("div.card.flush",
-        h("div.card-head", h("div", h("div.card-title", "📊 Financial Statements"), h("div.card-sub", `Rev CAGR 3Y ${rt.revCagr3Pct}% · PAT CAGR ${rt.patCagr3Pct}%`)),
-          h("div.tabs", [["annual", "Annual"], ["quarters", "Quarterly"]].map(([id, l]) => h("button.tab", { class: id === "annual" ? "active" : "", onclick: (e) => { mode = id; e.target.parentElement.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t === e.target)); paintFin(); } }, l)))),
+        h("div.card-head", h("div", h("div.card-title", "📊 Financial Statements"), h("div.card-sub", `P&L · balance sheet · cash flow — last ${YEARS} FYs (₹ crore)`)),
+          h("div.tabs", [["pnl", "P&L"], ["bs", "Balance Sheet"], ["cf", "Cash Flow"], ["q", "Quarterly"]].map(([id, l], i) =>
+            h("button.tab", { class: i === 0 ? "active" : "", onclick: (e) => { mode = id; e.target.parentElement.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t === e.target)); paintFin(); } }, l)))),
         finBody);
     }
+
+    // ---- sector valuation scorecard ----
+    const valuation = d.valuation;
+    const valuationCard = valuation ? h("div.card",
+      h("div.card-head", h("div", h("div.card-title", `🎯 How ${valuation.sectorName} Is Valued — and Where ${symbol} Stands`),
+        h("div.card-sub", `sector playbook metrics vs ${valuation.peerCount}-stock sector median`))),
+      h("p", { style: { color: "var(--text2)", fontSize: "13px", lineHeight: 1.7, marginBottom: "14px" } }, valuation.intro),
+      h("div.tbl-scroll", h("table.tbl",
+        h("thead", h("tr", h("th", "Metric"), h("th", "Why it matters here"), h("th", { style: { textAlign: "right" } }, symbol), h("th", { style: { textAlign: "right" } }, "Sector median"), h("th", "Standing"))),
+        h("tbody", valuation.rows.map((r) => h("tr",
+          h("td", h("b", r.label), h("div.sub", r.kind.toUpperCase())),
+          h("td", { style: { whiteSpace: "normal", maxWidth: "300px", fontSize: "12px", color: "var(--text2)" } }, r.why),
+          h("td.num", { style: { textAlign: "right", fontWeight: 700 } }, fmtNum(r.value)),
+          h("td.num", { style: { textAlign: "right" } }, fmtNum(r.median)),
+          h("td", h("span.chip" + (Math.abs(r.diffPct) < 5 ? "" : r.good ? ".up" : ".down"), r.verdict))))))),
+      valuation.summary ? h("div", { style: { marginTop: "14px", padding: "12px 15px", background: "var(--blue-bg)", borderLeft: "3px solid var(--blue)", fontSize: "13px", lineHeight: 1.65, color: "var(--text2)" } },
+        h("b", { style: { color: "var(--text)" } }, "Verdict: "), valuation.summary) : null) : null;
 
     const peersCard = peers ? h("div.card.flush",
       h("div.card-head", h("div", h("div.card-title", `🏭 ${peers.sectorName} peers`), h("div.card-sub", `medians — P/E ${peers.medians.pe}× · P/B ${peers.medians.pb}× · ROE ${peers.medians.roe}%`))),
@@ -448,9 +479,10 @@
         header,
         h("div.grid.cols-32", chartCard, aiCard || productsCard),
         ratioCard,
+        valuationCard,
+        finCard ? h("div.grid.cols-32", finCard, healthCard) : null,
         (industryCard || policyCard) ? h("div.grid.cols-2", industryCard, policyCard) : null,
         aiCard ? productsCard : null,
-        finCard ? h("div.grid.cols-32", finCard, healthCard) : null,
         (peersCard || swotCard) ? h("div.grid.cols-2", peersCard, swotCard) : null));
   }
 

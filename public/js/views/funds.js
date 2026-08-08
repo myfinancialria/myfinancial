@@ -9,29 +9,35 @@
 
   async function render(rest) {
     if (rest?.[0] === "robo") return robo();
-    if (rest?.[0] === "live") return liveUniverse();
+    if (rest?.[0] === "curated") return screener();
     if (rest?.[0] === "baskets") return basketsView();
     if (rest?.[0] && rest[0].startsWith("MF")) return detail(rest[0]);
-    return screener();
+    return liveUniverse();                        // ALL listed direct funds — the default
   }
 
   const fundTabs = (active) => h("div.tabs", { style: { marginBottom: "16px" } },
-    [["", "Curated Screener"], ["live", "🇮🇳 All-India Live (AMFI)"], ["baskets", "🧺 Goal Baskets"], ["robo", "🤖 Robo-Advisory"]].map(([id, label]) =>
+    [["", "🇮🇳 All Direct Funds (AMFI Live)"], ["curated", "Curated Screener (demo)"], ["baskets", "🧺 Goal Baskets"], ["robo", "🤖 Robo-Advisory"]].map(([id, label]) =>
       h("button.tab", { class: id === active ? "active" : "", onclick: () => navigate(`#/funds${id ? "/" + id : ""}`) }, label)));
 
   // ---------------------- All-India live universe (AMFI) ---------------------
   async function liveUniverse() {
     const buckets = await api("/mflive/buckets");
-    const state = { q: "", bucket: "", assetClass: "", minStars: 0, sort: "r3", dir: "desc" };
+    const state = { q: "", bucket: "", assetClass: "", minStars: 0, sort: "r3", dir: "desc", limit: 200 };
     const info = h("span.chip.blue", "loading…");
-    const tblWrap = h("div.tbl-scroll", { style: { maxHeight: "600px" } });
+    const tblWrap = h("div.tbl-scroll", { style: { maxHeight: "640px" } });
+    const moreWrap = h("div", { style: { padding: "12px 18px", textAlign: "center" } });
 
     const load = debounce(async () => {
       tblWrap.innerHTML = "";
       tblWrap.appendChild(h("div.skeleton", { style: { height: "300px" } }));
       try {
-        const data = await api(`/mflive/screen?q=${encodeURIComponent(state.q)}&bucket=${state.bucket}&assetClass=${state.assetClass}&minStars=${state.minStars}&sort=${state.sort}&dir=${state.dir}&limit=150`);
-        info.textContent = `${data.total.toLocaleString("en-IN")} Direct-Growth schemes · NAV date ${data.navDate}`;
+        const data = await api(`/mflive/screen?q=${encodeURIComponent(state.q)}&bucket=${state.bucket}&assetClass=${state.assetClass}&minStars=${state.minStars}&sort=${state.sort}&dir=${state.dir}&limit=${state.limit}`);
+        info.textContent = `showing ${data.count.toLocaleString("en-IN")} of ${data.total.toLocaleString("en-IN")} Direct-Growth schemes · NAV date ${data.navDate}`;
+        moreWrap.innerHTML = "";
+        if (data.count < data.total) {
+          moreWrap.appendChild(h("button.btn", { onclick: () => { state.limit += 400; load(); } }, `Load 400 more (${(data.total - data.count).toLocaleString("en-IN")} remaining)`));
+          moreWrap.appendChild(h("button.btn.ghost", { style: { marginLeft: "8px" }, onclick: () => { state.limit = 3000; load(); } }, "Load all"));
+        }
         tblWrap.innerHTML = "";
         const sortTh = (key, label) => h("th.sortable", { onclick: () => { state.dir = state.sort === key && state.dir === "desc" ? "asc" : "desc"; state.sort = key; load(); } },
           `${label} ${state.sort === key ? (state.dir === "desc" ? "▼" : "▲") : ""}`);
@@ -69,9 +75,9 @@
         h("div", h("div.page-title", "All-India Mutual Fund Universe"),
           h("div.page-sub", "Every Direct-Growth scheme from official AMFI NAVs · returns & volatility enriched live from mfapi.in · click any scheme for its NAV history")),
         info),
-      fundTabs("live"),
-      h("div.grid", { style: { gap: "16px" } }, filters, h("div.card.flush", tblWrap),
-        h("div.disclaimer", { style: { border: "none" } }, "Data: AMFI NAVAll (official, free) + mfapi.in histories, cached server-side. Returns are trailing CAGR; “…” means enrichment is still fetching — reopen in a few seconds. Direct plans only. Not investment advice.")));
+      fundTabs(""),
+      h("div.grid", { style: { gap: "16px" } }, filters, h("div.card.flush", tblWrap, moreWrap),
+        h("div.disclaimer", { style: { border: "none" } }, "Every Direct-plan Growth scheme AMFI lists (IDCW/bonus variants excluded by design). Data: official AMFI NAVAll + mfapi.in histories, cached server-side. “…” = returns still enriching — reopen shortly. Not investment advice.")));
   }
 
   async function liveSchemeModal(f) {
@@ -247,7 +253,7 @@
         h("div", h("div.page-title", "Direct Mutual Funds"),
           h("div.page-sub", "Zero-commission direct plans · multi-factor ranks: Sharpe, Sortino, Jensen's alpha, rolling consistency, cost")),
         h("div", { style: { display: "flex", gap: "8px", alignItems: "center" } }, count)),
-      fundTabs(""),
+      fundTabs("curated"),
       h("div.grid", { style: { gap: "16px" } }, filters, h("div.card.flush", tblWrap),
         h("div.disclaimer", { style: { border: "none" } }, "Rankings are model outputs on synthetic demo NAVs — methodology: 22% Sharpe · 18% Sortino · 20% alpha · 15% 3Y return · 10% rolling-min consistency · 10% cost · 5% tracking error, z-scored within category. Mutual fund investments are subject to market risks; read all scheme-related documents carefully.")));
   }

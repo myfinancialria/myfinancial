@@ -5,7 +5,7 @@
 // sentence traces to a number the user can see on the page.
 // ---------------------------------------------------------------------------
 import { STOCKS, STOCK_MAP, SECTORS } from "../data/universe.js";
-import { SUBSECTOR_OF, INDUSTRY, POLICY, PRODUCTS, SECTOR_PRODUCT_TEMPLATE } from "../data/sectorIntel.js";
+import { SUBSECTOR_OF, INDUSTRY, POLICY, PRODUCTS, SECTOR_PRODUCT_TEMPLATE, SECTOR_VALUATION } from "../data/sectorIntel.js";
 import { fundamentals, quote, daily } from "./market.js";
 import { sectorContext } from "./screeners.js";
 import { mean, round2, round1, rsiSeries } from "../lib/util.js";
@@ -177,6 +177,67 @@ export function productsOf(symbol) {
   return { curated: false, items: [], note: tpl ? `Detailed product intelligence is curated for covered companies. ${symbol} operates in ${tpl}.` : "Product intelligence not yet curated for this company." };
 }
 
+/**
+ * Sector valuation scorecard: the metrics this sector is actually valued on,
+ * company value vs sector median for each, and a composed verdict.
+ */
+export function sectorScorecard(symbol) {
+  const s = STOCK_MAP[symbol];
+  const fw = s && SECTOR_VALUATION[s.sector];
+  if (!fw) return null;
+  const metricOf = (sym) => {
+    const fd = fundamentals(sym);
+    const last = fd.annual[fd.annual.length - 1];
+    return { ...fd.ratios, roe: last.roe, roce: last.roce };
+  };
+  const mine = metricOf(symbol);
+  const peers = STOCKS.filter((x) => x.sector === s.sector);
+  const rows = [];
+  let valPremiumPct = null, qualityWins = 0, qualityTotal = 0;
+
+  for (const m of fw.metrics) {
+    const value = mine[m.key];
+    if (value === null || value === undefined) continue;
+    const peerVals = peers.map((p) => metricOf(p.symbol)[m.key]).filter((v) => v !== null && v !== undefined && isFinite(v)).sort((a, b) => a - b);
+    if (peerVals.length < 2) continue;
+    const median = peerVals[Math.floor(peerVals.length / 2)];
+    const diffPct = median !== 0 ? round1(((value - median) / Math.abs(median)) * 100) : 0;
+    let verdict, good;
+    if (m.kind === "valuation") {
+      good = diffPct <= 0;
+      verdict = Math.abs(diffPct) < 5 ? "in line with sector" : diffPct > 0 ? `${Math.abs(diffPct)}% premium to sector` : `${Math.abs(diffPct)}% discount to sector`;
+      if (valPremiumPct === null) valPremiumPct = diffPct;       // first valuation metric = headline
+    } else if (m.kind === "quality") {
+      good = diffPct >= 0;
+      const neutral = Math.abs(diffPct) < 5;
+      if (!neutral) { qualityTotal++; if (good) qualityWins++; }
+      verdict = neutral ? "matches sector" : diffPct > 0 ? `outperforms by ${Math.abs(diffPct)}%` : `lags by ${Math.abs(diffPct)}%`;
+    } else { // risk — lower is better
+      good = diffPct <= 0;
+      const neutral = Math.abs(diffPct) < 5;
+      if (!neutral) { qualityTotal++; if (good) qualityWins++; }
+      verdict = neutral ? "matches sector" : diffPct < 0 ? `better (lower) by ${Math.abs(diffPct)}%` : `worse (higher) by ${Math.abs(diffPct)}%`;
+    }
+    rows.push({ key: m.key, label: m.label, kind: m.kind, why: m.why, value, median, diffPct, verdict, good });
+  }
+
+  let summary = "";
+  if (valPremiumPct !== null && qualityTotal === 0) {
+    summary = `${STOCK_MAP[symbol].name} ${valPremiumPct > 8 ? `trades at a ${Math.abs(valPremiumPct)}% premium to` : valPremiumPct < -8 ? `trades at a ${Math.abs(valPremiumPct)}% discount to` : "is valued in line with"} the sector on ${fw.metrics[0].label}, with quality metrics tracking the sector median.`;
+  }
+  if (valPremiumPct !== null && qualityTotal > 0) {
+    const stance = valPremiumPct > 8 ? `trades at a ${Math.abs(valPremiumPct)}% premium to the sector` : valPremiumPct < -8 ? `trades at a ${Math.abs(valPremiumPct)}% discount to the sector` : "is valued in line with the sector";
+    const standing = qualityWins / qualityTotal >= 0.66 ? `beats sector benchmarks on ${qualityWins} of ${qualityTotal} quality/risk metrics` : qualityWins / qualityTotal >= 0.4 ? `is mixed on quality — ahead on ${qualityWins} of ${qualityTotal} metrics` : `trails the sector on most quality metrics (${qualityWins} of ${qualityTotal})`;
+    const fit = valPremiumPct > 8 && qualityWins / qualityTotal >= 0.66 ? "The premium is earned by superior fundamentals."
+      : valPremiumPct > 8 ? "The premium is NOT fully backed by fundamentals — execution must catch up or the multiple compresses."
+      : valPremiumPct < -8 && qualityWins / qualityTotal >= 0.66 ? "A quality business at a discount — the classic re-rating setup, worth investigating why the market disagrees."
+      : valPremiumPct < -8 ? "The discount reflects weaker fundamentals — cheap for a reason until the metrics turn."
+      : "Fairly priced against its own sector's yardsticks.";
+    summary = `${STOCK_MAP[symbol].name} ${stance} on ${fw.metrics[0].label}, and ${standing}. ${fit}`;
+  }
+  return { sector: s.sector, sectorName: SECTORS[s.sector].name, intro: fw.intro, rows, summary, peerCount: peers.length };
+}
+
 export function stockPage(symbol) {
   const s = STOCK_MAP[symbol];
   const f = fundamentals(symbol);                 // works for full-NSE extras too
@@ -205,6 +266,7 @@ export function stockPage(symbol) {
     policy: policyFor(s.sector),
     products: productsOf(symbol),
     sectorCtx: sectorContext(s.sector),
+    valuation: sectorScorecard(symbol),
   };
 }
 

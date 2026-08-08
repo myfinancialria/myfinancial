@@ -336,6 +336,146 @@ export const PRODUCTS = {
   MAZDOCK: [["Scorpene submarines (P-75)", "India's only conventional-sub yard", "3 add-on boats + P-75I candidacy"], ["P-15B destroyers/frigates", "Visakhapatnam-class deliveries", "Surface-fleet expansion annuity"]],
 };
 
+// ---------------------------------------------------------------------------
+// How each sector is VALUED — the metrics practitioners actually anchor on,
+// and why. keys map to computed ratios; kind: "valuation" (lower = cheaper)
+// or "quality" (higher = better) or "risk" (lower = better).
+// ---------------------------------------------------------------------------
+export const SECTOR_VALUATION = {
+  BANK: {
+    intro: "Banks are valued on price-to-book against the ROE they generate — because a bank's assets are loans marked close to fair value, book value is the real anchor. A bank earning 16%+ ROE with clean assets deserves 2-3× book; one earning 10% with rising NPAs struggles to hold 1×.",
+    metrics: [
+      { key: "pb", label: "Price / Book", kind: "valuation", why: "The anchor multiple — book value ≈ loan book marked near fair value" },
+      { key: "roe", label: "ROE", kind: "quality", why: "What justifies the book multiple — the compounding rate of the bank" },
+      { key: "roa", label: "ROA", kind: "quality", why: "Leverage-free profitability; 1%+ is strong for Indian banks" },
+      { key: "gnpaPct", label: "Gross NPA", kind: "risk", why: "Asset-quality — bad loans erode book value directly" },
+      { key: "casaPct", label: "CASA", kind: "quality", why: "Low-cost deposit share — the funding moat behind NIMs" },
+      { key: "costToIncomePct", label: "Cost-to-income", kind: "risk", why: "Operating efficiency of the franchise" },
+    ],
+  },
+  NBFC: {
+    intro: "NBFCs are judged like banks — price-to-book vs ROE — but with a premium/penalty for funding resilience, since they borrow wholesale rather than gather deposits. AUM growth quality and through-cycle credit costs separate compounders from blow-ups.",
+    metrics: [
+      { key: "pb", label: "Price / Book", kind: "valuation", why: "Book anchors lender valuation" },
+      { key: "roe", label: "ROE", kind: "quality", why: "The multiple justifier" },
+      { key: "roa", label: "ROA", kind: "quality", why: "2%+ ROA marks a superior lending franchise" },
+      { key: "revCagr3Pct", label: "AUM/income growth", kind: "quality", why: "Growth engine — but only with credit discipline" },
+    ],
+  },
+  IT: {
+    intro: "IT services trade on P/E and EV/EBITDA against revenue growth and margin stability — asset-light businesses where free cash conversion is king. Rupee EPS growth plus 85%+ FCF conversion and buyback/dividend yields set the premium between Tier-1s.",
+    metrics: [
+      { key: "pe", label: "P/E", kind: "valuation", why: "Primary multiple for asset-light compounders" },
+      { key: "evEbitda", label: "EV/EBITDA", kind: "valuation", why: "Cross-checks P/E adjusting for cash piles" },
+      { key: "opMarginPct", label: "Operating margin", kind: "quality", why: "Pricing power + pyramid efficiency (industry band ~15-26%)" },
+      { key: "revCagr3Pct", label: "Revenue CAGR", kind: "quality", why: "Deal-wins converting to growth — the re-rating trigger" },
+      { key: "priceToFcf", label: "Price/FCF", kind: "valuation", why: "Cash conversion honesty check on earnings" },
+    ],
+  },
+  AUTO: {
+    intro: "Autos are cyclical manufacturers valued on EV/EBITDA through the cycle — volume growth, realisation per vehicle and margin torque matter more than a point-in-time P/E. Franchise strength (SUV share, EV positioning) earns the premium.",
+    metrics: [
+      { key: "evEbitda", label: "EV/EBITDA", kind: "valuation", why: "Standard multiple for cyclical manufacturers" },
+      { key: "pe", label: "P/E", kind: "valuation", why: "Secondary check at mid-cycle earnings" },
+      { key: "revCagr3Pct", label: "Revenue CAGR", kind: "quality", why: "Volume × realisation growth" },
+      { key: "opMarginPct", label: "Operating margin", kind: "quality", why: "Mix (SUV/premium) and commodity pass-through power" },
+      { key: "roce", label: "ROCE", kind: "quality", why: "Capital discipline across capex cycles" },
+    ],
+  },
+  PHARMA: {
+    intro: "Pharma is a sum-of-parts market: domestic branded franchises deserve FMCG-like P/Es, US generics get cyclical multiples, and specialty/CDMO pipelines are optionality. Gross margin signals the mix quality; EV/EBITDA is the working multiple.",
+    metrics: [
+      { key: "pe", label: "P/E", kind: "valuation", why: "Headline multiple, blended across segments" },
+      { key: "evEbitda", label: "EV/EBITDA", kind: "valuation", why: "Preferred for R&D-heavy comparisons" },
+      { key: "grossMarginPct", label: "Gross margin", kind: "quality", why: "Specialty/branded mix vs commodity generics (60%+ = quality mix)" },
+      { key: "revCagr3Pct", label: "Revenue CAGR", kind: "quality", why: "Launch momentum + domestic chronic growth" },
+      { key: "roce", label: "ROCE", kind: "quality", why: "R&D productivity check" },
+    ],
+  },
+  FMCG: {
+    intro: "FMCG carries India's scarcity premium — 45-65× P/E for businesses with near-infinite ROCE, decades of pricing power and negative working capital. Volume growth is the re-rating currency; payout ratios and ROCE justify the multiple.",
+    metrics: [
+      { key: "pe", label: "P/E", kind: "valuation", why: "The premium gauge — India's most expensive sector for a reason" },
+      { key: "revCagr3Pct", label: "Revenue CAGR", kind: "quality", why: "Volume-led growth is what re-rates FMCG" },
+      { key: "grossMarginPct", label: "Gross margin", kind: "quality", why: "Brand pricing power vs input inflation" },
+      { key: "roce", label: "ROCE", kind: "quality", why: "Capital-light compounding (often 40%+)" },
+      { key: "dividendPayoutPct", label: "Payout ratio", kind: "quality", why: "Cash return culture backs the premium" },
+    ],
+  },
+  METAL: {
+    intro: "Metals are deep cyclicals valued on EV/EBITDA at normalised spreads and EV per tonne of capacity — buy at high multiples on trough earnings, sell at low multiples on peak. Balance-sheet leverage decides who survives the trough.",
+    metrics: [
+      { key: "evEbitda", label: "EV/EBITDA", kind: "valuation", why: "The cycle multiple — read against where spreads are" },
+      { key: "netDebtEbitda", label: "Net debt/EBITDA", kind: "risk", why: "Survival metric — >3× at the peak is a red flag" },
+      { key: "opMarginPct", label: "Operating margin", kind: "quality", why: "Cost-curve position (integration, captive mines)" },
+      { key: "pb", label: "Price/Book", kind: "valuation", why: "Trough-cycle floor valuation" },
+    ],
+  },
+  ENERGY: {
+    intro: "Energy splits into regulated utilities (valued on P/B against assured regulated ROE) and commodity producers (EV/EBITDA, dividend yield). Renewables platforms trade on EV/MW and growth pipeline instead of current earnings.",
+    metrics: [
+      { key: "evEbitda", label: "EV/EBITDA", kind: "valuation", why: "Cash-flow multiple across the complex" },
+      { key: "pb", label: "Price/Book", kind: "valuation", why: "Regulated-asset-base anchor for utilities" },
+      { key: "dividendYieldPct", label: "Dividend yield", kind: "quality", why: "Cash-return floor for mature producers" },
+      { key: "roce", label: "ROCE", kind: "quality", why: "Against ~15.5% regulated ROE benchmarks" },
+    ],
+  },
+  INFRA: {
+    intro: "Infra/EPC is valued on EV/EBITDA with the real diligence in the order book (book-to-bill), execution velocity and working-capital hygiene — receivables from governments decide whether accounting profit becomes cash. Cement inside this sector trades on EV/tonne.",
+    metrics: [
+      { key: "evEbitda", label: "EV/EBITDA", kind: "valuation", why: "Standard for asset/execution businesses" },
+      { key: "revCagr3Pct", label: "Revenue CAGR", kind: "quality", why: "Order-book conversion into execution" },
+      { key: "interestCoverage", label: "Interest coverage", kind: "quality", why: "Leverage discipline — EPC graveyards are full of 1× coverage names" },
+      { key: "workingCapitalDays", label: "Working-capital days", kind: "risk", why: "Government receivables stretch kills cash conversion" },
+    ],
+  },
+  REALTY: {
+    intro: "Developers are valued on NAV (land bank marked to market) with price-to-book as the listed proxy, plus pre-sales momentum — bookings today are P&L three years out. Net debt is the cycle-survival metric.",
+    metrics: [
+      { key: "pb", label: "Price/Book (NAV proxy)", kind: "valuation", why: "Land bank value is the real asset" },
+      { key: "revCagr3Pct", label: "Revenue CAGR", kind: "quality", why: "Proxy for pre-sales converting to recognition" },
+      { key: "netDebtEbitda", label: "Net debt/EBITDA", kind: "risk", why: "Leverage killed an entire generation of developers" },
+      { key: "roe", label: "ROE", kind: "quality", why: "Asset-turn discipline on the land bank" },
+    ],
+  },
+  CHEM: {
+    intro: "Specialty chemicals earn P/E premiums proportional to chemistry depth — fluorination, multi-step synthesis, CDMO contracts — visible in gross margins. Commodity chemistry trades on EV/EBITDA at spread cycles.",
+    metrics: [
+      { key: "pe", label: "P/E", kind: "valuation", why: "Specialty premium gauge" },
+      { key: "evEbitda", label: "EV/EBITDA", kind: "valuation", why: "Cycle-adjusted cross-check" },
+      { key: "grossMarginPct", label: "Gross margin", kind: "quality", why: "Chemistry complexity shows up here first" },
+      { key: "revCagr3Pct", label: "Revenue CAGR", kind: "quality", why: "Capex commissioning into demand" },
+    ],
+  },
+  CDUR: {
+    intro: "Consumer durables & EMS trade on P/E against growth — penetration stories (ACs) and PLI-fuelled manufacturing (EMS) justify 40-70× when growth is 25%+. Working-capital efficiency separates brands from box-movers.",
+    metrics: [
+      { key: "pe", label: "P/E", kind: "valuation", why: "Growth-premium gauge" },
+      { key: "revCagr3Pct", label: "Revenue CAGR", kind: "quality", why: "The entire bull case — penetration + PLI ramp" },
+      { key: "roce", label: "ROCE", kind: "quality", why: "Brand strength vs contract-manufacturing thinness" },
+      { key: "workingCapitalDays", label: "Working-capital days", kind: "risk", why: "Channel inventory discipline" },
+    ],
+  },
+  TELECOM: {
+    intro: "Telecom is valued on EV/EBITDA — capex-heavy, high-depreciation businesses where operating cash matters more than accounting EPS. ARPU trajectory and leverage decide the multiple; towers/infra get annuity multiples.",
+    metrics: [
+      { key: "evEbitda", label: "EV/EBITDA", kind: "valuation", why: "The sector's lingua franca — EPS is depreciation-distorted" },
+      { key: "netDebtEbitda", label: "Net debt/EBITDA", kind: "risk", why: "Spectrum debt loads make this existential" },
+      { key: "opMarginPct", label: "EBITDA margin", kind: "quality", why: "ARPU flow-through to profitability" },
+      { key: "revCagr3Pct", label: "Revenue CAGR", kind: "quality", why: "Tariff repair + subscriber mix" },
+    ],
+  },
+  DEFENCE: {
+    intro: "Defence PSUs are valued on P/E against order-book visibility — books at 3-6× revenue justify premium multiples if execution converts. Working capital (government receivables) and margin mix (indigenous vs licence) are the quality tells.",
+    metrics: [
+      { key: "pe", label: "P/E", kind: "valuation", why: "Headline multiple on visible earnings" },
+      { key: "revCagr3Pct", label: "Revenue CAGR", kind: "quality", why: "Order-book → revenue conversion rate" },
+      { key: "roe", label: "ROE", kind: "quality", why: "Execution efficiency on government capital" },
+      { key: "workingCapitalDays", label: "Working-capital days", kind: "risk", why: "MoD payment cycles strain cash" },
+    ],
+  },
+};
+
 export const SECTOR_PRODUCT_TEMPLATE = {
   IT: "software services, engineering and platform contracts", BANK: "deposits, loans, cards and fee products",
   NBFC: "loan products across vehicles, SME and consumer credit", AUTO: "vehicle platforms and mobility services",

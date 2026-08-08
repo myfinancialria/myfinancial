@@ -483,7 +483,101 @@ export function fundamentals(symbol) {
     const qpat = qrev * (last.patMarginPct / 100) * (1 + (rq.next() - 0.5) * 0.1);
     return { q: qn, revenue: Math.round(qrev), pat: Math.round(qpat), patMarginPct: round2((qpat / qrev) * 100) };
   });
-  const out = { symbol, annual, quarters, ratios, shares: Math.round(shares) };
+  const statements = buildStatements(s, annual, ratios, shares, isBank);
+  const out = { symbol, annual, quarters, ratios, shares: Math.round(shares), statements };
   fundCache.set(symbol, out);
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// modelled three-statement financials (₹ crore) — internally coherent with the
+// annual series: net worth from PAT/ROE, debt from D/E, balance sheet balances
+// by construction, cash flow reconciles opening → closing cash.
+// ---------------------------------------------------------------------------
+function buildStatements(s, annual, ratios, shares, isBank) {
+  const rs = rng(`stmt:${s.symbol}`);
+  const depRate = s.sector === "IT" ? 0.028 : ["METAL", "ENERGY", "INFRA", "TELECOM"].includes(s.sector) ? 0.075 : 0.045;
+  const pnl = [], bs = [], cf = [];
+  let prevWC = null, prevCash = null, prevDebt = null, prevNFA = null;
+
+  for (const a of annual) {
+    const netWorth = Math.max(1, Math.round((a.pat / Math.max(1, a.roe)) * 100));
+    const debt = isBank ? null : Math.round((a.debtToEquity ?? 0) * netWorth);
+
+    if (isBank) {
+      // ---------------- bank P&L ----------------
+      const interestEarned = a.revenue;
+      const advances = Math.round(interestEarned / 0.088);
+      const nii = Math.round(interestEarned * (0.36 + (a.nim ?? 3.5) * 0.02));
+      const interestExpended = interestEarned - nii;
+      const opex = Math.round(nii * 0.55);
+      const pbt = Math.round(a.pat / 0.752);
+      const provisions = Math.round(advances * 0.0045);            // steady-state credit cost
+      const otherIncome = Math.max(Math.round(interestEarned * 0.12), pbt + provisions + opex - nii); // fee income balances the chain
+      const ppop = nii + otherIncome - opex;                       // pre-provision profit
+      pnl.push({ fy: a.fy, interestEarned, interestExpended, nii, otherIncome, operatingExpenses: opex, prePpop: ppop, provisions: ppop - pbt, pbt, tax: pbt - a.pat, pat: a.pat, eps: a.eps });
+      const deposits = Math.round(advances / 0.76);
+      const investments = Math.round(deposits * 0.29);
+      const cashRbi = Math.round(deposits * 0.055);
+      const fixedOther = Math.round(deposits * 0.03);
+      const totalAssets = advances + investments + cashRbi + fixedOther;
+      const borrowings = Math.max(0, totalAssets - deposits - netWorth - Math.round(deposits * 0.025));
+      const otherLiab = totalAssets - deposits - borrowings - netWorth;
+      bs.push({ fy: a.fy, shareCapital: Math.round(shares / 1e7), reservesSurplus: netWorth - Math.round(shares / 1e7), netWorth, deposits, borrowings, otherLiabilities: otherLiab, totalLiabilities: totalAssets, cashWithRBI: cashRbi, investments, advances, fixedAndOther: fixedOther, totalAssets });
+      // ---------------- bank cash flow (simplified) ----------------
+      const depositGrowth = bs.length > 1 ? deposits - bs[bs.length - 2].deposits : Math.round(deposits * 0.1);
+      const advanceGrowth = bs.length > 1 ? advances - bs[bs.length - 2].advances : Math.round(advances * 0.1);
+      const cfo = a.pat + provisions + depositGrowth - advanceGrowth;
+      const cfi = -Math.round(investments * 0.06);
+      const dividends = Math.round(a.pat * (ratios.dividendPayoutPct / 100));
+      const cff = -dividends + (bs.length > 1 ? borrowings - bs[bs.length - 2].borrowings : 0);
+      cf.push({ fy: a.fy, cfo: Math.round(cfo), cfi, cff: Math.round(cff), netChange: Math.round(cfo + cfi + cff), closingCash: cashRbi, note: "simplified bank presentation" });
+    } else {
+      // ---------------- P&L ----------------
+      const otherIncome = Math.round(a.revenue * 0.014);
+      const materials = Math.round((a.revenue - a.ebitda) * (s.sector === "IT" ? 0.08 : 0.62));
+      const employee = Math.round((a.revenue - a.ebitda) * (s.sector === "IT" ? 0.72 : 0.16));
+      const otherExpenses = (a.revenue - a.ebitda) - materials - employee;
+      const dep = Math.round(a.revenue * depRate);
+      const ebit = a.ebitda - dep;
+      const interest = Math.round((debt || 0) * 0.085) + 1;
+      const pbt = Math.round(a.pat / 0.748);
+      // let other income absorb rounding so the chain stays coherent
+      const otherIncomeAdj = Math.max(0, pbt - ebit + interest);
+      pnl.push({ fy: a.fy, revenue: a.revenue, otherIncome: otherIncomeAdj || otherIncome, totalIncome: a.revenue + (otherIncomeAdj || otherIncome), materials, employee, otherExpenses, ebitda: a.ebitda, depreciation: dep, ebit, interest, pbt, tax: pbt - a.pat, pat: a.pat, eps: a.eps });
+      // ---------------- balance sheet ----------------
+      const invDays = s.sector === "FMCG" ? 38 : s.sector === "AUTO" ? 30 : ["METAL", "CHEM", "PHARMA"].includes(s.sector) ? 65 : s.sector === "IT" ? 0 : 45;
+      const recvDays = s.sector === "IT" ? 68 : s.sector === "FMCG" ? 12 : s.sector === "INFRA" || s.sector === "DEFENCE" ? 95 : 42;
+      const payDays = 45;
+      const inventory = Math.round((a.revenue * invDays) / 365);
+      const receivables = Math.round((a.revenue * recvDays) / 365);
+      const payables = Math.round((a.revenue * payDays) / 365);
+      const grossBlock = Math.round(a.revenue * (s.sector === "IT" ? 0.35 : ["METAL", "ENERGY", "INFRA", "TELECOM"].includes(s.sector) ? 1.5 : 0.7));
+      const netFixedAssets = Math.round(grossBlock * 0.62);
+      const cwip = Math.round(grossBlock * 0.07);
+      const investments = Math.round(netWorth * (0.12 + s.quality * 0.12));
+      const otherLiab = payables + Math.round(a.revenue * 0.05);
+      const totalLE = netWorth + (debt || 0) + otherLiab;
+      let cash = totalLE - netFixedAssets - cwip - investments - inventory - receivables - Math.round(a.revenue * 0.04);
+      let otherAssets = Math.round(a.revenue * 0.04);
+      if (cash < Math.round(a.revenue * 0.02)) { otherAssets = Math.max(0, otherAssets + cash - Math.round(a.revenue * 0.02)); cash = Math.round(a.revenue * 0.02); }
+      const totalAssets = netFixedAssets + cwip + investments + inventory + receivables + cash + otherAssets;
+      bs.push({ fy: a.fy, shareCapital: Math.round(shares / 1e7), reservesSurplus: netWorth - Math.round(shares / 1e7), netWorth, totalDebt: debt || 0, otherLiabilities: otherLiab + (totalAssets - totalLE), totalLiabilities: totalAssets, netFixedAssets, cwip, investments, inventory, receivables, cashAndBank: cash, otherAssets, totalAssets });
+      // ---------------- cash flow ----------------
+      const wc = inventory + receivables - payables;
+      const wcChange = prevWC === null ? Math.round(wc * 0.1) : wc - prevWC;
+      const cfo = a.pat + dep - wcChange;
+      const capex = -(prevNFA === null ? Math.round(dep * 1.25) : Math.max(Math.round(dep * 0.7), netFixedAssets - prevNFA + dep));
+      const cfi = capex - Math.round(investments * 0.05);
+      const dividends = -Math.round(a.pat * (ratios.dividendPayoutPct / 100));
+      const debtChange = prevDebt === null ? 0 : (debt || 0) - prevDebt;
+      const interestPaid = -interest;
+      const cff = dividends + debtChange + interestPaid;
+      const netChange = Math.round(cfo + cfi + cff);
+      cf.push({ fy: a.fy, cfo: Math.round(cfo), capex, cfi: Math.round(cfi), dividendsPaid: dividends, debtChange, cff: Math.round(cff), netChange, closingCash: cash, fcf: Math.round(cfo + capex) });
+      prevWC = wc; prevNFA = netFixedAssets;
+    }
+    prevDebt = debt; prevCash = null;
+  }
+  return { bankFormat: isBank, pnl, balanceSheet: bs, cashFlow: cf, note: "Modelled statements on the demo feed — figures are internally consistent projections, not audited filings. Connect a filings data source for production." };
 }
