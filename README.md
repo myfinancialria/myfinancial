@@ -129,6 +129,30 @@ Grounded answers are composed deterministically (so the demo needs no keys). Set
 - **SEBI separation**: every signal, ranking and AI answer carries an explicit *information vs advice* disclaimer; the platform does not present itself as an RIA. F&O risk disclosures shown on the desk.
 - **Currency**: primary INR with lakh/crore formatting; instant USD/AED/SGD/GBP/EUR conversion for NRIs (top-bar selector).
 
+## Secrets & full automation
+
+**Never commit real keys — this repo is public.** Two safe homes instead, both "in the repo":
+
+1. **Locally:** `cp .env.example .env` and fill it in — the server auto-loads `.env` (gitignored) at boot.
+2. **For automation:** GitHub Actions **Secrets** (encrypted, invisible in code). One line each:
+
+```bash
+gh secret set AIMLAPI_KEY            # → the 5 PM daily brief gains an AI-written market commentary
+gh secret set AIMLAPI_MODEL          # optional, default gpt-4o-mini
+gh secret set FYERS_APP_ID           # ↓ together these enable ZERO-TOUCH live NSE data
+gh secret set FYERS_SECRET_ID
+gh secret set FYERS_REFRESH_TOKEN    # from one login at myapi.fyers.in — valid ~15 days
+gh secret set FYERS_PIN
+gh secret set APP_URL                # your deployed app, e.g. https://myfinancial.onrender.com
+```
+
+**What then runs by itself:**
+- **17:00 IST market days** — `pages-daily.yml` rebuilds the public brief with real AMFI/mfapi/Yahoo data, plus an ✨ AI commentary when `AIMLAPI_KEY` is set.
+- **08:45 IST market days** — `refresh-fyers-token.yml` exchanges the FYERS refresh token for the day's access token and pushes it into the deployed app via the Connections API → the app trades the day on live NSE data, no human involved. Re-login once every ~15 days when the refresh token itself lapses (the workflow fails loudly to tell you).
+- **App login** — none needed: public mode auto-issues a session.
+
+**Why Upstox can't be fully automatic:** SEBI-era broker rules require an interactive daily login for standard retail API apps — Upstox issues no refresh token, so any "auto-login" would mean storing your brokerage password/TOTP, which this project deliberately refuses to do. Paste the day's Upstox token into ⚙ Connections when you want Upstox specifically; use FYERS for unattended automation.
+
 ## Env vars
 
 | Var | Default | Purpose |

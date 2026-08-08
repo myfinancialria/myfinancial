@@ -1,0 +1,44 @@
+# ---------------------------------------------------------------------------
+# Fully-automatic broker token refresh (FYERS).
+# Every market weekday at 08:45 IST (03:15 UTC) — before NSE opens at 09:15 —
+# exchanges the long-lived FYERS refresh token for the day's access token and
+# pushes it into the deployed app, which hot-swaps to live NSE data.
+#
+# One-time setup (values from myapi.fyers.in; run locally, never commit them):
+#   gh secret set FYERS_APP_ID          # e.g. AB12345-100
+#   gh secret set FYERS_SECRET_ID
+#   gh secret set FYERS_REFRESH_TOKEN   # valid ~15 days per login
+#   gh secret set FYERS_PIN
+#   gh secret set APP_URL               # e.g. https://myfinancial.onrender.com
+#
+# The job exits quietly (success) until the secrets exist, and fails loudly
+# when the refresh token itself expires (~15 days) so you know to re-login.
+# Upstox offers no refresh flow for retail apps — daily interactive login is
+# mandated — so use FYERS for unattended live data.
+# ---------------------------------------------------------------------------
+name: Refresh FYERS token → live app
+
+on:
+  schedule:
+    - cron: "15 3 * * 1-5"     # 08:45 IST, Monday–Friday
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Exchange refresh token & push to app
+        env:
+          FYERS_APP_ID: ${{ secrets.FYERS_APP_ID }}
+          FYERS_SECRET_ID: ${{ secrets.FYERS_SECRET_ID }}
+          FYERS_REFRESH_TOKEN: ${{ secrets.FYERS_REFRESH_TOKEN }}
+          FYERS_PIN: ${{ secrets.FYERS_PIN }}
+          APP_URL: ${{ secrets.APP_URL }}
+        run: node scripts/refresh_fyers_token.mjs

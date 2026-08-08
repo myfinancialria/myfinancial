@@ -79,6 +79,38 @@ for (const [name, sym] of YAHOO) {
   await new Promise((r) => setTimeout(r, 400));
 }
 
+// ---- AI daily commentary (AIMLAPI_KEY from GitHub Actions Secrets) ----------
+async function aiCommentary(idx, secs) {
+  const key = process.env.AIMLAPI_KEY;
+  if (!key) { console.log("[pages] AIMLAPI_KEY not set — skipping AI commentary"); return null; }
+  const facts = [
+    `Date: ${istStamp()}. ${marketDay ? "Market day." : "Weekend/holiday; latest available data."}`,
+    ...idx.map((i) => `${i.name}: ${i.price.toFixed(2)} (${i.chgPct > 0 ? "+" : ""}${i.chgPct.toFixed(2)}%)`),
+    ...secs.slice(0, 4).map((s) => `${s.label} leader: ${s.rows[0]?.name} (3Y CAGR ${s.rows[0]?.r3}%)`),
+    `AMFI NAV date ${universe.navDate}; ${universe.count} Direct-Growth schemes tracked.`,
+  ].join("\n");
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 45_000);
+    const res = await fetch("https://api.aimlapi.com/v1/chat/completions", {
+      method: "POST", signal: ctrl.signal,
+      headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: process.env.AIMLAPI_MODEL || "gpt-4o-mini", max_tokens: 320, temperature: 0.55,
+        messages: [
+          { role: "system", content: "You write a daily 100-130 word Indian market note for ordinary investors. Use ONLY the numbers in FACTS — never invent or extrapolate any figure. Plain English, 2 short paragraphs, no headings, no advice, no hype. End with one calm, practical observation." },
+          { role: "user", content: `FACTS:\n${facts}` },
+        ],
+      }),
+    }).finally(() => clearTimeout(t));
+    if (!res.ok) { console.log(`[pages] AIMLAPI HTTP ${res.status} — commentary skipped`); return null; }
+    const j = await res.json();
+    const text = j?.choices?.[0]?.message?.content?.trim();
+    if (text && text.length > 60) { console.log("[pages] AI commentary generated"); return { text, model: process.env.AIMLAPI_MODEL || "gpt-4o-mini" }; }
+    return null;
+  } catch (e) { console.log("[pages] AIMLAPI unreachable —", String(e.message).slice(0, 60)); return null; }
+}
+
 // top-5 per bucket by 3Y CAGR among enriched
 const sections = SHOW_BUCKETS.map(([bucket, label]) => ({
   label,
@@ -86,6 +118,8 @@ const sections = SHOW_BUCKETS.map(([bucket, label]) => ({
     .sort((a, b) => (b.r3 ?? -99) - (a.r3 ?? -99)).slice(0, 5)
     .map((f) => ({ name: f.name.replace(/ *-? *Direct.*$/i, ""), amc: f.amc, nav: f.nav, r1: f.r1, r3: f.r3, r5: f.r5, stars: f.stars })),
 })).filter((s) => s.rows.length);
+
+const commentary = await aiCommentary(indices, sections);
 
 // compact full-universe payload for client-side search (name, amc, category, nav)
 const allFunds = universe.funds.map((f) => [f.name.replace(/ *-? *Direct.*$/i, ""), f.amc, f.category, f.nav]);
@@ -168,6 +202,12 @@ td .amc{font-size:10.5px;color:var(--faint)}
   ${indices.length ? `<div class="idx">
     ${indices.map((i) => `<div><div class="l">${esc(i.name)}</div><div class="v">${num(i.price)}</div><div class="c ${cls(i.chgPct)}">${i.chgPct > 0 ? "▲" : i.chgPct < 0 ? "▼" : ""} ${pct(i.chgPct)}</div></div>`).join("")}
   </div>` : `<p class="stamp">Index quotes unavailable this run — fund data below is live from AMFI.</p>`}
+
+  ${commentary ? `<div style="border:1px solid var(--line2);border-left:3px solid var(--gold);background:var(--card);padding:20px 22px;margin-bottom:38px">
+    <div class="sub" style="margin-bottom:8px">✨ Today's read · written by ${esc(commentary.model)} from the numbers above</div>
+    ${commentary.text.split(/\n{2,}/).map((p) => `<p style="color:var(--dim);font-size:14.5px;line-height:1.75;margin-bottom:8px">${esc(p)}</p>`).join("")}
+    <div style="color:var(--faint);font-size:10px;margin-top:6px">AI-generated interpretation of the day's data — informational only, not advice.</div>
+  </div>` : ""}
 
   <h2>Category leaders — by real 3-year CAGR</h2>
   <div class="sub">Official AMFI NAVs · return histories from mfapi.in · Direct plans, Growth option only</div>

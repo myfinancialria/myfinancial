@@ -35,6 +35,10 @@ jobs:
 
       - name: Build brief from live AMFI / mfapi / Yahoo data
         run: node scripts/build_pages.mjs
+        env:
+          # optional: add with `gh secret set AIMLAPI_KEY` → AI daily commentary
+          AIMLAPI_KEY: ${{ secrets.AIMLAPI_KEY }}
+          AIMLAPI_MODEL: ${{ secrets.AIMLAPI_MODEL }}
 
       - uses: actions/configure-pages@v5
 

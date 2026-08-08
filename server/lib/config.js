@@ -5,7 +5,24 @@
 // Secrets are AES-256-GCM encrypted at rest with a scrypt-derived system key.
 // ---------------------------------------------------------------------------
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { q, insert } from "./db.js";
+
+// ---- .env auto-load (no dependency): keys live in the repo FOLDER, never in
+// git — .env is gitignored; commit .env.example with placeholders instead.
+try {
+  const envPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", ".env");
+  if (fs.existsSync(envPath)) {
+    let loaded = 0;
+    for (const line of fs.readFileSync(envPath, "utf8").split("\n")) {
+      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+      if (m && !m[1].startsWith("#") && !process.env[m[1]]) { process.env[m[1]] = m[2].replace(/^["']|["']$/g, ""); loaded++; }
+    }
+    if (loaded) console.log(`  config: loaded ${loaded} value(s) from .env`);
+  }
+} catch { /* .env is optional */ }
 
 const MASTER = process.env.MYFIN_SECRET || "dev-only-secret-rotate-in-prod";
 const KEY = crypto.scryptSync(MASTER, "settings:v1", 32, { N: 16384, r: 8, p: 1 });
