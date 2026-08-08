@@ -305,6 +305,7 @@
         h("div",
           h("div", { style: { display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" } },
             h("div.page-title", profile.name), h("span.chip.blue", profile.sectorName),
+            f.realSource ? h("span.chip.up", { title: `real fundamentals via ${f.realSource.source} · fetched ${f.realSource.asOf}` }, "REAL FUNDAMENTALS ✓") : h("span.chip", "modelled data"),
             profile.sub ? h("span.chip.violet", profile.sub) : null,
             profile.fno ? h("span.chip", "F&O") : null,
             health ? h("span.chip" + (health.score >= 75 ? ".up" : health.score >= 55 ? ".gold" : ".down"), `Health ${health.score}/100`) : h("span.chip", "Basic coverage"),
@@ -318,7 +319,7 @@
 
     const isBank = rt.gnpaPct !== null && rt.gnpaPct !== undefined;
     const ratioCard = h("div.card",
-      h("div.card-head", h("div", h("div.card-title", "🧮 Deep Ratios & Metrics"), h("div.card-sub", "30+ computed metrics · hover any row for its plain meaning"))),
+      h("div.card-head", h("div", h("div.card-title", "🧮 Deep Ratios & Metrics"), h("div.card-sub", f.realSource ? `REAL · Yahoo Finance filings data · fetched ${f.realSource.asOf} · modelled values fill gaps` : "modelled demo metrics · hover any row for its plain meaning"))),
       h("div.grid.cols-4", { style: { gap: "14px" } },
         h("div", h("label.lbl", "Valuation"),
           R("P/E", rt.pe + "×", "Price vs one year of profit"), R("PEG", rt.peg, "P/E ÷ profit growth — under 1 suggests growth is cheap"),
@@ -339,7 +340,7 @@
           R("Asset turnover", rt.assetTurnover ? rt.assetTurnover + "×" : null, "Sales per rupee of assets"),
           R("Working-capital days", rt.workingCapitalDays !== null && rt.workingCapitalDays !== undefined ? rt.workingCapitalDays + "d" : null, "Days cash stays stuck in operations"),
           R("EPS (FY26)", "₹" + f.annual.at(-1).eps), R("FCF (FY26)", f.annual.at(-1).fcf ? "₹" + fmtNum(f.annual.at(-1).fcf, 0) + " Cr" : null))),
-      h("div.disclaimer", "Modelled figures on the demo feed — connect Upstox/FYERS + filings data for production numbers."));
+      h("div.disclaimer", f.realSource ? "Ratios marked from real filings-derived Yahoo Finance data; the few without coverage fall back to modelled values. Broker APIs (Upstox/FYERS) do not serve fundamentals — they provide prices only." : "Modelled figures on the demo feed — real fundamentals load automatically per symbol from Yahoo Finance when online."));
 
     const industryCard = industry ? h("div.card",
       h("div.card-head",

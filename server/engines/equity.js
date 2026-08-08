@@ -9,6 +9,7 @@ import { SUBSECTOR_OF, INDUSTRY, POLICY, PRODUCTS, SECTOR_PRODUCT_TEMPLATE, SECT
 import { fundamentals, quote, daily } from "./market.js";
 import { sectorContext } from "./screeners.js";
 import { interpret, interpConfigured } from "./seo.js";
+import * as yfund from "../providers/yfundamentals.js";
 import { mean, round2, round1, rsiSeries } from "../lib/util.js";
 
 const fmtCr = (cr) => (cr >= 100000 ? `₹${(cr / 100000).toFixed(2)} lakh crore` : `₹${Math.round(cr).toLocaleString("en-IN")} crore`);
@@ -239,10 +240,32 @@ export function sectorScorecard(symbol) {
   return { sector: s.sector, sectorName: SECTORS[s.sector].name, intro: fw.intro, rows, summary, peerCount: peers.length };
 }
 
+/** Overlay REAL Yahoo fundamentals onto the modelled engine where present. */
+async function withRealFundamentals(symbol, f) {
+  const real = await yfund.fundamentals(symbol).catch(() => null);
+  if (!real) return { f, real: null };
+  const merged = { ...f };
+  // real ratios win wherever Yahoo has a value; modelled fills the gaps
+  const mr = { ...f.ratios };
+  for (const [k, v] of Object.entries(real.ratios)) if (v !== null && v !== undefined) mr[k] = v;
+  merged.ratios = mr;
+  if (real.statements?.pnl?.length >= 2) merged.statements = real.statements;
+  // real mini-annual series (revenue/PAT/EPS) for the header CAGRs
+  if (real.statements?.pnl?.length >= 3) {
+    const p = real.statements.pnl;
+    const first = p[0], last = p[p.length - 1], yrs = p.length - 1;
+    if (first.revenue && last.revenue) mr.revCagr3Pct = Math.round((Math.pow(last.revenue / first.revenue, 1 / yrs) - 1) * 1000) / 10;
+    if (first.pat > 0 && last.pat > 0) mr.patCagr3Pct = Math.round((Math.pow(last.pat / first.pat, 1 / yrs) - 1) * 1000) / 10;
+  }
+  merged.realSource = { source: "yahoo", asOf: real.asOf, name: real.name };
+  return { f: merged, real };
+}
+
 export async function stockPage(symbol) {
   const s = STOCK_MAP[symbol];
-  const f = fundamentals(symbol);                 // works for full-NSE extras too
+  let f = fundamentals(symbol);                   // works for full-NSE extras too
   if (!f) return null;
+  ({ f } = await withRealFundamentals(symbol, f)); // REAL ratios/statements overlay
   if (!s) {
     // basic coverage for non-curated NSE-listed symbols
     const qt = quote(symbol);
