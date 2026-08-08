@@ -400,23 +400,30 @@
           h("td", { style: r.strong ? { fontWeight: 750 } : {} }, r.label),
           cols.map((c) => {
             const v = c[r.k];
-            const disp = v === undefined || v === null ? "—" : r.k === "eps" ? "₹" + fmtNum(v) : fmtNum(v, 0);
+            const disp = v === undefined || v === null ? "—" : /^eps/i.test(r.k) ? "₹" + fmtNum(v) : fmtNum(v, 0);
             return h("td.num", { style: { textAlign: "right", fontWeight: r.strong ? 700 : 400, borderTop: r.strong ? "1px solid var(--border2)" : "" }, class: r.signed && v < 0 ? "down-t" : r.signed && v > 0 ? "up-t" : "" }, r.signed && v > 0 ? "+" + disp : disp);
           })));
         return h("div.tbl-scroll", h("table.tbl", h("thead", headRow), h("tbody", bodyRows)));
       };
 
-      const PNL_ROWS = st.bankFormat
+      // A real source that ships its own row spec (Upstox publishes a
+      // summary-level statement) renders exactly what it actually carries.
+      const SPEC = st.specs || null;
+      const PNL_ROWS_BUILT = st.bankFormat
         ? [{ k: "interestEarned", label: "Interest earned" }, { k: "interestExpended", label: "Interest expended" }, { k: "nii", label: "Net interest income", strong: true }, { k: "otherIncome", label: "Other income" }, { k: "operatingExpenses", label: "Operating expenses" }, { k: "prePpop", label: "Pre-provision profit", strong: true }, { k: "provisions", label: "Provisions" }, { k: "pbt", label: "Profit before tax", strong: true }, { k: "tax", label: "Tax" }, { k: "pat", label: "Net profit (PAT)", strong: true }, { k: "eps", label: "EPS" }]
         : [{ k: "revenue", label: "Revenue" }, { k: "otherIncome", label: "Other income" }, { k: "materials", label: "Material costs" }, { k: "employee", label: "Employee costs" }, { k: "otherExpenses", label: "Other expenses" }, { k: "ebitda", label: "EBITDA", strong: true }, { k: "depreciation", label: "Depreciation" }, { k: "ebit", label: "EBIT", strong: true }, { k: "interest", label: "Interest" }, { k: "pbt", label: "Profit before tax", strong: true }, { k: "tax", label: "Tax" }, { k: "pat", label: "Net profit (PAT)", strong: true }, { k: "eps", label: "EPS" }];
 
-      const BS_ROWS = st.bankFormat
+      const BS_ROWS_BUILT = st.bankFormat
         ? [{ k: "shareCapital", label: "Share capital" }, { k: "reservesSurplus", label: "Reserves & surplus" }, { k: "netWorth", label: "Net worth", strong: true }, { k: "deposits", label: "Deposits" }, { k: "borrowings", label: "Borrowings" }, { k: "otherLiabilities", label: "Other liabilities" }, { k: "totalLiabilities", label: "TOTAL LIABILITIES", strong: true }, { k: "cashWithRBI", label: "Cash & RBI balances" }, { k: "investments", label: "Investments" }, { k: "advances", label: "Advances (loans)" }, { k: "fixedAndOther", label: "Fixed & other assets" }, { k: "totalAssets", label: "TOTAL ASSETS", strong: true }]
         : [{ k: "shareCapital", label: "Share capital" }, { k: "reservesSurplus", label: "Reserves & surplus" }, { k: "netWorth", label: "Net worth", strong: true }, { k: "totalDebt", label: "Total debt" }, { k: "otherLiabilities", label: "Other liabilities" }, { k: "totalLiabilities", label: "TOTAL LIABILITIES", strong: true }, { k: "netFixedAssets", label: "Net fixed assets" }, { k: "cwip", label: "Capital WIP" }, { k: "investments", label: "Investments" }, { k: "inventory", label: "Inventory" }, { k: "receivables", label: "Receivables" }, { k: "cashAndBank", label: "Cash & bank" }, { k: "otherAssets", label: "Other assets" }, { k: "totalAssets", label: "TOTAL ASSETS", strong: true }];
 
-      const CF_ROWS = st.bankFormat
+      const CF_ROWS_BUILT = st.bankFormat
         ? [{ k: "cfo", label: "Operating cash flow", strong: true, signed: true }, { k: "cfi", label: "Investing cash flow", signed: true }, { k: "cff", label: "Financing cash flow", signed: true }, { k: "netChange", label: "Net change in cash", strong: true, signed: true }, { k: "closingCash", label: "Closing cash & RBI" }]
         : [{ k: "cfo", label: "Operating cash flow", strong: true, signed: true }, { k: "capex", label: "Capex", signed: true }, { k: "cfi", label: "Investing cash flow", signed: true }, { k: "dividendsPaid", label: "Dividends paid", signed: true }, { k: "debtChange", label: "Debt raised / (repaid)", signed: true }, { k: "cff", label: "Financing cash flow", signed: true }, { k: "netChange", label: "Net change in cash", strong: true, signed: true }, { k: "closingCash", label: "Closing cash" }, { k: "fcf", label: "Free cash flow (CFO − capex)", strong: true, signed: true }];
+
+      const PNL_ROWS = SPEC && SPEC.pnl ? SPEC.pnl : PNL_ROWS_BUILT;
+      const BS_ROWS = SPEC && SPEC.bs ? SPEC.bs : BS_ROWS_BUILT;
+      const CF_ROWS = SPEC && SPEC.cf ? SPEC.cf : CF_ROWS_BUILT;
 
       let mode = "pnl";
       const finBody = h("div");

@@ -269,6 +269,24 @@ async function withRealFundamentals(symbol, f) {
   const best = upLen >= 2 && upLen >= yaLen ? up : yaLen >= 2 ? ya : null;
   if (best) merged.statements = best.statements;
 
+  // Keep the annual series consistent with the real ratios, so the header
+  // stat, the ratio card and the scorecard cannot disagree with each other.
+  if (merged.annual?.length) {
+    const annual = merged.annual.map((a) => ({ ...a }));
+    const latest = annual[annual.length - 1];
+    for (const k of ["roe", "roce", "roa", "patMarginPct", "debtToEquity"]) {
+      if (mr[k] !== null && mr[k] !== undefined) latest[k] = mr[k];
+    }
+    const realLast = (best?.statements?.pnl || []).at(-1);
+    if (realLast) {
+      if (realLast.pat != null) latest.pat = realLast.pat;
+      const rev = realLast.totalRevenue ?? realLast.revenue;
+      if (rev != null) latest.revenue = rev;
+      if (realLast.eps != null) latest.eps = realLast.eps;
+    }
+    merged.annual = annual;
+  }
+
   // header CAGRs recomputed off the real P&L
   const p = (best?.statements?.pnl || []).filter((r) => r.revenue != null);
   if (p.length >= 3) {

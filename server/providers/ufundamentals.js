@@ -147,92 +147,126 @@ function ratioKeyOf(name) {
 }
 
 // ------------------------------ normalisation -------------------------------
+// Upstox serves a CONDENSED statement set (verified against the live API):
+// P&L      → Revenue · Other Income · Total Revenue · Total Expenses · PBT · Tax · PAT · EPS
+// Balance  → Non-Current/Current Assets & Liabilities · Equity Capital · Totals
+// Cash     → PBT · income before WC · WC changes · CFO/CFI/CFF · cash start/end
+// There is no material/employee/depreciation/interest breakdown, so rather than
+// forcing this into the modelled engine's row shape (which would render a wall
+// of dashes), each builder returns its rows AND the spec describing them.
 function buildPnl(inc) {
-  if (!inc) return [];
+  if (!inc) return { rows: [], specs: [] };
   const cats = inc.income_statement || [];
-  const catHist = (names) => {
-    const c = cats.find((x) => names.includes(norm(x.category).replace(/ /g, "_")) || names.some((n) => norm(x.category).includes(norm(n))));
+  const catHist = (needle) => {
+    const c = cats.find((x) => norm(x.category).replace(/ /g, "_").includes(needle));
     const out = {};
     for (const h of c?.history || []) out[h.period] = pnum(h.value);
     return out;
   };
-  const rev = catHist(["revenue", "total_revenue", "sales"]);
-  const op = catHist(["operating_profit", "ebitda", "operating_income"]);
-  const np = catHist(["net_profit", "pat", "profit_after_tax", "net_income"]);
+  const revCat = catHist("revenue");
+  const opCat = catHist("operating_profit");
+  const npCat = catHist("net_profit");
   const fsRows = inc.full_statement || [];
 
+  const rev = seriesMap(fsRows, ["revenue"]);                       // net sales, excl. other income
   const other = seriesMap(fsRows, ["other income"]);
-  const materials = seriesMap(fsRows, ["cost of materials consumed", "raw material cost", "material cost", "cost of revenue", "purchase of stock in trade"]);
-  const employee = seriesMap(fsRows, ["employee benefit expenses", "employee cost", "employee expenses"]);
-  const otherExp = seriesMap(fsRows, ["other expenses", "other operating expenses", "operating expenses"]);
-  const dep = seriesMap(fsRows, ["depreciation and amortisation", "depreciation amortization", "depreciation"]);
-  const interest = seriesMap(fsRows, ["finance cost", "finance costs", "interest expense", "interest"]);
-  const pbt = seriesMap(fsRows, ["profit before tax", "pbt"]);
-  const tax = seriesMap(fsRows, ["tax expense", "total tax", "income tax", "tax"]);
-  const eps = seriesMap(fsRows, ["basic eps", "diluted eps", "eps", "earnings per share"]);
-  const revFs = seriesMap(fsRows, ["revenue", "total revenue", "net sales", "sales", "total income"]);
-  const patFs = seriesMap(fsRows, ["net profit", "profit after tax", "pat", "net income"]);
+  const totalRev = seriesMap(fsRows, ["total revenue", "total income"]);
+  const totalExp = seriesMap(fsRows, ["total expenses", "total expenditure"]);
+  const pbt = seriesMap(fsRows, ["profit before tax"]);
+  const tax = seriesMap(fsRows, ["tax"]);
+  const pat = seriesMap(fsRows, ["profit after tax", "net profit"]);
+  const eps = seriesMap(fsRows, ["eps basic", "basic eps", "eps"]);
+  const epsD = seriesMap(fsRows, ["eps diluted", "diluted eps"]);
 
-  const periods = [...new Set([...Object.keys(rev), ...Object.keys(np), ...Object.keys(revFs)])];
-  periods.sort((a, b) => new Date(`1 ${a}`) - new Date(`1 ${b}`));       // oldest → newest
+  const periods = [...new Set([...Object.keys(revCat), ...Object.keys(npCat), ...Object.keys(rev)])];
+  periods.sort((a, b) => new Date(`1 ${a}`) - new Date(`1 ${b}`));   // oldest → newest
   const quarterly = norm(inc.time_period) === "quarterly";
 
-  return periods.map((p) => {
-    const ebitda = op[p] ?? null;
-    const d = dep[p] ?? null;
-    const ebit = ebitda !== null && d !== null ? r2(ebitda - d) : null;
+  // Banks and NBFCs report other income INSIDE total income, manufacturers add
+  // it on top. Detect which, so the table never implies an addition that does
+  // not hold (HDFCBANK: revenue == total income, with other income a component).
+  const lastP = periods[periods.length - 1];
+  const lr = rev[lastP], lo = other[lastP], lt = totalRev[lastP] ?? revCat[lastP];
+  const additive = lr != null && lo != null && lt ? Math.abs(lr + lo - lt) / Math.abs(lt) < 0.01 : true;
+
+  const rows = periods.map((p) => {
+    const tr = totalRev[p] ?? revCat[p] ?? null;
+    const pb = pbt[p] ?? null;
+    const op = opCat[p] ?? null;
+    // Upstox derives operating_profit as total revenue − total expenses, which
+    // equals PBT for most issuers; only surface it when it genuinely differs.
+    const opDistinct = op !== null && pb !== null && tr ? Math.abs(op - pb) / Math.abs(tr) > 0.01 : op !== null && pb === null;
     return {
       fy: quarterly ? qLabelOf(p) : fyOf(p), period: p,
-      revenue: rev[p] ?? revFs[p] ?? null, otherIncome: other[p] ?? null,
-      materials: materials[p] ?? null, employeeCost: employee[p] ?? null, otherExpenses: otherExp[p] ?? null,
-      ebitda, depreciation: d, ebit, interest: interest[p] ?? null,
-      pbt: pbt[p] ?? null, tax: tax[p] ?? null, pat: np[p] ?? patFs[p] ?? null, eps: eps[p] ?? null,
+      revenue: additive ? (rev[p] ?? (tr !== null && other[p] != null ? r2(tr - other[p]) : tr)) : null,
+      otherIncome: other[p] ?? null,
+      totalRevenue: tr,
+      totalExpenses: totalExp[p] ?? null,
+      operatingProfit: opDistinct ? op : null,
+      pbt: pb, tax: tax[p] ?? null,
+      pat: pat[p] ?? npCat[p] ?? null,
+      eps: eps[p] ?? null, epsDiluted: epsD[p] ?? null,
     };
   });
+  const specs = [
+    { k: "revenue", label: "Revenue from operations" },
+    { k: "otherIncome", label: additive ? "Other income" : "— of which, other income" },
+    { k: "totalRevenue", label: additive ? "Total revenue" : "Total income", strong: true },
+    { k: "totalExpenses", label: "Total expenses" },
+    { k: "operatingProfit", label: "Operating profit", strong: true },
+    { k: "pbt", label: "Profit before tax", strong: true },
+    { k: "tax", label: "Tax" },
+    { k: "pat", label: "Net profit (PAT)", strong: true },
+    { k: "eps", label: "EPS (basic)" },
+    { k: "epsDiluted", label: "EPS (diluted)" },
+  ];
+  return { rows, specs };
 }
 
 function buildBalanceSheet(bs) {
-  if (!bs) return [];
+  if (!bs) return { rows: [], specs: [] };
   const fsRows = bs.full_statement || [];
-  const shareCap = seriesMap(fsRows, ["equity share capital", "share capital", "paid up capital"]);
-  const reserves = seriesMap(fsRows, ["reserves and surplus", "other equity", "reserves"]);
-  const netWorth = seriesMap(fsRows, ["total shareholders funds", "shareholders funds", "total equity", "net worth"]);
-  const lt = seriesMap(fsRows, ["long term borrowings", "non current borrowings"]);
-  const st = seriesMap(fsRows, ["short term borrowings", "current borrowings"]);
-  // exact-ish only: a loose "borrowings" match would swallow the long-term row
-  const debtTotal = seriesMap(fsRows, ["total borrowings", "total debt"]);
-  const debtLoose = Object.keys(lt).length || Object.keys(st).length || Object.keys(debtTotal).length
-    ? {} : seriesMap(fsRows, ["borrowings", "debt"]);
-  const fixed = seriesMap(fsRows, ["net block", "property plant and equipment", "net fixed assets", "fixed assets", "tangible assets"]);
-  const inv = seriesMap(fsRows, ["non current investments", "investments"]);
-  const invy = seriesMap(fsRows, ["inventories", "inventory"]);
-  const recv = seriesMap(fsRows, ["trade receivables", "sundry debtors", "receivables"]);
-  const cash = seriesMap(fsRows, ["cash and cash equivalents", "cash and bank balance", "cash and bank", "cash"]);
-  const othA = seriesMap(fsRows, ["other current assets", "other assets"]);
-  const othL = seriesMap(fsRows, ["other liabilities", "other current liabilities", "current liabilities"]);
+  const ncA = seriesMap(fsRows, ["non current assets"]);
+  const cA = seriesMap(fsRows, ["current assets"]);
+  const totA = seriesMap(fsRows, ["total assets"]);
+  const cL = seriesMap(fsRows, ["current liabilities"]);
+  const ncL = seriesMap(fsRows, ["non current liabilities"]);
+  const netCA = seriesMap(fsRows, ["net current asset"]);
+  const equity = seriesMap(fsRows, ["equity capital", "total equity", "shareholders funds", "net worth"]);
+  const totEL = seriesMap(fsRows, ["total equity liabilities", "total equity and liabilities"]);
 
   const hist = (bs.history || []).slice();
   hist.sort((a, b) => new Date(`1 ${a.period}`) - new Date(`1 ${b.period}`));
-  return hist.map((h) => {
+  const rows = hist.map((h) => {
     const p = h.period;
-    const split = lt[p] != null || st[p] != null ? (lt[p] ?? 0) + (st[p] ?? 0) : null;
-    const totalDebt = split ?? debtTotal[p] ?? debtLoose[p] ?? null;
-    const nw = netWorth[p] ?? ((shareCap[p] ?? 0) + (reserves[p] ?? 0) || null);
-    const ta = pnum(h.total_asset);
+    const ta = totA[p] ?? pnum(h.total_asset);
+    const tl = pnum(h.total_liability);
     return {
-      fy: fyOf(p), period: p, netWorth: nw,
-      shareCapital: shareCap[p] ?? null, reservesSurplus: reserves[p] ?? null,
-      totalDebt, otherLiabilities: othL[p] ?? (ta !== null && nw !== null && totalDebt !== null ? r2(ta - nw - totalDebt) : null),
-      totalLiabilities: pnum(h.total_liability) ?? ta,
-      netFixedAssets: fixed[p] ?? null, investments: inv[p] ?? null, inventory: invy[p] ?? null,
-      receivables: recv[p] ?? null, cashAndBank: cash[p] ?? null, otherAssets: othA[p] ?? null,
-      totalAssets: ta,
+      fy: fyOf(p), period: p,
+      netWorth: equity[p] ?? (ta !== null && tl !== null ? r2(ta - tl) : null),
+      nonCurrentLiabilities: ncL[p] ?? null, currentLiabilities: cL[p] ?? null,
+      totalLiabilities: tl,
+      totalEquityAndLiabilities: totEL[p] ?? ta,
+      nonCurrentAssets: ncA[p] ?? null, currentAssets: cA[p] ?? null,
+      netCurrentAssets: netCA[p] ?? null, totalAssets: ta,
     };
   });
+  const specs = [
+    { k: "netWorth", label: "Equity (net worth)", strong: true },
+    { k: "nonCurrentLiabilities", label: "Non-current liabilities" },
+    { k: "currentLiabilities", label: "Current liabilities" },
+    { k: "totalLiabilities", label: "Total liabilities" },
+    { k: "totalEquityAndLiabilities", label: "TOTAL EQUITY & LIABILITIES", strong: true },
+    { k: "nonCurrentAssets", label: "Non-current assets" },
+    { k: "currentAssets", label: "Current assets" },
+    { k: "netCurrentAssets", label: "Net current assets (working capital)" },
+    { k: "totalAssets", label: "TOTAL ASSETS", strong: true },
+  ];
+  return { rows, specs };
 }
 
 function buildCashFlow(cf) {
-  if (!cf) return [];
+  if (!cf) return { rows: [], specs: [] };
   const cats = cf.cash_flow || [];
   const catHist = (needle) => {
     const c = cats.find((x) => norm(x.category).includes(needle));
@@ -240,23 +274,42 @@ function buildCashFlow(cf) {
     for (const h of c?.history || []) out[h.period] = pnum(h.value);
     return out;
   };
-  const cfo = catHist("operat"), cfi = catHist("invest"), cff = catHist("financ");
+  const cfoC = catHist("operat"), cfiC = catHist("invest"), cffC = catHist("financ");
   const fsRows = cf.full_statement || [];
-  const capex = seriesMap(fsRows, ["purchase of fixed assets", "capital expenditure", "purchase of property plant and equipment", "fixed assets purchased", "capex"]);
-  const div = seriesMap(fsRows, ["dividend paid", "dividends paid"]);
-  const net = seriesMap(fsRows, ["net cash flow", "net increase decrease in cash", "net change in cash"]);
+  const pbt = seriesMap(fsRows, ["profit before tax"]);
+  const beforeWc = seriesMap(fsRows, ["income before wc changes", "income before working capital"]);
+  const chgWc = seriesMap(fsRows, ["change in wc", "change in working capital"]);
+  const cfoF = seriesMap(fsRows, ["cash flow from operations"]);
+  const cfiF = seriesMap(fsRows, ["cash flow from investing"]);
+  const cffF = seriesMap(fsRows, ["cash flow from financing"]);
+  const total = seriesMap(fsRows, ["total cash flow"]);
+  const cashStart = seriesMap(fsRows, ["cash start of the year", "cash at start"]);
+  const cashEnd = seriesMap(fsRows, ["cash end of the year", "cash at end"]);
 
-  const periods = [...new Set([...Object.keys(cfo), ...Object.keys(cfi), ...Object.keys(cff)])];
+  const periods = [...new Set([...Object.keys(cfoC), ...Object.keys(cfiC), ...Object.keys(cffC), ...Object.keys(cfoF)])];
   periods.sort((a, b) => new Date(`1 ${a}`) - new Date(`1 ${b}`));
-  return periods.map((p) => {
-    const o = cfo[p] ?? null, cx = capex[p] ?? null;
+  const rows = periods.map((p) => {
+    const o = cfoF[p] ?? cfoC[p] ?? null, i = cfiF[p] ?? cfiC[p] ?? null, fn = cffF[p] ?? cffC[p] ?? null;
     return {
-      fy: fyOf(p), period: p, cfo: o, capex: cx, cfi: cfi[p] ?? null, cff: cff[p] ?? null,
-      dividendsPaid: div[p] ?? null,
-      netChange: net[p] ?? (o !== null && cfi[p] !== null && cff[p] !== null ? r2(o + cfi[p] + cff[p]) : null),
-      fcf: o !== null && cx !== null ? r2(o - Math.abs(cx)) : null,
+      fy: fyOf(p), period: p,
+      pbt: pbt[p] ?? null, incomeBeforeWc: beforeWc[p] ?? null, changeInWc: chgWc[p] ?? null,
+      cfo: o, cfi: i, cff: fn,
+      netChange: total[p] ?? (o !== null && i !== null && fn !== null ? r2(o + i + fn) : null),
+      cashStart: cashStart[p] ?? null, closingCash: cashEnd[p] ?? null,
     };
   });
+  const specs = [
+    { k: "pbt", label: "Profit before tax" },
+    { k: "incomeBeforeWc", label: "Cash profit before working capital" },
+    { k: "changeInWc", label: "Change in working capital", signed: true },
+    { k: "cfo", label: "Operating cash flow", strong: true, signed: true },
+    { k: "cfi", label: "Investing cash flow", signed: true },
+    { k: "cff", label: "Financing cash flow", signed: true },
+    { k: "netChange", label: "Net change in cash", strong: true, signed: true },
+    { k: "cashStart", label: "Cash at start of year" },
+    { k: "closingCash", label: "Cash at end of year", strong: true },
+  ];
+  return { rows, specs };
 }
 
 function buildHoldings(sh) {
@@ -276,24 +329,44 @@ function buildHoldings(sh) {
   return { periods, rows, latest, prev };
 }
 
+/** Live shape: { name, expiry_date, amount, ratio, event_details:[{name,value}] } */
 function buildActions(ca) {
   const arr = Array.isArray(ca) ? ca : ca?.corporate_actions || [];
   if (!arr.length) return null;
+  const detailOf = (a) => {
+    const ev = {};
+    for (const d of a.event_details || []) ev[norm(d.name)] = d.value;
+    if (ev["details"]) return ev["details"];
+    if (a.amount != null) return `₹${a.amount} per share${ev["dividend"] ? ` (${ev["dividend"]}%)` : ""}${ev["dividend type"] ? ` · ${ev["dividend type"]}` : ""}`;
+    if (a.ratio) return `Ratio ${a.ratio}`;
+    return null;
+  };
+  const exOf = (a) => {
+    const ev = {};
+    for (const d of a.event_details || []) ev[norm(d.name)] = d.value;
+    return ev["ex dividend date"] || ev["ex date"] || a.expiry_date || a.ex_date || a.date || null;
+  };
   return arr.slice(0, 24).map((a) => ({
-    type: a.type || a.action_type || a.purpose || "action",
-    date: a.ex_date || a.exDate || a.date || a.record_date || null,
-    detail: a.description || a.detail || a.value || a.dividend || a.ratio || null,
+    type: a.name || a.type || "Action",
+    date: exOf(a),
+    detail: detailOf(a),
+    announced: (a.event_details || []).find((d) => norm(d.name) === "announcement date")?.value || null,
   })).filter((a) => a.date || a.detail);
 }
 
 function buildCompetitors(cp) {
   const arr = Array.isArray(cp) ? cp : cp?.competitors || [];
-  return arr.slice(0, 12).map((c) => ({
-    isin: c.isin || null, name: c.name || c.company_name || c.short_name || null,
-    description: c.description || c.company_profile || null,
-    marketCap: pnum(c.market_cap ?? c.market_cap_inr?.value ?? c.marketCap),
-    pe: pnum(c.pe ?? c.price_earnings), price: pnum(c.last_price ?? c.price),
-  })).filter((c) => c.name);
+  return arr.slice(0, 12).map((c) => {
+    const prof = c.company_profile || c.description || null;
+    return {
+      isin: c.isin || (c.instrument_key ? String(c.instrument_key).split("|")[1] : null),
+      name: c.name || c.company_name || c.short_name || (prof ? prof.split(/\s+(?:is|Limited)/)[0].slice(0, 60) : null),
+      description: prof,
+      sector: c.sector || null,
+      marketCap: pnum(c.market_cap ?? c.market_cap_inr?.value ?? c.marketCap),
+      pe: pnum(c.pe ?? c.price_earnings), price: pnum(c.last_price ?? c.price),
+    };
+  }).filter((c) => c.name || c.description);
 }
 
 // --------------------------------- main -------------------------------------
@@ -325,7 +398,8 @@ export async function fundamentals(symbol) {
       safe(get(`${BASE}/${isin}/cash-flow?${q}`)),
       safe(get(`${BASE}/${isin}/share-holdings`)),
       safe(get(`${BASE}/${isin}/corporate-actions`)),
-      safe(get(`${BASE}/${isin}/competitors`)),
+      // competitors is the one endpoint keyed by instrument_key, not bare ISIN
+      safe(get(`${BASE}/${encodeURIComponent(`NSE_EQ|${isin}`)}/competitors`)),
     ]);
     if (!ratiosRaw && !inc && !bs) {
       if (!hardError) fs.writeFileSync(cacheFile, "null");   // genuinely not covered
@@ -341,20 +415,23 @@ export async function fundamentals(symbol) {
       if (cv !== null || sv !== null) sectorBenchmarks.push({ key, name: row.name, company: cv, sector: sv, unit: /%/.test(String(row.company_value)) ? "%" : "x" });
     }
 
-    const pnl = buildPnl(inc);
-    const balanceSheet = buildBalanceSheet(bs);
-    const cashFlow = buildCashFlow(cf);
+    const P = buildPnl(inc), B = buildBalanceSheet(bs), C = buildCashFlow(cf);
+    const pnl = P.rows, balanceSheet = B.rows, cashFlow = C.rows;
     const holdings = buildHoldings(sh);
     if (holdings?.latest?.promoters != null) ratios.promoterHoldingPct = holdings.latest.promoters;
 
     // margins / growth derived from the real P&L when the ratio API omits them
     const last = pnl[pnl.length - 1], prev = pnl[pnl.length - 2];
-    if (last?.revenue) {
-      if (ratios.patMarginPct == null && last.pat != null) ratios.patMarginPct = r2((last.pat / last.revenue) * 100);
-      if (ratios.ebitdaMarginPct == null && last.ebitda != null) ratios.ebitdaMarginPct = r2((last.ebitda / last.revenue) * 100);
-      if (prev?.revenue) ratios.revGrowthPct = r2(((last.revenue - prev.revenue) / Math.abs(prev.revenue)) * 100);
+    const lastRev = last?.totalRevenue ?? last?.revenue;
+    const prevRev = prev?.totalRevenue ?? prev?.revenue;
+    if (lastRev) {
+      if (last.pat != null) ratios.patMarginPct = r2((last.pat / lastRev) * 100);
+      if (prevRev) ratios.revGrowthPct = r2(((lastRev - prevRev) / Math.abs(prevRev)) * 100);
     }
     if (ratios.eps == null && last?.eps != null) ratios.eps = last.eps;
+    // net worth / total assets are the only book figures this feed exposes
+    const lastBs = balanceSheet[balanceSheet.length - 1];
+    if (lastBs?.netWorth) ratios.bookValueCr = lastBs.netWorth;
 
     const out = {
       symbol, isin, source: "upstox", asOf: new Date().toISOString().slice(0, 10),
@@ -374,7 +451,8 @@ export async function fundamentals(symbol) {
         units: inc?.units_in || bs?.units_in || "crore",
         type: inc?.type || "consolidated",
         pnl, balanceSheet, cashFlow,
-        note: `REAL filings data via the Upstox Company Fundamentals API — ${inc?.type || "consolidated"} statements, ₹ ${inc?.units_in || "crore"}, ${pnl.length} periods. Blank cells are line items the exchange filing does not break out.`,
+        specs: { pnl: P.specs, bs: B.specs, cf: C.specs },
+        note: `REAL filed company data via the Upstox Company Fundamentals API — ${inc?.type || "consolidated"} statements, ₹ ${inc?.units_in || "crore"}, ${pnl.length} periods. This feed publishes a summary-level statement: totals are exact as filed, but it does not break out individual cost lines such as materials, employee cost, depreciation or interest.`,
       },
     };
     fs.writeFileSync(cacheFile, JSON.stringify(out));

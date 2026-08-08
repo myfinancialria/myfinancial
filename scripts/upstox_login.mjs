@@ -25,8 +25,19 @@ import fs from "node:fs";
 import readline from "node:readline/promises";
 import { execFileSync, execSync } from "node:child_process";
 
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-const ask = async (q, def = "") => ((await rl.question(def ? `${q} [${def}]: ` : `${q}: `)) || def).trim();
+// Non-interactive mode: pass the redirected URL (or bare code) as an argument
+//   node scripts/upstox_login.mjs "https://127.0.0.1:5000/callback?code=…"
+// Everything — exchange, .env write, app push — then runs without prompts.
+// This is the path to use when your app's registered redirect URI points
+// somewhere this server cannot listen (a different host, port or scheme).
+const ARG = process.argv[2] || "";
+const AUTO = !!ARG;
+
+const rl = AUTO ? null : readline.createInterface({ input: process.stdin, output: process.stdout });
+const ask = async (q, def = "") => {
+  if (AUTO) return def;                       // accept every default, ask nothing
+  return ((await rl.question(def ? `${q} [${def}]: ` : `${q}: `)) || def).trim();
+};
 
 try {
   for (const line of fs.readFileSync(".env", "utf8").split("\n")) {
@@ -40,11 +51,13 @@ const apiKey = process.env.UPSTOX_API_KEY || await ask("Upstox API Key (from acc
 const apiSecret = process.env.UPSTOX_API_SECRET || await ask("Upstox API Secret");
 const redirect = process.env.UPSTOX_REDIRECT_URI || await ask("Redirect URI registered on the app", "http://localhost:5599/upstox/callback");
 
-const authUrl = `https://api.upstox.com/v2/login/authorization/dialog?client_id=${encodeURIComponent(apiKey)}&redirect_uri=${encodeURIComponent(redirect)}&response_type=code&state=myfinancial`;
-console.log(`\n1) Open this URL and log in (mobile number + OTP + PIN):\n\n   ${authUrl}\n`);
-try { execFileSync(process.platform === "darwin" ? "open" : "xdg-open", [authUrl], { stdio: "ignore" }); console.log("   (opened in your browser)"); } catch { /* manual open */ }
-
-const pasted = await ask("\n2) After login you land on the redirect page — paste the FULL URL from the address bar (or just the code)");
+let pasted = ARG;
+if (!AUTO) {
+  const authUrl = `https://api.upstox.com/v2/login/authorization/dialog?client_id=${encodeURIComponent(apiKey)}&redirect_uri=${encodeURIComponent(redirect)}&response_type=code&state=myfinancial`;
+  console.log(`\n1) Open this URL and log in (mobile number + OTP + PIN):\n\n   ${authUrl}\n`);
+  try { execFileSync(process.platform === "darwin" ? "open" : "xdg-open", [authUrl], { stdio: "ignore" }); console.log("   (opened in your browser)"); } catch { /* manual open */ }
+  pasted = await ask("\n2) After login you land on the redirect page — paste the FULL URL from the address bar (or just the code)");
+}
 const code = (pasted.match(/[?&]code=([^&\s]+)/) || [, pasted])[1];
 if (!code || code.length < 6) { console.error("✗ That doesn't look like an authorization code."); process.exit(1); }
 
@@ -114,4 +127,4 @@ if ((await ask("Update GitHub secret UPSTOX_ACCESS_TOKEN via gh CLI? (y/n)", "n"
 
 console.log("\nDone. Upstox tokens expire ~03:30 IST daily — rerun this before the market opens.");
 console.log("Cached fundamentals stay valid for 3 days, so stock pages keep their real data even after the token lapses.\n");
-rl.close();
+if (rl) rl.close();
