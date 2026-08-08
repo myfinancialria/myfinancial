@@ -260,3 +260,7 @@ fs.writeFileSync(path.join(OUT_DIR, "index.html"), html);
 fs.writeFileSync(path.join(OUT_DIR, ".nojekyll"), "");
 const enriched = universe.funds.filter((f) => f.enriched).length;
 console.log(`[pages] wrote dist/index.html (${(html.length / 1024).toFixed(0)} KB) · ${sections.length} category tables · ${enriched} schemes enriched · ${indices.length}/${YAHOO.length} indices`);
+
+// the rest of the public site: company pages + the full fund screener
+const { buildSite } = await import("./build_site.mjs");
+buildSite({ funds: universe.funds, navDate: universe.navDate });

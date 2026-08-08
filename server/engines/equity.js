@@ -263,11 +263,40 @@ async function withRealFundamentals(symbol, f) {
   }
   merged.ratios = mr;
 
-  // statements: prefer whichever real source gives the most usable history
-  const upLen = up?.statements?.pnl?.filter((r) => r.revenue != null).length || 0;
+  // Statements: Upstox carries authoritative filed totals but publishes no
+  // cost breakdown, while Yahoo carries the detailed lines (depreciation,
+  // interest, materials). Merge them per field, matched on fiscal year, so the
+  // totals stay exact and the detail fills in instead of showing dashes.
+  const upLen = up?.statements?.pnl?.filter((r) => r.totalRevenue != null || r.revenue != null).length || 0;
   const yaLen = ya?.statements?.pnl?.filter((r) => r.revenue != null).length || 0;
-  const best = upLen >= 2 && upLen >= yaLen ? up : yaLen >= 2 ? ya : null;
-  if (best) merged.statements = best.statements;
+  let best = upLen >= 2 && upLen >= yaLen ? up : yaLen >= 2 ? ya : null;
+
+  if (best === up && yaLen >= 2) {
+    const detail = ["materials", "employeeCost", "otherExpenses", "depreciation", "interest", "ebitda", "ebit"];
+    const byFy = new Map(ya.statements.pnl.map((r) => [r.fy, r]));
+    const pnl = up.statements.pnl.map((r) => {
+      const y = byFy.get(r.fy);
+      if (!y) return r;
+      const out = { ...r };
+      for (const k of detail) if (out[k] == null && y[k] != null) out[k] = y[k];
+      return out;
+    });
+    const filled = detail.filter((k) => pnl.some((r) => r[k] != null));
+    const specs = up.statements.specs.pnl.slice();
+    if (filled.length) {
+      const extra = [
+        ["materials", "Material costs"], ["employeeCost", "Employee costs"],
+        ["depreciation", "Depreciation & amortisation"], ["interest", "Finance cost (interest)"],
+        ["ebitda", "EBITDA"], ["ebit", "EBIT"],
+      ].filter(([k]) => filled.includes(k)).map(([k, label]) => ({ k, label, sub: "Yahoo Finance" }));
+      // slot the cost detail between total expenses and profit before tax
+      const at = Math.max(0, specs.findIndex((s) => s.k === "pbt"));
+      specs.splice(at, 0, ...extra);
+    }
+    merged.statements = { ...up.statements, pnl, specs: { ...up.statements.specs, pnl: specs },
+      note: `${up.statements.note}${filled.length ? ` Cost detail (${filled.join(", ")}) is filled from Yahoo Finance where the broker feed omits it.` : ""}` };
+    best = { statements: merged.statements };
+  } else if (best) merged.statements = best.statements;
 
   // Keep the annual series consistent with the real ratios, so the header
   // stat, the ratio card and the scorecard cannot disagree with each other.
