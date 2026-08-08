@@ -443,18 +443,12 @@ export async function fundamentals(symbol) {
     const lastBs = balanceSheet[balanceSheet.length - 1];
     if (lastBs?.netWorth) ratios.bookValueCr = lastBs.netWorth;
 
-    // Peers: resolve each to its NSE symbol (so the UI can link straight to
-    // that company's own page) and pull its headline ratios for comparison.
+    // Peers: resolve each to its NSE symbol so the UI can link to that
+    // company's own page. Their ratios are read from the peer's own cached
+    // record at render time — fetching them here would triple API load for
+    // data we already hold once that peer is covered.
     const peers = buildCompetitors(cp);
-    await Promise.all(peers.map(async (c) => {
-      if (!c.isin) return;
-      c.symbol = await symbolOf(c.isin);
-      const kr = await get(`${BASE}/${c.isin}/key-ratios`).catch(() => null);
-      for (const row of Array.isArray(kr) ? kr : kr?.key_ratios || []) {
-        const k = ratioKeyOf(row.name), v = pnum(row.company_value);
-        if (k && v !== null) c[k] = v;
-      }
-    }));
+    for (const c of peers) if (c.isin) c.symbol = await symbolOf(c.isin);
 
     const out = {
       symbol, isin, source: "upstox", asOf: new Date().toISOString().slice(0, 10),
@@ -504,6 +498,31 @@ export async function quarterly(symbol) {
     fs.writeFileSync(cacheFile, JSON.stringify(rows));
     return rows;
   } catch { return null; }
+}
+
+/** ms until Upstox should be contacted again (0 = go ahead). */
+export function cooldownMs() { return Math.max(0, coolDownUntil - Date.now()); }
+
+/** Read a covered peer's own ratios straight off disk — no network. */
+export function ratiosFromCache(symbol) {
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(CACHE_DIR, `${symbol.replace(/[^A-Z0-9-]/g, "_")}.json`), "utf8"));
+    return j?.ratios || null;
+  } catch { return null; }
+}
+
+/** Fill each peer's comparison ratios from its own cached record. */
+export function withPeerRatios(peers) {
+  return (peers || []).map((c) => {
+    if (!c.symbol) return c;
+    const r = ratiosFromCache(c.symbol);
+    if (!r) return c;
+    const out = { ...c };
+    for (const k of ["pe", "pb", "evEbitda", "roe", "roce", "roa", "patMarginPct"]) {
+      if (out[k] == null && r[k] != null) out[k] = r[k];
+    }
+    return out;
+  });
 }
 
 export function cachedCount() {

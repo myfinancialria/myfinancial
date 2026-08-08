@@ -169,7 +169,10 @@ function companyPage(c, bySymbol) {
     return `<tr><td><b>${esc(row.label)}</b></td>${hd.periods.slice(0, 5).map((p, i) => `<td class="num">${row.values[i] === null || row.values[i] === undefined ? "—" : row.values[i] + "%"}</td>`).join("")}<td class="num ${d > 0 ? "up" : d < 0 ? "down" : ""}">${d === null ? "—" : (d > 0 ? "+" : "") + d.toFixed(2)}</td></tr>`;
   }).join("") : "";
 
-  const rivalRows = (c.competitors || []).map((p) => {
+  const rivalRows = (c.competitors || []).map((p0) => {
+    // a covered peer's ratios come from its own record — no extra API calls
+    const own = p0.symbol ? bySymbol.get(p0.symbol) : null;
+    const p = own ? { ...p0, pe: p0.pe ?? own.pe, pb: p0.pb ?? own.pb, evEbitda: p0.evEbitda ?? own.evEbitda, roe: p0.roe ?? own.roe, roce: p0.roce ?? own.roce } : p0;
     const link = p.symbol && bySymbol.has(p.symbol);
     const nm = link ? `<a href="./${encodeURIComponent(p.symbol)}.html" style="font-weight:650">${esc(p.name)} ↗</a>` : esc(p.name);
     return `<tr><td>${nm}<div class="dim" style="font-size:11.5px">${p.symbol ? esc(p.symbol) : "not NSE-listed"}</div></td><td class="num">${num(p.pe)}</td><td class="num">${num(p.pb)}</td><td class="num">${num(p.evEbitda)}</td><td class="num">${num(p.roe)}</td><td class="num">${num(p.roce)}</td></tr>`;
@@ -268,7 +271,7 @@ paint(D);
 // --------------------------------- build ------------------------------------
 export function buildSite({ funds = [], navDate = "" } = {}) {
   const list = loadFundamentals().sort((a, b) => (a.name || a.symbol).localeCompare(b.name || b.symbol));
-  const bySymbol = new Set(list.map((c) => c.symbol));
+  const bySymbol = new Map(list.map((c) => [c.symbol, c.ratios || {}]));
   fs.mkdirSync(path.join(OUT, "stock"), { recursive: true });
   for (const c of list) fs.writeFileSync(path.join(OUT, "stock", `${c.symbol}.html`), companyPage(c, bySymbol));
   fs.writeFileSync(path.join(OUT, "stocks.html"), stocksIndex(list));

@@ -424,7 +424,8 @@ export async function stockPage(symbol) {
   ({ f, upstox } = await withRealFundamentals(symbol, f)); // REAL ratios/statements overlay
   const realExtras = upstox ? {
     profile: upstox.profile, holdings: upstox.holdings,
-    corporateActions: upstox.corporateActions, competitors: upstox.competitors,
+    corporateActions: upstox.corporateActions,
+    competitors: ufund.withPeerRatios(upstox.competitors),   // from each peer's own record
     isin: upstox.isin, asOf: upstox.asOf,
   } : null;
   if (!s) {
