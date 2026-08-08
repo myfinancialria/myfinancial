@@ -48,7 +48,16 @@ const res = await fetch("https://api-t1.fyers.in/api/v3/validate-refresh-token",
 });
 const json = await res.json().catch(() => ({}));
 if (!res.ok || json.s !== "ok" || !json.access_token) {
-  console.error(`[fyers-refresh] FAILED (HTTP ${res.status}): ${json.message || json.s || "no access_token"} — the refresh token may have expired (~15 days). Log in once at myapi.fyers.in and update FYERS_REFRESH_TOKEN.`);
+  const msg = json.message || json.s || "no access_token";
+  if (/disabled to comply|SEBI/i.test(msg)) {
+    // Broker-side regulatory block: FYERS has switched the refresh endpoint
+    // off for all users. Nothing is wrong with this setup — exit green so the
+    // schedule stays quiet, and this pipeline self-activates if re-enabled.
+    console.log(`[fyers-refresh] FYERS says: "${msg}"`);
+    console.log("[fyers-refresh] SEBI-mandated daily interactive login is in force for all brokers — run `node scripts/fyers_login.mjs` each morning (~60s); it pushes the day's token automatically.");
+    process.exit(0);
+  }
+  console.error(`[fyers-refresh] FAILED (HTTP ${res.status}): ${msg} — the refresh token may have expired (~15 days). Log in once via scripts/fyers_login.mjs to update FYERS_REFRESH_TOKEN.`);
   process.exit(1);
 }
 const accessToken = json.access_token;
