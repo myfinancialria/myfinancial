@@ -276,6 +276,8 @@
     if (!d) return h("div.card", h("div.empty", `Unknown symbol "${symbol}"`));
     const { quote: qt, fundamentals: f, health, peers, swot, summary, profile, industry, policy, products, sectorCtx } = d;
     const rt = f.ratios;
+    const rx = d.realExtras || null;
+    const srcLabel = f.realSource ? f.realSource.sources.join(" + ") : null;
 
     const cc = candleChart({ height: 400 });
     let resolution = "1D", days = 260;
@@ -305,7 +307,7 @@
         h("div",
           h("div", { style: { display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" } },
             h("div.page-title", profile.name), h("span.chip.blue", profile.sectorName),
-            f.realSource ? h("span.chip.up", { title: `real fundamentals via ${f.realSource.source} · fetched ${f.realSource.asOf}` }, "REAL FUNDAMENTALS ✓") : h("span.chip", "modelled data"),
+            f.realSource ? h("span.chip.up", { title: `real filed fundamentals via ${srcLabel} · fetched ${f.realSource.asOf}` }, `REAL FUNDAMENTALS ✓ ${f.realSource.primary}`) : h("span.chip", "modelled data"),
             profile.sub ? h("span.chip.violet", profile.sub) : null,
             profile.fno ? h("span.chip", "F&O") : null,
             health ? h("span.chip" + (health.score >= 75 ? ".up" : health.score >= 55 ? ".gold" : ".down"), `Health ${health.score}/100`) : h("span.chip", "Basic coverage"),
@@ -319,7 +321,7 @@
 
     const isBank = rt.gnpaPct !== null && rt.gnpaPct !== undefined;
     const ratioCard = h("div.card",
-      h("div.card-head", h("div", h("div.card-title", "🧮 Deep Ratios & Metrics"), h("div.card-sub", f.realSource ? `REAL · Yahoo Finance filings data · fetched ${f.realSource.asOf} · modelled values fill gaps` : "modelled demo metrics · hover any row for its plain meaning"))),
+      h("div.card-head", h("div", h("div.card-title", "🧮 Deep Ratios & Metrics"), h("div.card-sub", f.realSource ? `REAL filed data · ${srcLabel} · fetched ${f.realSource.asOf} · modelled values fill any gaps` : "modelled demo metrics · hover any row for its plain meaning"))),
       h("div.grid.cols-4", { style: { gap: "14px" } },
         h("div", h("label.lbl", "Valuation"),
           R("P/E", rt.pe + "×", "Price vs one year of profit"), R("PEG", rt.peg, "P/E ÷ profit growth — under 1 suggests growth is cheap"),
@@ -340,7 +342,9 @@
           R("Asset turnover", rt.assetTurnover ? rt.assetTurnover + "×" : null, "Sales per rupee of assets"),
           R("Working-capital days", rt.workingCapitalDays !== null && rt.workingCapitalDays !== undefined ? rt.workingCapitalDays + "d" : null, "Days cash stays stuck in operations"),
           R("EPS (FY26)", "₹" + f.annual.at(-1).eps), R("FCF (FY26)", f.annual.at(-1).fcf ? "₹" + fmtNum(f.annual.at(-1).fcf, 0) + " Cr" : null))),
-      h("div.disclaimer", f.realSource ? "Ratios marked from real filings-derived Yahoo Finance data; the few without coverage fall back to modelled values. Broker APIs (Upstox/FYERS) do not serve fundamentals — they provide prices only." : "Modelled figures on the demo feed — real fundamentals load automatically per symbol from Yahoo Finance when online."));
+      h("div.disclaimer", f.realSource
+        ? `Ratios sourced from real filed company data via ${srcLabel}; any metric the source does not publish falls back to a modelled value. Figures are for research, not a recommendation to buy or sell.`
+        : "Modelled figures on the demo feed. Real filed fundamentals load automatically per symbol once an Upstox access token is connected (Upstox Company Fundamentals API), with Yahoo Finance as backup."));
 
     const industryCard = industry ? h("div.card",
       h("div.card-head",
@@ -440,11 +444,13 @@
     // ---- sector valuation scorecard ----
     const valuation = d.valuation;
     const valuationCard = valuation ? h("div.card",
-      h("div.card-head", h("div", h("div.card-title", `🎯 How ${valuation.sectorName} Is Valued — and Where ${symbol} Stands`),
-        h("div.card-sub", `sector playbook metrics vs ${valuation.peerCount}-stock sector median`))),
+      h("div.card-head",
+        h("div", h("div.card-title", `🎯 How ${valuation.sectorName} Is Valued — and Where ${symbol} Stands`),
+          h("div.card-sub", valuation.real ? `company vs the published sector benchmark · real data` : `sector playbook metrics vs ${valuation.peerCount}-stock sector median`)),
+        valuation.real ? h("span.chip.up", "REAL SECTOR BENCHMARK ✓") : null),
       h("p", { style: { color: "var(--text2)", fontSize: "13px", lineHeight: 1.7, marginBottom: "14px" } }, valuation.intro),
       h("div.tbl-scroll", h("table.tbl",
-        h("thead", h("tr", h("th", "Metric"), h("th", "Why it matters here"), h("th", { style: { textAlign: "right" } }, symbol), h("th", { style: { textAlign: "right" } }, "Sector median"), h("th", "Standing"))),
+        h("thead", h("tr", h("th", "Metric"), h("th", "Why it matters here"), h("th", { style: { textAlign: "right" } }, symbol), h("th", { style: { textAlign: "right" } }, valuation.real ? "Sector" : "Sector median"), h("th", "Standing"))),
         h("tbody", valuation.rows.map((r) => h("tr",
           h("td", h("b", r.label), h("div.sub", r.kind.toUpperCase())),
           h("td", { style: { whiteSpace: "normal", maxWidth: "300px", fontSize: "12px", color: "var(--text2)" } }, r.why),
@@ -453,6 +459,72 @@
           h("td", h("span.chip" + (Math.abs(r.diffPct) < 5 ? "" : r.good ? ".up" : ".down"), r.verdict))))))),
       valuation.summary ? h("div", { style: { marginTop: "14px", padding: "12px 15px", background: "var(--blue-bg)", borderLeft: "3px solid var(--blue)", fontSize: "13px", lineHeight: 1.65, color: "var(--text2)" } },
         h("b", { style: { color: "var(--text)" } }, "Verdict: "), valuation.summary) : null) : null;
+
+    // ---- shareholding pattern (real, quarterly) ----
+    let holdingsCard = null;
+    if (rx && rx.holdings && rx.holdings.rows.length) {
+      const hd = rx.holdings;
+      const cols = hd.periods.slice(0, 5);
+      const delta = (r) => (r.values[0] === null || r.values[1] === null ? null : Math.round((r.values[0] - r.values[1]) * 100) / 100);
+      const bodyRows = hd.rows.map((r) => {
+        const dv = delta(r);
+        const cells = cols.map((p, i) => h("td.num", { style: { textAlign: "right", fontWeight: i === 0 ? 700 : 400 } }, r.values[i] === null || r.values[i] === undefined ? "—" : r.values[i] + "%"));
+        const trend = dv === null ? h("td", "—") : h("td", h("span.chip" + (dv > 0 ? ".up" : dv < 0 ? ".down" : ""), (dv > 0 ? "▲ +" : dv < 0 ? "▼ " : "") + dv + " pp"));
+        return h("tr", h("td", h("b", r.label)), ...cells, trend);
+      });
+      const pr = hd.latest.promoters, prPrev = hd.prev.promoters;
+      const fii = hd.latest.fii, fiiPrev = hd.prev.fii;
+      const bits = [];
+      if (pr !== null && pr !== undefined) bits.push(`Promoters — the founding owners — hold ${pr}% of the company${prPrev != null ? (pr > prPrev ? ", and they bought more this quarter, usually a sign of confidence" : pr < prPrev ? ", and they trimmed their stake this quarter, which is worth understanding before you invest" : ", unchanged from last quarter") : ""}.`);
+      if (fii !== null && fii !== undefined) bits.push(`Foreign investors hold ${fii}%${fiiPrev != null ? (fii > fiiPrev ? " and were buyers" : fii < fiiPrev ? " and were sellers" : " and stayed put") : ""} last quarter.`);
+      if (hd.latest.mutual_funds != null) bits.push(`Indian mutual funds — the money of ordinary SIP investors — hold ${hd.latest.mutual_funds}%.`);
+      holdingsCard = h("div.card.flush",
+        h("div.card-head",
+          h("div", h("div.card-title", "👥 Who Owns This Company"), h("div.card-sub", `shareholding pattern filed with the exchange · latest ${hd.periods[0]}`)),
+          h("span.chip.up", "REAL ✓")),
+        h("div.tbl-scroll", h("table.tbl",
+          h("thead", h("tr", h("th", "Holder"), ...cols.map((p) => h("th", { style: { textAlign: "right" } }, p)), h("th", "QoQ"))),
+          h("tbody", bodyRows))),
+        h("div.disclaimer", bits.join(" ")));
+    }
+
+    // ---- corporate actions (real) ----
+    let actionsCard = null;
+    if (rx && rx.corporateActions && rx.corporateActions.length) {
+      const ICON = { dividend: "💰", bonus: "🎁", split: "✂️", rights: "📜" };
+      const items = rx.corporateActions.map((a) => {
+        const kind = String(a.type || "").toLowerCase();
+        const icon = Object.keys(ICON).find((k) => kind.includes(k));
+        return h("tr",
+          h("td", h("b", `${icon ? ICON[icon] + " " : ""}${String(a.type || "action").replace(/_/g, " ")}`)),
+          h("td", a.date || "—"),
+          h("td", { style: { whiteSpace: "normal", color: "var(--text2)" } }, a.detail === null || a.detail === undefined ? "—" : String(a.detail)));
+      });
+      actionsCard = h("div.card.flush",
+        h("div.card-head",
+          h("div", h("div.card-title", "📅 Corporate Actions"), h("div.card-sub", "dividends, bonus issues, splits and rights — as declared")),
+          h("span.chip.up", "REAL ✓")),
+        h("div.tbl-scroll", { style: { maxHeight: "300px" } }, h("table.tbl",
+          h("thead", h("tr", h("th", "Action"), h("th", "Ex-date"), h("th", "Details"))),
+          h("tbody", items))),
+        h("div.disclaimer", "The ex-date is the cut-off: you must already own the share before that date to receive the dividend or bonus."));
+    }
+
+    // ---- competitors named by the exchange data feed (real) ----
+    let rivalsCard = null;
+    if (rx && rx.competitors && rx.competitors.length) {
+      const rows = rx.competitors.map((c) => h("tr",
+        h("td", h("div.sym", c.name)),
+        h("td.num", c.marketCap === null || c.marketCap === undefined ? "—" : fmtNum(c.marketCap, 0)),
+        h("td.num", c.pe === null || c.pe === undefined ? "—" : c.pe)));
+      rivalsCard = h("div.card.flush",
+        h("div.card-head",
+          h("div", h("div.card-title", "⚔️ Who It Competes With"), h("div.card-sub", "rival companies in the same business")),
+          h("span.chip.up", "REAL ✓")),
+        h("div.tbl-scroll", { style: { maxHeight: "300px" } }, h("table.tbl",
+          h("thead", h("tr", h("th", "Company"), h("th", "MCap ₹Cr"), h("th", "P/E"))),
+          h("tbody", rows))));
+    }
 
     const peersCard = peers ? h("div.card.flush",
       h("div.card-head", h("div", h("div.card-title", `🏭 ${peers.sectorName} peers`), h("div.card-sub", `medians — P/E ${peers.medians.pe}× · P/B ${peers.medians.pb}× · ROE ${peers.medians.roe}%`))),
@@ -483,6 +555,8 @@
         ratioCard,
         valuationCard,
         finCard ? h("div.grid.cols-32", finCard, healthCard) : null,
+        holdingsCard,
+        (actionsCard || rivalsCard) ? h("div.grid.cols-2", actionsCard, rivalsCard) : null,
         (industryCard || policyCard) ? h("div.grid.cols-2", industryCard, policyCard) : null,
         aiCard ? productsCard : null,
         (peersCard || swotCard) ? h("div.grid.cols-2", peersCard, swotCard) : null));

@@ -151,7 +151,23 @@ gh secret set APP_URL                # your deployed app, e.g. https://myfinanci
 - **08:45 IST market days** — `refresh-fyers-token.yml` exchanges the FYERS refresh token for the day's access token and pushes it into the deployed app via the Connections API → the app trades the day on live NSE data, no human involved. Re-login once every ~15 days when the refresh token itself lapses (the workflow fails loudly to tell you).
 - **App login** — none needed: public mode auto-issues a session.
 
-**Why Upstox can't be fully automatic:** SEBI-era broker rules require an interactive daily login for standard retail API apps — Upstox issues no refresh token, so any "auto-login" would mean storing your brokerage password/TOTP, which this project deliberately refuses to do. Paste the day's Upstox token into ⚙ Connections when you want Upstox specifically; use FYERS for unattended automation.
+**Why Upstox can't be fully automatic:** SEBI-era broker rules require an interactive daily login for standard retail API apps — Upstox issues no refresh token, so any "auto-login" would mean storing your brokerage password/TOTP, which this project deliberately refuses to do. Run `npm run login:upstox` (about 60 seconds) when you want Upstox; use FYERS for unattended price automation.
+
+## Real company fundamentals
+
+Stock pages carry genuine filed company data, not modelled figures — every page states which:
+
+| Source | What it provides | Setup |
+|---|---|---|
+| **Upstox Company Fundamentals API** (primary) | P&L, balance sheet and cash flow (consolidated, ₹ crore, with full line-item detail), key ratios **with the published sector benchmark beside each one**, quarterly shareholding (promoters / FII / DII / mutual funds / retail), corporate actions, competitor set, company profile | `npm run login:upstox` |
+| **Yahoo Finance** (backup) | Ratios and 4 years of statements for anything Upstox does not cover | none — automatic |
+| **Modelled engine** (last resort) | Fills only the individual metrics neither source publishes | built in |
+
+```bash
+npm run login:upstox
+```
+
+One login unlocks both live prices and fundamentals. Results are cached for 3 days, so pages keep their real data after the daily token lapses. Pages badge the provenance explicitly — **REAL FUNDAMENTALS ✓ Upstox** vs *modelled data* — and the sector scorecard switches from a modelled peer median to the **REAL SECTOR BENCHMARK ✓** the exchange feed publishes.
 
 ## Env vars
 
@@ -160,7 +176,8 @@ gh secret set APP_URL                # your deployed app, e.g. https://myfinanci
 | `PORT` | `5599` | HTTP + WS port |
 | `MYFIN_SECRET` | dev value | Session HMAC + vault KDF master — **set in production** |
 | `MYFIN_PROVIDER` | `synthetic` | Market feed: `upstox` \| `fyers` \| `synthetic` |
-| `UPSTOX_ACCESS_TOKEN` | unset | Upstox v2 daily access token |
+| `UPSTOX_ACCESS_TOKEN` | unset | Upstox v2 daily access token — live prices **and** the Company Fundamentals API |
+| `UPSTOX_API_KEY` / `UPSTOX_API_SECRET` | unset | Used by `npm run login:upstox` to mint the daily token |
 | `FYERS_APP_ID` / `FYERS_ACCESS_TOKEN` | unset | FYERS v3 credentials |
 | `AIMLAPI_KEY` | unset | Enables LLM enhancement of /learn articles (aimlapi.com) |
 | `AIMLAPI_MODEL` | `gpt-4o-mini` | AIMLAPI model id |

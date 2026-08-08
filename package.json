@@ -7,7 +7,9 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "test": "node --test server/test/"
+    "test": "node --test server/test/",
+    "login:upstox": "node scripts/upstox_login.mjs",
+    "login:fyers": "node scripts/fyers_login.mjs"
   },
   "dependencies": {
     "express": "^4.19.2",

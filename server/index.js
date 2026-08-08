@@ -65,10 +65,16 @@ startLiveFeed();               // no-op unless MYFIN_PROVIDER=upstox|fyers + tok
 seedArticles().catch((e) => console.log("  seo seed:", e.message));
 amfiWarmup().catch(() => {});   // background: real returns for the live MF screener & baskets
 loadNseMaster().catch(() => {}); // background: full NSE symbol master (~2,000 listed companies)
-import("./providers/yfundamentals.js").then(async (yf) => {
+// background: REAL company fundamentals — Upstox first (filed exchange data),
+// Yahoo as the always-available backup for anything Upstox does not cover.
+(async () => {
   const { STOCKS } = await import("./data/universe.js");
-  yf.warmup(STOCKS.map((s) => s.symbol)).catch(() => {});
-}); // background: REAL fundamentals (Yahoo) for the curated universe
+  const syms = STOCKS.map((s) => s.symbol);
+  const uf = await import("./providers/ufundamentals.js");
+  const yf = await import("./providers/yfundamentals.js");
+  if (uf.configured()) uf.warmup(syms).catch(() => {});
+  yf.warmup(syms).catch(() => {});
+})();
 
 server.listen(PORT, () => {
   console.log(`\n  myfinancial ▸ http://localhost:${PORT}`);

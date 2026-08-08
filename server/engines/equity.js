@@ -10,6 +10,7 @@ import { fundamentals, quote, daily } from "./market.js";
 import { sectorContext } from "./screeners.js";
 import { interpret, interpConfigured } from "./seo.js";
 import * as yfund from "../providers/yfundamentals.js";
+import * as ufund from "../providers/ufundamentals.js";
 import { mean, round2, round1, rsiSeries } from "../lib/util.js";
 
 const fmtCr = (cr) => (cr >= 100000 ? `₹${(cr / 100000).toFixed(2)} lakh crore` : `₹${Math.round(cr).toLocaleString("en-IN")} crore`);
@@ -240,32 +241,145 @@ export function sectorScorecard(symbol) {
   return { sector: s.sector, sectorName: SECTORS[s.sector].name, intro: fw.intro, rows, summary, peerCount: peers.length };
 }
 
-/** Overlay REAL Yahoo fundamentals onto the modelled engine where present. */
+/**
+ * Overlay REAL fundamentals onto the modelled engine.
+ * Upstox Company Fundamentals is the primary source (exchange-filed data via
+ * the user's own broker entitlement); Yahoo fills any gap Upstox leaves and
+ * covers symbols/fields Upstox does not carry. Modelled values fill the rest.
+ */
 async function withRealFundamentals(symbol, f) {
-  const real = await yfund.fundamentals(symbol).catch(() => null);
-  if (!real) return { f, real: null };
+  const [up, ya] = await Promise.all([
+    ufund.fundamentals(symbol).catch(() => null),
+    yfund.fundamentals(symbol).catch(() => null),
+  ]);
+  if (!up && !ya) return { f, real: null, upstox: null };
+
   const merged = { ...f };
-  // real ratios win wherever Yahoo has a value; modelled fills the gaps
   const mr = { ...f.ratios };
-  for (const [k, v] of Object.entries(real.ratios)) if (v !== null && v !== undefined) mr[k] = v;
+  // lowest precedence first: modelled → Yahoo → Upstox
+  for (const src of [ya, up]) {
+    if (!src?.ratios) continue;
+    for (const [k, v] of Object.entries(src.ratios)) if (v !== null && v !== undefined) mr[k] = v;
+  }
   merged.ratios = mr;
-  if (real.statements?.pnl?.length >= 2) merged.statements = real.statements;
-  // real mini-annual series (revenue/PAT/EPS) for the header CAGRs
-  if (real.statements?.pnl?.length >= 3) {
-    const p = real.statements.pnl;
+
+  // statements: prefer whichever real source gives the most usable history
+  const upLen = up?.statements?.pnl?.filter((r) => r.revenue != null).length || 0;
+  const yaLen = ya?.statements?.pnl?.filter((r) => r.revenue != null).length || 0;
+  const best = upLen >= 2 && upLen >= yaLen ? up : yaLen >= 2 ? ya : null;
+  if (best) merged.statements = best.statements;
+
+  // header CAGRs recomputed off the real P&L
+  const p = (best?.statements?.pnl || []).filter((r) => r.revenue != null);
+  if (p.length >= 3) {
     const first = p[0], last = p[p.length - 1], yrs = p.length - 1;
     if (first.revenue && last.revenue) mr.revCagr3Pct = Math.round((Math.pow(last.revenue / first.revenue, 1 / yrs) - 1) * 1000) / 10;
     if (first.pat > 0 && last.pat > 0) mr.patCagr3Pct = Math.round((Math.pow(last.pat / first.pat, 1 / yrs) - 1) * 1000) / 10;
   }
-  merged.realSource = { source: "yahoo", asOf: real.asOf, name: real.name };
-  return { f: merged, real };
+
+  const sources = [up && "Upstox Company Fundamentals", ya && "Yahoo Finance"].filter(Boolean);
+  merged.realSource = {
+    source: up ? "upstox" : "yahoo",
+    sources, primary: up ? "Upstox" : "Yahoo Finance",
+    asOf: (up || ya).asOf, name: ya?.name || null,
+    statementsFrom: best === up ? "upstox" : best === ya ? "yahoo" : null,
+  };
+  return { f: merged, real: ya, upstox: up };
+}
+
+// ratio direction + plain-English "why it matters" for the real sector scorecard
+const RATIO_META = {
+  pe: ["valuation", "P/E", "What you pay for ₹1 of the company's yearly profit. Lower than the sector means cheaper on earnings — but check why."],
+  pb: ["valuation", "P/B", "Price against the company's net assets on the books. Below sector can mean value, or assets the market distrusts."],
+  evEbitda: ["valuation", "EV/EBITDA", "Whole-business value against operating cash profit — the fairest way to compare firms with different debt levels."],
+  evSales: ["valuation", "EV/Sales", "Business value per ₹1 of sales. Used where profits are early-stage or lumpy."],
+  peg: ["valuation", "PEG", "P/E adjusted for growth. Under 1 suggests growth you are not paying full price for."],
+  roe: ["quality", "ROE", "Profit generated on shareholders' own money. Consistently above sector is the mark of a superior business."],
+  roa: ["quality", "ROA", "Profit squeezed out of every rupee of assets — how hard the asset base works."],
+  roce: ["quality", "ROCE", "Return on all capital employed, debt included. The cleanest read on core operating quality."],
+  patMarginPct: ["quality", "Net margin", "Rupees of final profit per ₹100 of sales — pricing power and cost control in one number."],
+  opMarginPct: ["quality", "Operating margin", "Profitability of the core business before financing and tax effects."],
+  ebitdaMarginPct: ["quality", "EBITDA margin", "Operating cash profitability before depreciation — useful for capital-heavy sectors."],
+  grossMarginPct: ["quality", "Gross margin", "What survives after direct input costs — the first test of pricing power."],
+  dividendYieldPct: ["quality", "Dividend yield", "Cash returned to you each year as a % of price."],
+  interestCover: ["quality", "Interest cover", "How many times operating profit covers interest. Higher is safer."],
+  assetTurnover: ["quality", "Asset turnover", "Sales generated per rupee of assets — efficiency of the asset base."],
+  currentRatio: ["quality", "Current ratio", "Short-term assets against short-term dues. Above 1 means near-term bills are covered."],
+  quickRatio: ["quality", "Quick ratio", "Current ratio excluding inventory — the stricter liquidity test."],
+  debtToEquity: ["risk", "Debt / Equity", "Borrowings against own funds. Lower than sector means less financial risk if rates or demand turn."],
+};
+
+/**
+ * REAL sector scorecard — company value vs the actual sector benchmark that
+ * Upstox publishes alongside each ratio (no peer modelling involved).
+ */
+function realScorecard(symbol, up) {
+  const rows = [];
+  let valPremiumPct = null, wins = 0, total = 0;
+  for (const b of up.sectorBenchmarks || []) {
+    if (b.company === null || b.sector === null || !b.key) continue;
+    const meta = RATIO_META[b.key];
+    if (!meta) continue;
+    const [kind, label, why] = meta;
+    const diffPct = b.sector !== 0 ? round1(((b.company - b.sector) / Math.abs(b.sector)) * 100) : 0;
+    const neutral = Math.abs(diffPct) < 5;
+    let verdict, good;
+    if (kind === "valuation") {
+      good = diffPct <= 0;
+      verdict = neutral ? "in line with sector" : diffPct > 0 ? `${Math.abs(diffPct)}% premium to sector` : `${Math.abs(diffPct)}% discount to sector`;
+      if (valPremiumPct === null) valPremiumPct = diffPct;
+    } else if (kind === "quality") {
+      good = diffPct >= 0;
+      if (!neutral) { total++; if (good) wins++; }
+      verdict = neutral ? "matches sector" : diffPct > 0 ? `outperforms by ${Math.abs(diffPct)}%` : `lags by ${Math.abs(diffPct)}%`;
+    } else {
+      good = diffPct <= 0;
+      if (!neutral) { total++; if (good) wins++; }
+      verdict = neutral ? "matches sector" : diffPct < 0 ? `better (lower) by ${Math.abs(diffPct)}%` : `worse (higher) by ${Math.abs(diffPct)}%`;
+    }
+    rows.push({ key: b.key, label: b.name || label, kind, why, value: b.company, median: b.sector, diffPct, verdict, good });
+  }
+  if (!rows.length) return null;
+
+  const nm = STOCK_MAP[symbol]?.name || symbol;
+  const headline = rows.find((r) => r.kind === "valuation");
+  let summary = "";
+  if (headline) {
+    const stance = valPremiumPct > 8 ? `trades at a ${Math.abs(valPremiumPct)}% premium to its sector`
+      : valPremiumPct < -8 ? `trades at a ${Math.abs(valPremiumPct)}% discount to its sector`
+      : "is valued broadly in line with its sector";
+    const standing = total === 0 ? "with quality metrics tracking the sector"
+      : wins / total >= 0.66 ? `and beats the sector benchmark on ${wins} of ${total} quality/risk measures`
+      : wins / total >= 0.4 ? `and is mixed on quality — ahead on ${wins} of ${total} measures`
+      : `and trails the sector on most quality measures (${wins} of ${total})`;
+    const fit = valPremiumPct > 8 && total && wins / total >= 0.66 ? "The premium is earned by genuinely better fundamentals."
+      : valPremiumPct > 8 ? "The premium is not fully backed by the numbers — either execution catches up, or the multiple compresses."
+      : valPremiumPct < -8 && total && wins / total >= 0.66 ? "A better-than-average business at a below-average price — the classic re-rating setup, so check what the market is worried about."
+      : valPremiumPct < -8 ? "The discount reflects weaker fundamentals — cheap for a reason until the metrics turn."
+      : "Fairly priced against its own sector's yardsticks.";
+    summary = `${nm} ${stance} on ${headline.label}, ${standing}. ${fit}`;
+  }
+  const s = STOCK_MAP[symbol];
+  return {
+    real: true, source: "upstox",
+    sector: up.profile?.sector || s?.sector || "—",
+    sectorName: up.profile?.sector || (s ? SECTORS[s.sector].name : "Sector"),
+    intro: `These are the ratios this sector is actually valued on, with the live sector benchmark published by the exchange data feed — not a modelled peer average. ${up.profile?.sectorMarketCapFmt ? `Sector market cap: ₹${up.profile.sectorMarketCapFmt}.` : ""}`,
+    rows, summary, peerCount: null,
+  };
 }
 
 export async function stockPage(symbol) {
   const s = STOCK_MAP[symbol];
   let f = fundamentals(symbol);                   // works for full-NSE extras too
   if (!f) return null;
-  ({ f } = await withRealFundamentals(symbol, f)); // REAL ratios/statements overlay
+  let upstox = null;
+  ({ f, upstox } = await withRealFundamentals(symbol, f)); // REAL ratios/statements overlay
+  const realExtras = upstox ? {
+    profile: upstox.profile, holdings: upstox.holdings,
+    corporateActions: upstox.corporateActions, competitors: upstox.competitors,
+    isin: upstox.isin, asOf: upstox.asOf,
+  } : null;
   if (!s) {
     // basic coverage for non-curated NSE-listed symbols
     const qt = quote(symbol);
@@ -273,12 +387,17 @@ export async function stockPage(symbol) {
       coverage: "basic",
       profile: { symbol, name: qt?.name || symbol, sector: "OTHER", sectorName: "Broader Market (NSE listed)", sub: null, fno: false },
       quote: qt, fundamentals: f, health: null, peers: null, swot: null,
-      summary: { paragraphs: [`${qt?.name || symbol} is an NSE-listed company outside our curated 60-stock deep-coverage universe. Price history, quotes and modelled fundamentals are available; connect a broker feed (Upstox/FYERS) for live prices. Deep coverage — peers, SWOT, AI summary, hero products — is curated progressively.`], disclaimer: "Basic coverage · modelled data." },
+      summary: { paragraphs: [realExtras?.profile?.description
+        ? realExtras.profile.description
+        : `${qt?.name || symbol} is an NSE-listed company outside our curated 60-stock deep-coverage universe. Price history, quotes and ${f.realSource ? "REAL filed fundamentals" : "modelled fundamentals"} are available. Deep coverage — peers, SWOT, AI summary, hero products — is curated progressively.`],
+        disclaimer: f.realSource ? `Basic coverage · fundamentals are REAL filed data via ${f.realSource.primary}.` : "Basic coverage · modelled data." },
       industry: null, policy: null, products: productsOf(symbol), sectorCtx: null,
+      valuation: upstox ? realScorecard(symbol, upstox) : null,
+      realExtras,
     };
   }
   const summary = executiveSummary(symbol);
-  const valuation = sectorScorecard(symbol);
+  const valuation = (upstox && realScorecard(symbol, upstox)) || sectorScorecard(symbol);
   const hs = healthScore(symbol);
 
   // AIMLAPI interpretation layer: the same grounded facts, richer prose.
@@ -293,6 +412,8 @@ export async function stockPage(symbol) {
       `Valuation: P/E ${f.ratios.pe}×, P/B ${f.ratios.pb}×${f.ratios.evEbitda ? `, EV/EBITDA ${f.ratios.evEbitda}×` : ""}, dividend yield ${f.ratios.dividendYieldPct}%.`,
       `Health score ${hs.score}/100 (${hs.grade}).`,
       valuation?.summary ? `Sector standing: ${valuation.summary}` : "",
+      upstox?.holdings?.latest ? `Shareholding: promoters ${upstox.holdings.latest.promoters ?? "—"}%, FII ${upstox.holdings.latest.fii ?? "—"}%, mutual funds ${upstox.holdings.latest.mutual_funds ?? "—"}%, retail ${upstox.holdings.latest.retail_and_other ?? "—"}% (${upstox.holdings.periods[0]}).` : "",
+      f.realSource ? `Data provenance: fundamentals are REAL filed figures via ${f.realSource.sources.join(" + ")}.` : "",
     ].filter(Boolean).join("\n");
     const r = await interpret("stock", `${symbol}:${new Date().toISOString().slice(0, 10)}`, facts, summary.paragraphs.join("\n\n"));
     summary.paragraphs = r.text.split(/\n{2,}/).filter((p) => p.trim());
@@ -313,6 +434,7 @@ export async function stockPage(symbol) {
     products: productsOf(symbol),
     sectorCtx: sectorContext(s.sector),
     valuation,
+    realExtras,
   };
 }
 

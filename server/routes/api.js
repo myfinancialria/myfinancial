@@ -229,7 +229,17 @@ api.get("/vault/doc/:id", requireAuth, wrap((req, res) => {
 api.delete("/vault/doc/:id", requireAuth, wrap((req, res) => ok(res, vault.deleteDoc(req.user.id, req.params.id))));
 
 // --------------------------- live data providers -----------------------------
-api.get("/providers/status", wrap((req, res) => ok(res, { market: market.liveStatus(), mf: amfi.statusSync(), connections: connectionsStatus() })));
+api.get("/providers/status", wrap(async (req, res) => {
+  const [uf, yf] = await Promise.all([import("../providers/ufundamentals.js"), import("../providers/yfundamentals.js")]);
+  ok(res, {
+    market: market.liveStatus(), mf: amfi.statusSync(), connections: connectionsStatus(),
+    fundamentals: {
+      primary: uf.configured() ? "upstox" : "yahoo",
+      upstox: { configured: uf.configured(), cached: uf.cachedCount() },
+      yahoo: { configured: true, cached: yf.cachedCount() },
+    },
+  });
+}));
 
 // -------------------- connections (Upstox / FYERS / AIMLAPI) -----------------
 api.get("/settings/connections", requireAuth, wrap((req, res) => ok(res, connectionsStatus())));

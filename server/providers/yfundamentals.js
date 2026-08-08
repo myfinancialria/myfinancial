@@ -19,23 +19,36 @@ const UA = { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Appl
 const CR = 1e7;                                    // ₹ → ₹ crore
 
 let session = null;                                // { cookie, crumb, at }
-let sessionFailedAt = 0;                           // 429 cooldown — never hammer
+let coolUntil = 0;                                 // exponential backoff on 429
+let fails = 0;
 let inFlight = 0;
+
+/** ms remaining before Yahoo should be contacted again (0 = go ahead). */
+export function cooldownMs() { return Math.max(0, coolUntil - Date.now()); }
 
 async function getSession() {
   if (session && Date.now() - session.at < 30 * 60_000) return session;
-  if (Date.now() - sessionFailedAt < 120_000) throw new Error("yahoo: cooling down after rate limit");
+  if (Date.now() < coolUntil) throw new Error(`yahoo: backing off ${Math.ceil(cooldownMs() / 60_000)}m`);
   try {
     const r1 = await fetch("https://fc.yahoo.com", { headers: UA, redirect: "manual" });
     const cookie = (r1.headers.get("set-cookie") || "").split(";")[0];
     if (!cookie) throw new Error("yahoo: no cookie");
-    const r2 = await fetch("https://query1.finance.yahoo.com/v1/test/getcrumb", { headers: { ...UA, cookie } });
-    const crumb = (await r2.text()).trim();
-    if (r2.status === 429) throw new Error("yahoo: 429 rate limited");
-    if (!r2.ok || crumb.length > 30 || !crumb || crumb.includes(" ")) throw new Error("yahoo: no crumb");
+    let crumb = null;
+    for (const host of ["query1", "query2"]) {
+      const r2 = await fetch(`https://${host}.finance.yahoo.com/v1/test/getcrumb`, { headers: { ...UA, cookie } });
+      const t = (await r2.text()).trim();
+      if (r2.ok && t && t.length <= 30 && !t.includes(" ")) { crumb = t; break; }
+      if (r2.status === 429) continue;              // try the sibling host before giving up
+    }
+    if (!crumb) throw new Error("yahoo: rate limited (no crumb)");
     session = { cookie, crumb, at: Date.now() };
+    fails = 0;
     return session;
-  } catch (e) { sessionFailedAt = Date.now(); throw e; }
+  } catch (e) {
+    fails++;
+    coolUntil = Date.now() + Math.min(5 * 60_000 * 2 ** (fails - 1), 60 * 60_000);   // 5m → 60m cap
+    throw e;
+  }
 }
 
 const raw = (o) => (o && typeof o === "object" ? o.raw : o) ?? null;
@@ -163,7 +176,13 @@ export async function warmup(symbols, { spacingMs = 4000, startDelayMs = 20_000 
   for (const sym of symbols) {
     const cacheFile = path.join(CACHE_DIR, `${sym.replace(/[^A-Z0-9-]/g, "_")}.json`);
     try { if (Date.now() - fs.statSync(cacheFile).mtimeMs < TTL) { ok++; continue; } } catch { /* fetch */ }
-    const r = await fundamentals(sym).catch(() => null);
+    let r = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const wait = cooldownMs();
+      if (wait) await new Promise((res) => setTimeout(res, wait + 1000));   // sit out the backoff
+      r = await fundamentals(sym).catch(() => null);
+      if (r || fs.existsSync(cacheFile)) break;               // got data, or definitively not on Yahoo
+    }
     r ? ok++ : miss++;
     await new Promise((res) => setTimeout(res, spacingMs));
   }
