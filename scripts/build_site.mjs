@@ -30,48 +30,63 @@ const cls = (x) => (x > 0 ? "up" : x < 0 ? "down" : "");
 // ------------------------------- shared chrome ------------------------------
 const CSS = `
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#0a0a0a;--bg2:#111;--line:#242424;--line2:#333;--fg:#f4f4f4;--dim:#8f8f8f;--up:#22c55e;--down:#ef4444;--accent:#f4f4f4}
-:root[data-theme=light]{--bg:#f5f4f1;--bg2:#fff;--line:#e2e0da;--line2:#cfccc4;--fg:#131313;--dim:#66635c;--up:#15803d;--down:#b91c1c;--accent:#131313}
-body{background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;-webkit-font-smoothing:antialiased}
-a{color:inherit}
-.wrap{max-width:1180px;margin:0 auto;padding:0 22px 72px}
-header.site{border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:10}
-header.site .wrap{display:flex;align-items:center;gap:20px;padding-top:15px;padding-bottom:15px}
-.logo{font-weight:800;letter-spacing:-.03em;font-size:17px;text-decoration:none}
-.logo span{color:var(--dim);font-weight:500}
-nav a{color:var(--dim);text-decoration:none;font-size:13.5px;margin-right:16px}
-nav a:hover,nav a.on{color:var(--fg)}
+:root{--ink:#f4f4f4;--ink-dim:#9a9a9a;--ink-faint:#5c5c5c;--paper:#060606;--paper-2:#0d0d0d;--line:#1f1f1f;--line-2:#2e2e2e;--inv-bg:#fff;--inv-fg:#000;--grain:.05;
+--font:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,"Helvetica Neue",Arial,sans-serif;--serif:Georgia,"Times New Roman",serif;--mono:ui-monospace,"SF Mono",Menlo,monospace;
+--ease:cubic-bezier(.22,.8,.24,1);--up:#22c55e;--down:#ef4444}
+:root[data-theme=light]{--ink:#151515;--ink-dim:#55544f;--ink-faint:#96958f;--paper:#f6f5f2;--paper-2:#edece8;--line:#e0dfda;--line-2:#c9c8c2;--inv-bg:#151515;--inv-fg:#f6f5f2;--grain:.035;--up:#15803d;--down:#b91c1c}
+body{background:var(--paper);color:var(--ink);font-family:var(--font);line-height:1.55;overflow-x:hidden;-webkit-font-smoothing:antialiased;transition:background .25s,color .25s}
+a{color:inherit;text-decoration:none}
+::selection{background:var(--inv-bg);color:var(--inv-fg)}
+body::after{content:"";position:fixed;inset:-50%;z-index:90;pointer-events:none;opacity:var(--grain);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E")}
+.wrap{max-width:1200px;margin:0 auto;padding:0 clamp(20px,4vw,56px) 90px}
+nav.site{position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:clamp(14px,2.6vw,34px);padding:16px clamp(20px,4vw,56px);
+background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.wordmark{font-family:var(--serif);font-size:20px;letter-spacing:-.02em;font-style:italic}
+.wordmark b{font-style:normal;font-family:var(--font);font-weight:800;letter-spacing:-.04em}
+nav.site .lk{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim);position:relative;padding:4px 0;transition:color .25s}
+nav.site .lk::after{content:"";position:absolute;left:0;bottom:0;height:1px;width:0;background:var(--ink);transition:width .3s var(--ease)}
+nav.site .lk:hover,nav.site .lk.on{color:var(--ink)}nav.site .lk:hover::after,nav.site .lk.on::after{width:100%}
 .spacer{flex:1}
-button.tt{background:none;border:1px solid var(--line2);color:var(--fg);padding:5px 11px;cursor:pointer;font-size:12px;border-radius:2px}
-h1{font-size:27px;letter-spacing:-.025em;margin:30px 0 6px;font-weight:800}
-h2{font-size:15px;letter-spacing:-.01em;margin:0;font-weight:700}
-.sub{color:var(--dim);font-size:13px}
-.card{border:1px solid var(--line);background:var(--bg2);margin-top:20px}
-.card-h{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-.card-b{padding:16px 18px}
-.chip{display:inline-block;border:1px solid var(--line2);color:var(--dim);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:2px}
-.chip.ok{color:var(--up);border-color:var(--up)}
+button.tt{width:38px;height:38px;border:1px solid var(--line-2);background:transparent;color:var(--ink);font-size:15px;cursor:pointer}
+.eyebrow{display:inline-flex;align-items:center;gap:12px;font-family:var(--mono);font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:18px}
+.eyebrow::before{content:"";width:44px;height:1px;background:var(--ink-dim)}
+h1{font-size:clamp(34px,5.2vw,60px);line-height:1.02;letter-spacing:-.04em;font-weight:800;margin-bottom:12px}
+h1 em{font-family:var(--serif);font-weight:400;font-style:italic;letter-spacing:-.02em}
+h2{font-size:14px;letter-spacing:.02em;font-weight:700;margin:0}
+.sub{color:var(--ink-dim);font-size:14.5px;line-height:1.75;max-width:74ch}
+.head{padding:56px 0 6px}
+.card{border:1px solid var(--line);background:var(--paper-2);margin-top:22px}
+.card-h{padding:15px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.card-b{padding:18px 20px}
+.chip{display:inline-block;font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;border:1px solid var(--line-2);color:var(--ink-dim);padding:3px 9px}
+.chip.ok{color:var(--ink);border-color:var(--ink)}
 table{width:100%;border-collapse:collapse;font-size:13.5px}
-th{text-align:left;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);font-weight:600;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
-td{padding:9px 12px;border-bottom:1px solid var(--line)}
-tbody tr:hover{background:rgba(128,128,128,.06)}
-.num{text-align:right;font-variant-numeric:tabular-nums}
-.up{color:var(--up)}.down{color:var(--down)}.dim{color:var(--dim)}
+th{text-align:left;font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);font-weight:500;padding:11px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:11px 14px;border-bottom:1px solid var(--line)}
+tbody tr:hover{background:color-mix(in srgb,var(--ink) 4%,transparent)}
+.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:12.5px}
+.up{color:var(--up)}.down{color:var(--down)}.dim{color:var(--ink-dim)}
 .scroll{overflow-x:auto}
-.grid{display:grid;gap:16px}
-.g2{grid-template-columns:repeat(auto-fit,minmax(310px,1fr))}
-.g4{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
-.stat{border:1px solid var(--line);padding:12px 14px}
-.stat .k{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
-.stat .v{font-size:20px;font-weight:750;margin-top:3px;letter-spacing:-.02em}
-input.s{width:100%;background:var(--bg);border:1px solid var(--line2);color:var(--fg);padding:11px 14px;font-size:14px;border-radius:2px}
-.note{color:var(--dim);font-size:12px;line-height:1.65;padding:12px 18px;border-top:1px solid var(--line)}
-.tabs{display:flex;gap:0;border-bottom:1px solid var(--line);flex-wrap:wrap}
-.tabs button{background:none;border:none;border-bottom:2px solid transparent;color:var(--dim);padding:10px 15px;cursor:pointer;font-size:13px;font-family:inherit}
-.tabs button.on{color:var(--fg);border-bottom-color:var(--fg);font-weight:650}
-.strong td{font-weight:700;border-top:1px solid var(--line2)}
-footer.site{border-top:1px solid var(--line);color:var(--dim);font-size:11.5px;line-height:1.7;padding:22px 0 40px;margin-top:44px}
-.big{font-size:32px;font-weight:800;letter-spacing:-.03em}
+.grid{display:grid;gap:18px}
+.grid>*{min-width:0}
+.card{min-width:0}
+.scroll{overflow-x:auto;max-width:100%}
+table{min-width:max-content}
+.g2{grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(158px,1fr))}
+.stat{border:1px solid var(--line);padding:15px 17px;background:var(--paper-2)}
+.stat .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint)}
+.stat .v{font-size:23px;font-weight:800;margin-top:5px;letter-spacing:-.03em}
+input.s{width:100%;background:transparent;border:1px solid var(--line-2);color:var(--ink);padding:13px 16px;font-size:14.5px;font-family:var(--font)}
+input.s:focus{outline:none;border-color:var(--ink)}
+.note{color:var(--ink-faint);font-size:12px;line-height:1.7;padding:14px 20px;border-top:1px solid var(--line)}
+.tabs{display:flex;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tabs button{background:none;border:none;border-bottom:1px solid transparent;color:var(--ink-dim);padding:12px 18px;cursor:pointer;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;font-family:var(--font)}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--ink)}
+.strong td{font-weight:700;border-top:1px solid var(--line-2)}
+footer.site{border-top:1px solid var(--line);color:var(--ink-faint);font-size:11.5px;line-height:1.8;padding:26px 0 46px;margin-top:52px}
+footer.site a{color:var(--ink-dim);text-decoration:underline}
+@media(max-width:640px){nav.site .lk{font-size:10.5px;letter-spacing:.08em}}
 `;
 
 // `base` is "" for root pages and "../" for pages under /stock/, so the nav
@@ -79,19 +94,69 @@ footer.site{border-top:1px solid var(--line);color:var(--dim);font-size:11.5px;l
 const shell = (title, desc, body, active = "", base = "") => `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title><meta name="description" content="${esc(desc)}">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💠</text></svg>">
-<script>document.documentElement.dataset.theme=localStorage.getItem("mf.theme")||"dark"</script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>\u{1F4A0}</text></svg>">
+<script>document.documentElement.dataset.theme=localStorage.getItem("myfin.theme")||"dark"</script>
 <style>${CSS}</style></head><body>
-<header class="site"><div class="wrap">
-<a class="logo" href="${base}index.html">my<span>financial</span></a>
-<nav><a href="${base}index.html"${active === "brief" ? ' class="on"' : ""}>Daily Brief</a><a href="${base}stocks.html"${active === "stocks" ? ' class="on"' : ""}>Companies</a><a href="${base}funds.html"${active === "funds" ? ' class="on"' : ""}>Mutual Funds</a></nav>
+<nav class="site">
+<a class="wordmark" href="${base}index.html">my<b>financial</b></a>
+<a class="lk${active === "stocks" ? " on" : ""}" href="${base}stocks.html">Companies</a>
+<a class="lk${active === "funds" ? " on" : ""}" href="${base}funds.html">Mutual Funds</a>
+<a class="lk${active === "brief" ? " on" : ""}" href="${base}brief.html">Daily Brief</a>
 <div class="spacer"></div>
-<button class="tt" onclick="var r=document.documentElement,n=r.dataset.theme==='dark'?'light':'dark';r.dataset.theme=n;localStorage.setItem('mf.theme',n)">◐ Theme</button>
-</div></header><div class="wrap">${body}</div>
+<button class="tt" title="Toggle light / dark" onclick="var r=document.documentElement,n=r.dataset.theme==='dark'?'light':'dark';r.dataset.theme=n;localStorage.setItem('myfin.theme',n)">\u263C</button>
+</nav><div class="wrap">${body}</div>
 <footer class="site"><div class="wrap">
-Educational research only — not investment advice under SEBI (Investment Advisers) Regulations, 2013. Investments are subject to market risks; read all scheme-related documents carefully.<br>
-Fundamentals are real filed company data via the Upstox Company Fundamentals API. Mutual fund NAVs are official AMFI data; returns computed from published NAV history. Past performance does not indicate future results.
+Educational research only \u2014 not investment advice under SEBI (Investment Advisers) Regulations, 2013. Investments are subject to market risks; read all scheme-related documents carefully.<br>
+Company fundamentals are real filed data via the Upstox Company Fundamentals API. Mutual fund NAVs are official AMFI data; returns are computed from published NAV history. Past performance does not indicate future results.<br>
+<a href="${base}index.html">Home</a> \u00b7 <a href="https://github.com/myfinancialria/myfinancial" rel="noopener">GitHub</a>
 </div></footer></body></html>`;
+
+// ------------------------------ the homepage --------------------------------
+// The public landing page IS the designed homepage — same monochrome art,
+// motion and copy. Only the destinations change: on GitHub Pages there is no
+// server, so app routes are rewired to the static pages that hold real data,
+// and the modules that genuinely need the running platform say so instead of
+// pretending to work.
+const REPO = "https://github.com/myfinancialria/myfinancial";
+const ROUTE_MAP = [
+  [/href="\/app#\/funds"/g, 'href="funds.html"'],
+  [/href="\/app#\/equities\/screeners\/[a-z]+"/g, 'href="stocks.html"'],
+  [/href="\/app#\/equities"/g, 'href="stocks.html"'],
+  [/href="\/app#\/dashboard"/g, 'href="brief.html"'],
+  [/href="\/app#\/planning\/fema"/g, `href="${REPO}#nri--fema" rel="noopener"`],
+  [/href="\/app#\/planning"/g, `href="${REPO}#run-it" rel="noopener"`],
+  [/href="\/app#\/advisory"/g, `href="${REPO}#run-it" rel="noopener"`],
+  [/href="\/app#\/estate"/g, `href="${REPO}#run-it" rel="noopener"`],
+  [/href="\/app"/g, 'href="stocks.html"'],
+  [/href="\/learn"/g, `href="${REPO}#insights" rel="noopener"`],
+  [/href="https:\/\/myfinancialria\.github\.io\/myfinancial\/"/g, 'href="brief.html"'],
+];
+
+export function buildHome() {
+  const src = path.join(ROOT, "public", "home.html");
+  if (!fs.existsSync(src)) return false;
+  let html = fs.readFileSync(src, "utf8");
+  for (const [re, to] of ROUTE_MAP) html = html.replace(re, to);
+
+  // the three module cards that need a server get an honest label
+  html = html.replace(/(<a class="mod reveal" href="[^"]*github[^"]*"[^>]*>)([\s\S]*?)(<span class="go">)Open module →(<\/span>)/g,
+    '$1$2<span class="mod-tag">Runs in the full platform</span>$3Get the code →$4');
+  html = html.replace("</style>", `.mod-tag{position:absolute;top:clamp(26px,3vw,42px);right:clamp(26px,3vw,42px);font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);border:1px solid var(--line-2);padding:3px 8px;max-width:9em;line-height:1.35;text-align:right}
+.pub-links{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+</style>`);
+
+  // give the hero a second call to action pointing at the live public data
+  html = html.replace(/<a class="btn" href="stocks\.html">Launch Platform <span class="arr">→<\/span><\/a>/g,
+    '<a class="btn" href="stocks.html">Explore 211 Companies <span class="arr">→</span></a>');
+  html = html.replace(/<a class="btn" style="font-size: 15px; padding: 16px 34px" href="stocks\.html">Launch the Platform <span class="arr">→<\/span><\/a>/,
+    '<a class="btn" style="font-size:15px;padding:16px 34px" href="stocks.html">Explore the Research <span class="arr">→</span></a>');
+
+  // nav: swap the app launcher for the public sections
+
+
+  fs.writeFileSync(path.join(OUT, "index.html"), html);
+  return true;
+}
 
 // ------------------------------- load data ----------------------------------
 export function loadFundamentals() {

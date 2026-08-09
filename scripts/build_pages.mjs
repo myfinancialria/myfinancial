@@ -149,6 +149,8 @@ a{color:inherit}
 nav{position:sticky;top:0;z-index:50;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px clamp(16px,4vw,48px);background:color-mix(in srgb,var(--paper) 90%,transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
 .wordmark{font-family:Georgia,serif;font-style:italic;font-size:19px;text-decoration:none}
 .wordmark b{font-style:normal;font-family:inherit;font-weight:800}
+.navlk{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);text-decoration:none;margin-left:6px}
+.navlk:hover{color:var(--ink)}
 .btn{border:1px solid var(--inv-bg);background:var(--inv-bg);color:var(--inv-fg);font-size:11px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;padding:9px 15px;text-decoration:none;cursor:pointer}
 .btn:hover{background:transparent;color:var(--ink)}
 .tbtn{width:36px;height:36px;border:1px solid var(--line2);background:transparent;color:var(--ink);font-size:14px;cursor:pointer}
@@ -187,7 +189,9 @@ td .amc{font-size:10.5px;color:var(--faint)}
 </head>
 <body>
 <nav>
-  <a class="wordmark" href="https://github.com/myfinancialria/myfinancial"><b>my</b>financial</a>
+  <a class="wordmark" href="index.html"><b>my</b>financial</a>
+  <a class="navlk" href="stocks.html">Companies</a>
+  <a class="navlk" href="funds.html">Mutual Funds</a>
   <span class="badge"><span class="pulse"></span> auto-refreshed market days · 5 PM IST</span>
   <div style="display:flex;gap:10px;align-items:center">
     <button class="tbtn" onclick="const n=document.documentElement.dataset.theme==='light'?'dark':'light';document.documentElement.dataset.theme=n;localStorage.setItem('myfin.theme',n);this.textContent=n==='light'?'☾':'☀︎'">☀︎</button>
@@ -256,11 +260,12 @@ document.querySelector(".tbtn").textContent = document.documentElement.dataset.t
 </body></html>`;
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
-fs.writeFileSync(path.join(OUT_DIR, "index.html"), html);
+fs.writeFileSync(path.join(OUT_DIR, "brief.html"), html);
 fs.writeFileSync(path.join(OUT_DIR, ".nojekyll"), "");
 const enriched = universe.funds.filter((f) => f.enriched).length;
-console.log(`[pages] wrote dist/index.html (${(html.length / 1024).toFixed(0)} KB) · ${sections.length} category tables · ${enriched} schemes enriched · ${indices.length}/${YAHOO.length} indices`);
+console.log(`[pages] wrote dist/brief.html (${(html.length / 1024).toFixed(0)} KB) · ${sections.length} category tables · ${enriched} schemes enriched · ${indices.length}/${YAHOO.length} indices`);
 
 // the rest of the public site: company pages + the full fund screener
-const { buildSite } = await import("./build_site.mjs");
+const { buildSite, buildHome } = await import("./build_site.mjs");
 buildSite({ funds: universe.funds, navDate: universe.navDate });
+console.log(buildHome() ? "[site] homepage = the designed landing page (dist/index.html)" : "[site] home.html missing — no landing page written");
