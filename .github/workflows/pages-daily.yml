@@ -18,7 +18,11 @@ name: Daily rebuild (GitHub Pages)
 
 on:
   schedule:
-    - cron: "30 12 * * 1-5"      # 18:00 IST, Mon–Fri (IST has no DST)
+    # 21:00 IST, Mon–Fri. IST has no DST, so 15:30 UTC never drifts.
+    # Timed deliberately late: NSE publishes the full bhavcopy around 18:00-18:30
+    # IST and AMFI publishes NAVs later still, so an evening run picks up the
+    # same trading day rather than yesterday's.
+    - cron: "30 15 * * 1-5"
   workflow_dispatch: {}
 
 permissions:
@@ -66,6 +70,24 @@ jobs:
 
       - name: Mutual funds — AMFI + full NAV history
         run: node scripts/fetch_funds.mjs
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install the fundamentals fetcher
+        run: pip install -r requirements-data.txt
+
+      # Best-effort, never fatal. Yahoo rate-limits shared CI addresses, so this
+      # will often fetch only part of the market — but records land in var/yfin,
+      # which the cache carries into tomorrow's run, so coverage accumulates
+      # across days instead of restarting. If it fetches nothing at all, the
+      # committed snapshot is used and the build is unaffected.
+      - name: Fundamentals — refresh what has gone stale (best effort)
+        run: python3 scripts/fetch_yfinance.py --liquid-first --workers 4
+        continue-on-error: true
+        timeout-minutes: 12
 
       - name: Compute every screener metric
         run: node scripts/build_screener.mjs

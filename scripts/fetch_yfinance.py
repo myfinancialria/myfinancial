@@ -221,6 +221,7 @@ def main() -> int:
     if not uni_file.exists():
         return print("data/nse_universe.json missing — run: npm run data:universe") or 1
     symbols = [s["symbol"] for s in json.loads(uni_file.read_text())["symbols"]]
+    universe_size = len(symbols)          # --limit must not distort the reported coverage
 
     # Fetching in liquidity order means an interrupted run still leaves the
     # part of the market anyone would actually screen fully covered.
@@ -270,27 +271,49 @@ def main() -> int:
                         )
         print()
 
-    # ---- rebuild the snapshot from everything on disk, fresh or not ----------
+    # ---- merge into the snapshot; never shrink it ---------------------------
+    # The snapshot is committed, and this script also runs in CI where the cache
+    # may be cold or Yahoo may throttle after a couple of hundred symbols. If it
+    # rebuilt purely from local cache it would replace a full snapshot with a
+    # partial one and silently drop coverage from the published site. So start
+    # from whatever is already committed and only ever overwrite with fresher
+    # records.
     companies: dict[str, dict] = {}
+    inherited = 0
+    if SNAPSHOT.exists():
+        try:
+            prev = json.loads(SNAPSHOT.read_text()).get("companies", {})
+            if isinstance(prev, dict):
+                companies.update({k: v for k, v in prev.items() if v})
+                inherited = len(companies)
+        except (OSError, ValueError):
+            pass
+
+    refreshed = 0
     for sym in symbols:
         try:
             rec = json.loads(cache_path(sym).read_text())
         except (OSError, ValueError):
             continue
         if rec:
+            if sym not in companies:
+                refreshed += 1
             companies[sym] = rec
+
+    if inherited:
+        print(f"[yf] merged: {inherited} already in the snapshot, {refreshed} newly covered")
 
     SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
     SNAPSHOT.write_text(json.dumps({
         "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "source": "Yahoo Finance via yfinance",
         "covered": len(companies),
-        "universe": len(symbols),
+        "universe": universe_size,
         "companies": companies,
     }))
 
-    pct = len(companies) / max(1, len(symbols)) * 100
-    print(f"[yf] snapshot: {len(companies)}/{len(symbols)} companies ({pct:.1f}%) → data/fundamentals_wide.json")
+    pct = len(companies) / max(1, universe_size) * 100
+    print(f"[yf] snapshot: {len(companies)}/{universe_size} companies ({pct:.1f}%) → data/fundamentals_wide.json")
     if _counts["error"]:
         print(f"[yf] {_counts['error']} symbols errored — rerun to retry just those")
     print("[yf] next: npm run build")
