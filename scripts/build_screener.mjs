@@ -430,6 +430,8 @@ function buildStocks() {
   // sector-relative valuation: cheap vs the market means little, cheap vs peers means something
   sectorRelative(rows, "pe", "peVsSector");
   sectorRelative(rows, "roe", "roeVsSector");
+  // and the same against the narrower sub-sector, which is the real comparison
+  buildPeerGroups(rows, details);
 
   for (const row of rows) {
     const d = details.get(row.symbol);
@@ -472,6 +474,86 @@ function rankPercentile(rows, key, out) {
   const have = rows.filter((r) => typeof r[key] === "number").sort((a, b) => a[key] - b[key]);
   have.forEach((r, i) => { r[out] = r2((i / Math.max(1, have.length - 1)) * 100, 1); });
   for (const r of rows) if (r[out] === undefined) r[out] = null;
+}
+
+/**
+ * Peer groups, built on the sub-sector rather than the sector.
+ *
+ * "Cheap for the market" is close to meaningless and "cheap for Energy" lumps a
+ * refiner in with a solar developer. Yahoo's `industry` is the narrower cut —
+ * Energy → "Oil & Gas Refining & Marketing" — and that is the only grouping in
+ * which a P/E comparison actually says something.
+ *
+ * Writes peer-relative metrics onto every row, and attaches the comparison
+ * table itself to the detail record so the company page can render it.
+ */
+function buildPeerGroups(rows, details) {
+  const groups = new Map();
+  for (const r of rows) {
+    // fall back to the broad sector for the long tail with no sub-sector
+    const key = r.industry || r.sector || null;
+    r.peerGroup = key;
+    if (!key) continue;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(r);
+  }
+
+  const median = (vals) => {
+    const v = vals.filter((x) => typeof x === "number" && Number.isFinite(x)).sort((a, b) => a - b);
+    if (!v.length) return null;
+    const m = Math.floor(v.length / 2);
+    return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+  };
+
+  let withPeers = 0;
+  for (const [key, group] of groups) {
+    const med = {
+      pe: median(group.map((r) => r.pe)),
+      pb: median(group.map((r) => r.pb)),
+      roe: median(group.map((r) => r.roe)),
+      roce: median(group.map((r) => r.roce)),
+      evEbitda: median(group.map((r) => r.evEbitda)),
+      profitMarginPct: median(group.map((r) => r.profitMarginPct)),
+      dividendYieldPct: median(group.map((r) => r.dividendYieldPct)),
+      ret1y: median(group.map((r) => r.ret1y)),
+    };
+
+    // ranked by size, so "the big names in this sub-sector" is the default view
+    const byCap = group.filter((r) => typeof r.marketCapCr === "number")
+      .sort((a, b) => b.marketCapCr - a.marketCapCr);
+
+    for (const r of group) {
+      r.peerCount = group.length;
+      r.peVsPeers = typeof r.pe === "number" && med.pe ? r2(((r.pe - med.pe) / Math.abs(med.pe)) * 100, 1) : null;
+      r.roeVsPeers = typeof r.roe === "number" && med.roe ? r2(((r.roe - med.roe) / Math.abs(med.roe)) * 100, 1) : null;
+      const ix = byCap.indexOf(r);
+      r.peerRankByCap = ix >= 0 ? ix + 1 : null;
+    }
+
+    // the table itself: the largest names in the sub-sector, plus this company
+    // when it is not one of them, so a small player still sees where it sits
+    const top = byCap.slice(0, 8);
+    for (const r of group) {
+      const d = details.get(r.symbol);
+      if (!d) continue;
+      const list = top.includes(r) ? top : [...top, r];
+      if (list.length < 2) continue;                 // a group of one is not a comparison
+      withPeers++;
+      d.peerGroup = {
+        name: key,
+        count: group.length,
+        medians: med,
+        rows: list.map((p) => ({
+          symbol: p.symbol, name: p.name, self: p.symbol === r.symbol,
+          marketCapCr: p.marketCapCr ?? null, pe: p.pe ?? null, pb: p.pb ?? null,
+          roe: p.roe ?? null, roce: p.roce ?? null,
+          profitMarginPct: p.profitMarginPct ?? null,
+          dividendYieldPct: p.dividendYieldPct ?? null, ret1y: p.ret1y ?? null,
+        })),
+      };
+    }
+  }
+  console.log(`[build] peer groups: ${groups.size} sub-sectors · ${withPeers} companies have a comparison table`);
 }
 
 /** How far a metric sits from its own sector's median, in percent. */

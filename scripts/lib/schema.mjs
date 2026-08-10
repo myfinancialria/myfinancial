@@ -24,7 +24,9 @@ export const STOCK_FIELDS = [
   { key: "name", label: "Company", group: "Company", type: "text", col: true },
   { key: "symbol", label: "Symbol", group: "Company", type: "text" },
   { key: "sector", label: "Sector", group: "Company", type: "cat", col: true },
-  { key: "industry", label: "Industry", group: "Company", type: "cat" },
+  { key: "industry", label: "Sub-sector", group: "Company", type: "cat", col: true, help: "The narrow industry a company competes in — e.g. Energy → Oil & Gas Refining & Marketing. Peer comparisons are built on this, not on the broad sector." },
+  { key: "peerCount", label: "Companies in sub-sector", group: "Company", unit: "n", dir: 0, type: "num" },
+  { key: "peerRankByCap", label: "Size rank in sub-sector", group: "Company", unit: "n", dir: -1, type: "num", help: "1 = the largest company in its sub-sector by market cap." },
   { key: "nseTier", label: "NSE index tier", group: "Company", type: "cat", col: true, help: "Which broad NSE index the company belongs to — the exchange's own size and liquidity classification, not a threshold we chose." },
   { key: "inNifty50", label: "In NIFTY 50", group: "Company", type: "bool", dir: 1 },
   { key: "inNifty500", label: "In NIFTY 500", group: "Company", type: "bool", dir: 1 },
@@ -58,7 +60,9 @@ export const STOCK_FIELDS = [
   { key: "earningsYieldPct", label: "Earnings yield", group: "Valuation", unit: "%", dir: 1, type: "num", help: "The inverse of P/E. Compare it against a fixed deposit rate." },
   { key: "dividendYieldPct", label: "Dividend yield", group: "Valuation", unit: "%", dir: 1, type: "num", help: "Cash dividends declared over the last twelve months, as a percentage of today's price. Summed from the company's own filed corporate actions." },
   { key: "dividendPerShare", label: "Dividend / share (TTM)", group: "Valuation", unit: "₹", dir: 1, type: "num", help: "Total cash dividend per share with an ex-date in the last twelve months." },
-  { key: "peVsSector", label: "P/E vs sector", group: "Valuation", unit: "%", dir: -1, type: "num", help: "How far the P/E sits from the median of its own sector. Negative = cheaper than peers." },
+  { key: "payoutRatioPct", label: "Payout ratio", group: "Valuation", unit: "%", dir: 0, type: "num", help: "Share of profit paid out as dividend. Very high payouts are hard to sustain if earnings dip." },
+  { key: "peVsSector", label: "P/E vs sector", group: "Valuation", unit: "%", dir: -1, type: "num", help: "How far the P/E sits from the median of its broad sector. Negative = cheaper." },
+  { key: "peVsPeers", label: "P/E vs sub-sector", group: "Valuation", unit: "%", dir: -1, type: "num", col: true, help: "How far the P/E sits from the median of its SUB-sector — a refiner against other refiners, not against all of Energy. The comparison that actually means something." },
 
   // ------------------------------ profitability -----------------------------
   { key: "roe", label: "ROE", group: "Profitability", unit: "%", dir: 1, type: "num", col: true, help: "Profit earned on shareholders' own money." },
@@ -69,6 +73,7 @@ export const STOCK_FIELDS = [
   { key: "grossMarginPct", label: "Gross margin", group: "Profitability", unit: "%", dir: 1, type: "num" },
   { key: "ebitdaMarginPct", label: "EBITDA margin", group: "Profitability", unit: "%", dir: 1, type: "num" },
   { key: "roeVsSector", label: "ROE vs sector", group: "Profitability", unit: "%", dir: 1, type: "num" },
+  { key: "roeVsPeers", label: "ROE vs sub-sector", group: "Profitability", unit: "%", dir: 1, type: "num", help: "ROE against the median of the sub-sector it competes in." },
 
   // --------------------------------- growth ---------------------------------
   { key: "revenueGrowthPct", label: "Revenue growth", group: "Growth", unit: "%", dir: 1, type: "num" },
@@ -87,6 +92,7 @@ export const STOCK_FIELDS = [
   // ------------------------------- ownership --------------------------------
   { key: "promoterHoldingPct", label: "Promoter holding", group: "Ownership", unit: "%", dir: 1, type: "num", help: "The founding owners' stake. A high, stable stake usually signals commitment." },
   { key: "institutionHoldingPct", label: "Institutional holding", group: "Ownership", unit: "%", dir: 1, type: "num" },
+  { key: "employees", label: "Employees", group: "Company", unit: "n", dir: 0, type: "num" },
 
   // --------------------------------- trend ----------------------------------
   { key: "stage", label: "Weinstein stage", group: "Trend", unit: "n", dir: 0, type: "num", col: true, help: "1 basing · 2 advancing · 3 topping · 4 declining, from the 30-week average." },

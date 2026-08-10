@@ -1,7 +1,7 @@
 {
   "name": "myfinancial",
   "version": "1.0.0",
-  "description": "myfinancial — enterprise-grade financial planning, direct mutual funds, equity analytics, quantitative screeners, advisory signals and estate planning platform for Resident Indians & NRIs.",
+  "description": "myfinancial \u2014 enterprise-grade financial planning, direct mutual funds, equity analytics, quantitative screeners, advisory signals and estate planning platform for Resident Indians & NRIs.",
   "type": "module",
   "main": "server/index.js",
   "scripts": {
@@ -10,25 +10,26 @@
     "test": "node --test server/test/*.mjs",
     "login:upstox": "node scripts/upstox_login.mjs",
     "login:fyers": "node scripts/fyers_login.mjs",
-
     "data:universe": "node scripts/fetch_universe.mjs",
     "data:prices": "node scripts/fetch_prices.mjs --years 5",
     "data:indices": "node scripts/fetch_indices.mjs",
     "data:funds": "node scripts/fetch_funds.mjs",
-    "data:fundamentals": "node scripts/fetch_fundamentals.mjs",
+    "data:fundamentals": "python3 scripts/fetch_yfinance.py --liquid-first",
     "data:upstox": "node scripts/fetch_upstox_fundamentals.mjs",
     "data": "npm run data:universe && npm run data:prices && npm run data:indices && npm run data:funds",
-
     "build:screener": "node scripts/build_screener.mjs",
     "build:app": "node scripts/build_app.mjs",
     "build": "npm run build:screener && npm run build:app && node scripts/build_pages.mjs",
     "verify": "node scripts/verify_build.mjs",
-    "serve": "cd dist && python3 -m http.server 8080"
+    "serve": "cd dist && python3 -m http.server 8080",
+    "data:all": "npm run data && npm run data:fundamentals"
   },
   "dependencies": {
     "express": "^4.19.2",
     "lightweight-charts": "^4.2.3",
     "ws": "^8.18.0"
   },
-  "engines": { "node": ">=22" }
+  "engines": {
+    "node": ">=22"
+  }
 }

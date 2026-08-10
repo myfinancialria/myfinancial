@@ -181,7 +181,42 @@ browser, so every keystroke re-screens the market with no server and no waiting.
 | Sector labels + index membership (NIFTY 50/500, mid/small/microcap, sector indices) | NSE index constituent lists | ~755 | none |
 | Mutual fund NAV + full history | AMFI `NAVAll` + mfapi.in | all ~2,400 Direct-Growth schemes | none |
 | Filed fundamentals — P&L, balance sheet, cash flow, shareholding, peers | Upstox Company Fundamentals | as far as you sweep it | Upstox token |
-| Wide fundamentals — P/E, P/B, ROE, market cap, margins | Yahoo Finance | best-effort | none |
+| Wide fundamentals — market cap, sub-sector, D/E, PEG, beta, payout | Yahoo Finance via **yfinance** | ~2,000 | none |
+
+The two fundamentals layers are complementary rather than redundant. Upstox
+supplies what a company *filed* — statements, shareholding, named competitors,
+published sector benchmarks — and is the better source wherever it reaches.
+yfinance supplies what filings do not contain at all:
+
+- **Market cap.** Filed statements report no share count, so market cap is not
+  derivable from them. Both ways of backing it out of the ratios (`PAT÷EPS×price`
+  and `P/B×book value`) agree within 10% for only 61% of companies — Reliance
+  differs by 18% — so it is taken from yfinance or left blank, never guessed.
+- **Sub-sector.** Yahoo's `industry` is the narrow cut inside the broad sector:
+  Energy → *Oil & Gas Refining & Marketing*. This is what makes a like-for-like
+  peer group possible.
+- Debt/equity, current and quick ratios, PEG, P/S, EV/Revenue, forward P/E,
+  beta, payout ratio, employee count and the business description.
+
+**Peer comparison** is then built from the whole listed universe, grouped by
+sub-sector: every company page carries a table of the largest names it competes
+with plus the sub-sector median, and the screener exposes `P/E vs sub-sector` and
+`ROE vs sub-sector` as filterable fields. Comparing a refiner against other
+refiners says something; comparing it against all of Energy does not.
+
+Dividend yield is reconstructed independently, by summing the cash dividends in
+the company's own filed corporate actions over the last twelve months — ITC comes
+out at 5.07% from two payouts totalling ₹14.50 on a ₹286.10 price.
+
+> The fundamentals layer is Python because Yahoo's endpoints require a cookie +
+> crumb handshake and block plain HTTP clients hard — a hand-rolled Node client
+> was rate-limited for hours from a single address. `yfinance` negotiates that
+> handshake itself and routes through `curl_cffi` with a browser TLS
+> fingerprint, which gets through: ~450 companies a minute against zero.
+>
+> ```bash
+> pip install -r requirements-data.txt
+> ```
 
 One bhavcopy file carries **every** symbol for a session, so the whole market costs
 one request per trading day rather than one per company — and it is the only free

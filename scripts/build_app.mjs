@@ -150,7 +150,34 @@ function stockPage(detail) {
 <tbody>${hd.rows.map((r) => `<tr><td><b>${esc(r.label)}</b></td>${(hd.periods || []).slice(0, 5).map((_, i) => `<td class="num">${r.values[i] === null || r.values[i] === undefined ? "—" : r.values[i] + "%"}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
 <div class="note">Promoters are the founding owners. A rising promoter stake usually signals confidence; a falling one is worth understanding before investing.</div></div>` : "";
 
-  const peers = deep?.competitors?.length ? `<div class="card"><div class="card-h"><h2>Rivals, side by side</h2></div>
+  // Sub-sector comparison, built from the whole listed universe rather than a
+  // supplied rival list — so it exists for every company, and every row links.
+  const pg = detail.peerGroup;
+  const peerCard = pg?.rows?.length > 1 ? `<div class="card"><div class="card-h">
+<div><h2>How it compares in ${esc(pg.name)}</h2>
+<div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none">${pg.count} listed ${pg.count === 1 ? "company" : "companies"} in this sub-sector · largest by market cap${m.peerRankByCap ? ` · this one ranks #${m.peerRankByCap}` : ""}</div></div>
+<span class="chip ok">Sub-sector peers</span></div>
+<div class="scroll"><table>
+<thead><tr><th>Company</th><th class="num">Market cap</th><th class="num">P/E</th><th class="num">P/B</th><th class="num">ROE</th><th class="num">ROCE</th><th class="num">Net margin</th><th class="num">Div yield</th><th class="num">1-year</th></tr></thead>
+<tbody>
+${pg.rows.map((p) => `<tr${p.self ? ' style="background:color-mix(in srgb,var(--ink) 7%,transparent)"' : ""}>
+<td>${p.self ? `<b>${esc(p.name)}</b> <span class="badge">this company</span>` : `<a href="./${encodeURIComponent(p.symbol)}.html" style="font-weight:650">${esc(p.name)}</a>`}<div class="sym dim" style="font-size:10.5px">${esc(p.symbol)}</div></td>
+<td class="num">${crore(p.marketCapCr)}</td><td class="num">${num(p.pe)}</td><td class="num">${num(p.pb)}</td>
+<td class="num">${p.roe == null ? "—" : num(p.roe, 1) + "%"}</td><td class="num">${p.roce == null ? "—" : num(p.roce, 1) + "%"}</td>
+<td class="num">${p.profitMarginPct == null ? "—" : num(p.profitMarginPct, 1) + "%"}</td>
+<td class="num">${p.dividendYieldPct == null ? "—" : num(p.dividendYieldPct, 2) + "%"}</td>
+<td class="num ${cls(p.ret1y)}">${pct(p.ret1y)}</td></tr>`).join("")}
+<tr class="strong" style="border-top:1px solid var(--line-2)"><td><b>Sub-sector median</b></td>
+<td class="num dim">—</td><td class="num">${num(pg.medians.pe)}</td><td class="num">${num(pg.medians.pb)}</td>
+<td class="num">${pg.medians.roe == null ? "—" : num(pg.medians.roe, 1) + "%"}</td>
+<td class="num">${pg.medians.roce == null ? "—" : num(pg.medians.roce, 1) + "%"}</td>
+<td class="num">${pg.medians.profitMarginPct == null ? "—" : num(pg.medians.profitMarginPct, 1) + "%"}</td>
+<td class="num">${pg.medians.dividendYieldPct == null ? "—" : num(pg.medians.dividendYieldPct, 2) + "%"}</td>
+<td class="num ${cls(pg.medians.ret1y)}">${pct(pg.medians.ret1y)}</td></tr>
+</tbody></table></div>
+<div class="note">${m.peVsPeers == null ? "" : `On earnings this company trades <b>${Math.abs(m.peVsPeers).toFixed(0)}% ${m.peVsPeers < 0 ? "below" : "above"}</b> the median of its sub-sector. `}Comparing against the narrow sub-sector rather than the whole sector is the point — a refiner judged against other refiners, not against every energy company. Medians use all ${pg.count} listed names, not just the ones shown.</div></div>` : "";
+
+  const peers = deep?.competitors?.length ? `<div class="card"><div class="card-h"><h2>Rivals named in the filings</h2></div>
 <div class="scroll"><table><thead><tr><th>Company</th><th class="num">P/E</th><th class="num">P/B</th><th class="num">ROE</th><th class="num">ROCE</th></tr></thead>
 <tbody>${deep.competitors.map((p) => `<tr><td>${p.symbol ? `<a href="./${encodeURIComponent(p.symbol)}.html" style="font-weight:650">${esc(p.name)} ↗</a>` : esc(p.name)}</td>
 <td class="num">${num(p.pe)}</td><td class="num">${num(p.pb)}</td><td class="num">${num(p.roe)}</td><td class="num">${num(p.roce)}</td></tr>`).join("")}</tbody></table></div></div>` : "";
@@ -204,6 +231,7 @@ ${panes.length ? `<div class="card"><div class="card-h"><h2>Financial statements
 <div class="tabs" style="display:flex;border-bottom:1px solid var(--line)">${panes.map(([l], i) => `<button class="btn" style="border:none;border-bottom:2px solid ${i === 0 ? "var(--ink)" : "transparent"}" data-t="${esc(l)}">${esc(l)}</button>`).join("")}</div>
 ${panes.map(([l, h], i) => h.replace('class="pane"', `class="pane" ${i ? 'style="display:none"' : ""}`)).join("")}
 </div>` : ""}
+${peerCard}
 ${holdCard}
 ${peers}
 ${productsCard}
