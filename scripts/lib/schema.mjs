@@ -71,8 +71,10 @@ export const STOCK_FIELDS = [
   { key: "eps", label: "EPS", group: "Growth", unit: "₹", dir: 1, type: "num" },
 
   // ------------------------------ balance sheet -----------------------------
-  { key: "debtToEquity", label: "Debt / Equity", group: "Balance sheet", unit: "x", dir: -1, type: "num", help: "Borrowings against own funds. Above 1 means more debt than equity." },
-  { key: "currentRatio", label: "Current ratio", group: "Balance sheet", unit: "x", dir: 1, type: "num" },
+  { key: "debtToEquity", label: "Debt / Equity", group: "Balance sheet", unit: "x", dir: -1, type: "num", help: "Borrowings against own funds. Above 1 means more debt than equity. Sparse: filed statements report total liabilities, not borrowings, so this only exists where an outside feed supplies it — use Liabilities / Equity to screen the full universe." },
+  { key: "liabilitiesToEquity", label: "Liabilities / Equity", group: "Balance sheet", unit: "x", dir: -1, type: "num", help: "Total liabilities divided by net worth, straight from the filed balance sheet. Broader than debt/equity — it includes payables and provisions, not just borrowings — so read it as overall leverage." },
+  { key: "netWorthCr", label: "Net worth", group: "Balance sheet", unit: "₹cr", dir: 1, type: "num", help: "Shareholders' funds as filed." },
+  { key: "currentRatio", label: "Current ratio", group: "Balance sheet", unit: "x", dir: 1, type: "num", help: "Current assets over current liabilities — can short-term dues be met. Computed from the filed balance sheet where available." },
   { key: "quickRatio", label: "Quick ratio", group: "Balance sheet", unit: "x", dir: 1, type: "num" },
   { key: "bookValue", label: "Book value", group: "Balance sheet", unit: "₹", dir: 1, type: "num" },
 

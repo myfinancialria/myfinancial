@@ -136,6 +136,20 @@ const screener = (() => { try { return fs.readFileSync(path.join(DIST, "screener
 if (/data\/stocks\.json/.test(screener) && /addFilter/.test(screener)) ok("screener page carries its filter logic and data reference");
 else bad("screener.html looks incomplete");
 
+// The screener's JavaScript is assembled inside a template literal, so a stray
+// backtick in it truncates the script and ships a page that renders but does
+// nothing. Parse every inline block rather than trusting that it looks right.
+{
+  const blocks = [...screener.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  let broken = 0;
+  for (const b of blocks) {
+    try { new Function(b); } catch { broken++; }
+  }
+  if (!blocks.length) bad("screener.html has no inline script at all");
+  else if (broken) bad(`${broken} of ${blocks.length} inline script blocks in screener.html do not parse`);
+  else ok(`${blocks.length} inline script blocks parse cleanly`);
+}
+
 console.log("────────────────────────────────────────────────────────────");
 if (failures) {
   console.log(`✗ ${failures} check${failures === 1 ? "" : "s"} failed${warnings ? `, ${warnings} warning${warnings === 1 ? "" : "s"}` : ""} — NOT publishing.`);

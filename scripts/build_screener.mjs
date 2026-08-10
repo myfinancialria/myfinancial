@@ -331,6 +331,17 @@ function buildStocks() {
     // Prefer the filed Upstox figure where we have it; fall back to the wide feed.
     const pick = (deepKey, wideKey) => (dr[deepKey] ?? null) ?? (w[wideKey] ?? null);
 
+    // The filed balance sheet carries net worth and the liability split but not
+    // borrowings, so a true debt/equity cannot be derived from it. What CAN be
+    // derived honestly is overall leverage and the current ratio — named for
+    // what they actually are rather than passed off as debt/equity.
+    const bs = d?.statements?.balanceSheet?.length ? d.statements.balanceSheet[d.statements.balanceSheet.length - 1] : null;
+    const netWorth = bs?.netWorth ?? null;
+    const liabToEquity = netWorth && netWorth > 0 && bs?.totalLiabilities != null
+      ? r2(bs.totalLiabilities / netWorth) : null;
+    const filedCurrentRatio = bs?.currentAssets != null && bs?.currentLiabilities > 0
+      ? r2(bs.currentAssets / bs.currentLiabilities) : null;
+
     const marketCapCr = w.marketCapCr ?? null;
     const row = {
       symbol,
@@ -363,7 +374,9 @@ function buildStocks() {
       grossMarginPct: w.grossMarginPct ?? null,
       ebitdaMarginPct: w.ebitdaMarginPct ?? null,
       debtToEquity: dr.debtToEquity ?? w.debtToEquity ?? null,
-      currentRatio: w.currentRatio ?? null,
+      liabilitiesToEquity: liabToEquity,
+      netWorthCr: netWorth != null ? r2(netWorth, 0) : null,
+      currentRatio: filedCurrentRatio ?? w.currentRatio ?? null,
       quickRatio: pick("quickRatio", "quickRatio"),
       revenueCr: w.revenueCr ?? null,
       revenueGrowthPct: pick("revGrowthPct", "revenueGrowthPct"),
@@ -376,9 +389,11 @@ function buildStocks() {
       institutionHoldingPct: w.institutionHoldingPct ?? null,
       employees: w.employees ?? null,
 
-      // depth flags let the UI be honest about what backs each row
+      // Depth flags let the UI be honest about what backs each row.
+      // "hasFundamentals" means either layer supplied something, since a company
+      // with filed statements plainly has fundamentals even with no wide feed.
       hasDeepData: !!d,
-      hasFundamentals: !!(w && Object.keys(w).length),
+      hasFundamentals: !!d || !!(w && Object.keys(w).length),
       ...t,
     };
     // earnings yield is the inverse of P/E and is what value screens actually want

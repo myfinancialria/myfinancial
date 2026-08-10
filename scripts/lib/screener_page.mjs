@@ -17,9 +17,10 @@ import { shell } from "./shell.mjs";
 const STOCK_PRESETS = [
   {
     id: "quality", name: "Quality compounders",
-    why: "Businesses that earn a high return on their own capital without leaning on debt, and are still trending up.",
+    why: "Businesses that earn a high return on their own capital without leaning heavily on liabilities, and are still trending up.",
     filters: [
-      { f: "roe", op: ">=", a: 15 }, { f: "debtToEquity", op: "<=", a: 0.5 },
+      { f: "roe", op: ">=", a: 15 }, { f: "roce", op: ">=", a: 15 },
+      { f: "liabilitiesToEquity", op: "<=", a: 1.5 },
       { f: "profitMarginPct", op: ">=", a: 8 }, { f: "avgTurnoverCr", op: ">=", a: 5 },
       { f: "aboveSma200", op: "true" },
     ],
@@ -69,7 +70,7 @@ const STOCK_PRESETS = [
     why: "Profitable, low-debt companies whose price has been beaten down — a watchlist, not a buy list.",
     filters: [
       { f: "rsi14", op: "<=", a: 35 }, { f: "roe", op: ">=", a: 12 },
-      { f: "debtToEquity", op: "<=", a: 1 }, { f: "avgTurnoverCr", op: ">=", a: 3 },
+      { f: "liabilitiesToEquity", op: "<=", a: 2 }, { f: "avgTurnoverCr", op: ">=", a: 3 },
     ],
     sort: { f: "rsi14", dir: 1 },
   },
@@ -253,6 +254,7 @@ export function screenerPage({ stockCount, fundCount, priceDate, navDate }) {
 .frow .op{min-width:120px}
 .frow .val{width:110px}
 .frow .catval{min-width:200px;max-width:340px}
+.sparse{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;color:var(--warn);border:1px solid var(--warn);padding:2px 7px;cursor:help;white-space:nowrap}
 .xbtn{border:1px solid var(--line-2);background:transparent;color:var(--ink-dim);width:32px;height:32px;cursor:pointer;font-size:15px;line-height:1}
 .xbtn:hover{border-color:var(--down);color:var(--down)}
 .colspanel{border-bottom:1px solid var(--line);padding:14px 18px;background:var(--paper-3);
@@ -343,7 +345,16 @@ async function load(tab) {
     for (const r of rows) if (r[m.k] !== null && r[m.k] !== undefined && r[m.k] !== "") s.add(String(r[m.k]));
     cats[m.k] = [...s].sort();
   }
-  store[tab] = { ...j, rows, byKey, cats };
+  // How much of the universe actually carries each field. A numeric threshold
+  // cannot be met by a blank, so filtering on a sparse field quietly discards
+  // most of the market — the UI warns rather than letting that pass unnoticed.
+  const cov = {};
+  for (const m of j.meta) {
+    let n = 0;
+    for (const r of rows) { const v = r[m.k]; if (v !== null && v !== undefined && v !== "") n++; }
+    cov[m.k] = rows.length ? n / rows.length : 0;
+  }
+  store[tab] = { ...j, rows, byKey, cats, cov };
   return store[tab];
 }
 
@@ -472,6 +483,18 @@ function renderFilters() {
     }
 
     if (m.h) { const q = el("span", "k"); q.textContent = "ⓘ"; q.title = m.h; q.style.cursor = "help"; row.appendChild(q); }
+
+    // Numeric conditions on a thinly-covered field silently drop every row that
+    // has no value for it. Say so, next to the condition causing it.
+    const coverage = d.cov?.[f.f];
+    const needsValue = !["true", "false", "notnull"].includes(f.op);
+    if (needsValue && coverage !== undefined && coverage < 0.6) {
+      const shown = (coverage * 100).toFixed(0);
+      const wrn = el("span", "sparse", "only " + shown + "% have this");
+      wrn.title = m.l + " is present for " + shown + "% of the universe. Rows without a value cannot satisfy a"
+        + " threshold, so this condition excludes them.";
+      row.appendChild(wrn);
+    }
 
     const x = el("button", "xbtn", "×"); x.title = "Remove";
     x.onclick = () => { state.filters.splice(i, 1); state.preset = null; renderFilters(); run(); };
