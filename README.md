@@ -153,6 +153,84 @@ gh secret set APP_URL                # your deployed app, e.g. https://myfinanci
 
 **Why Upstox can't be fully automatic:** SEBI-era broker rules require an interactive daily login for standard retail API apps — Upstox issues no refresh token, so any "auto-login" would mean storing your brokerage password/TOTP, which this project deliberately refuses to do. Run `npm run login:upstox` (about 60 seconds) when you want Upstox; use FYERS for unattended price automation.
 
+## The public screener — every listed company, every scheme
+
+[**myfinancialria.github.io/myfinancial/screener.html**](https://myfinancialria.github.io/myfinancial/screener.html)
+
+A screener over the **whole** market, served as a static site: **~2,057 NSE-listed
+companies across 85 metrics** and **~2,400 mutual fund schemes across 40**. The
+whole index is downloaded once (≈290 KB and ≈150 KB gzipped) and filtered in the
+browser, so every keystroke re-screens the market with no server and no waiting.
+
+- **Build any condition set** — pick a field, an operator (`at least`, `between`,
+  `is one of`, `is yes`…), a value. Combine as many as you like.
+- **Ten ready-made screens** each for stocks and funds (quality compounders, value
+  that isn't broken, momentum leaders, quiet accumulation, volatility squeeze;
+  consistent equity, best risk-adjusted, top-quartile 5Y…). Each explains what it
+  looks for and is editable — they are ordinary filter sets, not black boxes.
+- **Save screens** to your browser and **share any screen as a URL** — the entire
+  state is encoded in the link. No account; nothing leaves your machine.
+- Sortable columns, a column picker over every field, and **CSV export**.
+- Every row links to a full page for that company or scheme.
+
+### Where the data comes from
+
+| Layer | Source | Coverage | Key needed |
+|---|---|---|---|
+| Prices, volume, turnover, **delivery %** | NSE **full bhavcopy**, 5 years of sessions | every listed company | none |
+| Sector labels + index membership (NIFTY 50/500, mid/small/microcap, sector indices) | NSE index constituent lists | ~755 | none |
+| Mutual fund NAV + full history | AMFI `NAVAll` + mfapi.in | all ~2,400 Direct-Growth schemes | none |
+| Filed fundamentals — P&L, balance sheet, cash flow, shareholding, peers | Upstox Company Fundamentals | as far as you sweep it | Upstox token |
+| Wide fundamentals — P/E, P/B, ROE, market cap, margins | Yahoo Finance | best-effort | none |
+
+One bhavcopy file carries **every** symbol for a session, so the whole market costs
+one request per trading day rather than one per company — and it is the only free
+source that also publishes **delivery percentage**, which matters a great deal when
+screening Indian equities (high delivery means shares were actually taken home, not
+churned intraday).
+
+Everything the screener filters on is **computed here, at build time** — RSI, MACD,
+ADX, Bollinger, Supertrend, ATR, Weinstein stage, relative-strength percentiles,
+beta, drawdowns; and for funds, CAGRs, **rolling returns across every start date**,
+Sharpe, Sortino and drawdown. Nothing is copied from a factsheet, so every figure is
+reproducible from published data. The indicator library is covered by tests
+(`npm test`) that check it against an independent implementation rather than against
+itself.
+
+**Corporate actions are handled.** NSE bhavcopy prices are raw traded prices, and
+NSE does not adjust `PREV_CLOSE` across a capital action either — HDFC Bank's 1:1
+bonus prints as a close of 973.4 against a previous close of 1964.1. Left alone that
+reads as a 50% crash and poisons every return, moving average and 52-week range
+spanning it. The build detects these from the price series itself (NSE price bands
+make a >30% single-session move impossible, so a gap past that is necessarily a
+capital action), snaps it to the nearest simple ratio, and back-adjusts history.
+
+### Rebuilding it
+
+```bash
+npm run data          # NSE universe + 5y bhavcopy + index lists + all NAV history
+npm run build         # compute every metric, render the site into dist/
+npm run verify        # refuse-to-publish checks (also run in CI)
+npm run serve         # → http://localhost:8080
+```
+
+`npm run data` is keyless and resumable — historical bhavcopies and NAV histories
+never change, so they are cached permanently and a re-run costs seconds. The two
+fundamentals layers are separate commands because each needs either a token or a
+free rate-limit window:
+
+```bash
+npm run login:upstox && npm run data:upstox   # filed fundamentals (best quality)
+npm run data:fundamentals                     # wide Yahoo layer (rate-limited)
+```
+
+Both write snapshots into `data/` that are **committed**, so the nightly GitHub
+Action ([`pages-daily.yml`](.github/workflows/pages-daily.yml)) rebuilds the whole
+site from keyless sources plus those snapshots — never needing a secret, and never
+failing because a third party throttled a shared CI address. `verify_build.mjs` runs
+before the deploy step and fails the workflow rather than publishing an empty or
+implausible site.
+
 ## Real company fundamentals
 
 Stock pages carry genuine filed company data, not modelled figures — every page states which:

@@ -1,15 +1,25 @@
 # ---------------------------------------------------------------------------
-# Daily Market Brief → GitHub Pages
-# Rebuilds https://myfinancialria.github.io/myfinancial/ with REAL data
-# (AMFI NAVs, mfapi return histories, index closes) every market weekday at
-# 17:00 IST (11:30 UTC — IST has no DST, so this never drifts).
+# Daily rebuild → GitHub Pages
+#
+# Refreshes https://myfinancialria.github.io/myfinancial/ every market weekday
+# from sources that need no key and no login:
+#
+#   NSE bhavcopy      every listed company's OHLCV, turnover and delivery %
+#   NSE index lists   sector labels and index membership
+#   AMFI NAVAll       every mutual fund scheme + today's NAV
+#   mfapi.in          each scheme's full NAV history
+#
+# Company fundamentals (P/E, ROE, market cap…) are NOT fetched here: the free
+# endpoint rate-limits shared CI addresses hard. They are refreshed locally with
+# `npm run data:fundamentals` and committed as data/fundamentals_wide.json,
+# which this build reads. That keeps the nightly build unattended and reliable.
 # ---------------------------------------------------------------------------
-name: Daily market brief (GitHub Pages)
+name: Daily rebuild (GitHub Pages)
 
 on:
   schedule:
-    - cron: "30 11 * * 1-5"      # 17:00 IST, Monday–Friday
-  workflow_dispatch: {}           # manual refresh any time
+    - cron: "30 12 * * 1-5"      # 18:00 IST, Mon–Fri (IST has no DST)
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -23,6 +33,7 @@ concurrency:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -33,12 +44,44 @@ jobs:
         with:
           node-version: 22
 
-      - name: Build brief from live AMFI / mfapi / Yahoo data
+      # Historical bhavcopies and NAV histories never change, so caching them
+      # turns a 20-minute cold build into a one-minute incremental one. The key
+      # rotates weekly; restore-keys let a new week start from last week's copy.
+      - name: Restore market data cache
+        uses: actions/cache@v4
+        with:
+          path: var
+          key: market-data-${{ github.run_id }}
+          restore-keys: |
+            market-data-
+
+      - name: Prices — NSE bhavcopy (every listed company)
+        run: node scripts/fetch_prices.mjs --years 5
+
+      - name: Sectors & index membership
+        run: node scripts/fetch_indices.mjs
+
+      - name: Universe — NSE symbol master
+        run: node scripts/fetch_universe.mjs
+
+      - name: Mutual funds — AMFI + full NAV history
+        run: node scripts/fetch_funds.mjs
+
+      - name: Compute every screener metric
+        run: node scripts/build_screener.mjs
+
+      - name: Render the site
+        run: node scripts/build_app.mjs
+
+      - name: Daily brief + landing page
         run: node scripts/build_pages.mjs
         env:
-          # optional: add with `gh secret set AIMLAPI_KEY` → AI daily commentary
           AIMLAPI_KEY: ${{ secrets.AIMLAPI_KEY }}
           AIMLAPI_MODEL: ${{ secrets.AIMLAPI_MODEL }}
+        continue-on-error: true    # the brief is a bonus; never fail the deploy for it
+
+      - name: Verify the build before publishing
+        run: node scripts/verify_build.mjs
 
       - uses: actions/configure-pages@v5
 

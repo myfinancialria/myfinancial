@@ -265,7 +265,9 @@ fs.writeFileSync(path.join(OUT_DIR, ".nojekyll"), "");
 const enriched = universe.funds.filter((f) => f.enriched).length;
 console.log(`[pages] wrote dist/brief.html (${(html.length / 1024).toFixed(0)} KB) · ${sections.length} category tables · ${enriched} schemes enriched · ${indices.length}/${YAHOO.length} indices`);
 
-// the rest of the public site: company pages + the full fund screener
-const { buildSite, buildHome } = await import("./build_site.mjs");
-buildSite({ funds: universe.funds, navDate: universe.navDate });
+// The landing page only. Company, fund and screener pages are now produced by
+// build_app.mjs from the full screener dataset — every listed company rather
+// than the subset a token had fetched — so buildSite() is deliberately NOT
+// called here: it would overwrite those pages with the narrower older ones.
+const { buildHome } = await import("./build_site.mjs");
 console.log(buildHome() ? "[site] homepage = the designed landing page (dist/index.html)" : "[site] home.html missing — no landing page written");

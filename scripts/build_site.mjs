@@ -123,7 +123,9 @@ Company fundamentals are real filed data via the Upstox Company Fundamentals API
 const REPO = "https://github.com/myfinancialria/myfinancial";
 const ROUTE_MAP = [
   [/href="\/app#\/funds"/g, 'href="funds.html"'],
-  [/href="\/app#\/equities\/screeners\/[a-z]+"/g, 'href="stocks.html"'],
+  // the app's screener routes now have a real static counterpart
+  [/href="\/app#\/equities\/screeners\/[a-z]+"/g, 'href="screener.html"'],
+  [/href="\/app#\/equities\/screeners"/g, 'href="screener.html"'],
   [/href="\/app#\/equities"/g, 'href="stocks.html"'],
   [/href="\/app#\/dashboard"/g, 'href="brief.html"'],
   [/href="\/app#\/planning\/fema"/g, `href="${REPO}#nri--fema" rel="noopener"`],
@@ -140,6 +142,14 @@ export function buildHome() {
   if (!fs.existsSync(src)) return false;
   let html = fs.readFileSync(src, "utf8");
   for (const [re, to] of ROUTE_MAP) html = html.replace(re, to);
+
+  // The landing page's nav is written for the running app, where everything sits
+  // behind /app. On the public site the data pages ARE the product, so put them
+  // first — a visitor should reach the screener without reading a pitch.
+  html = html.replace(
+    '<a href="#platform">Platform</a>',
+    '<a href="screener.html">Screener</a><a href="stocks.html">Companies</a><a href="funds.html">Mutual Funds</a><a href="#platform">Platform</a>',
+  );
 
   // the three module cards that need a server get an honest label
   html = html.replace(/(<a class="mod reveal" href="[^"]*github[^"]*"[^>]*>)([\s\S]*?)(<span class="go">)Open module →(<\/span>)/g,

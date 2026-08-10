@@ -7,9 +7,23 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "test": "node --test server/test/",
+    "test": "node --test server/test/*.mjs",
     "login:upstox": "node scripts/upstox_login.mjs",
-    "login:fyers": "node scripts/fyers_login.mjs"
+    "login:fyers": "node scripts/fyers_login.mjs",
+
+    "data:universe": "node scripts/fetch_universe.mjs",
+    "data:prices": "node scripts/fetch_prices.mjs --years 5",
+    "data:indices": "node scripts/fetch_indices.mjs",
+    "data:funds": "node scripts/fetch_funds.mjs",
+    "data:fundamentals": "node scripts/fetch_fundamentals.mjs",
+    "data:upstox": "node scripts/fetch_upstox_fundamentals.mjs",
+    "data": "npm run data:universe && npm run data:prices && npm run data:indices && npm run data:funds",
+
+    "build:screener": "node scripts/build_screener.mjs",
+    "build:app": "node scripts/build_app.mjs",
+    "build": "npm run build:screener && npm run build:app && node scripts/build_pages.mjs",
+    "verify": "node scripts/verify_build.mjs",
+    "serve": "cd dist && python3 -m http.server 8080"
   },
   "dependencies": {
     "express": "^4.19.2",
