@@ -87,15 +87,16 @@ jobs:
         run: pip install -r requirements-data.txt
         continue-on-error: true
 
-      # Best-effort, never fatal. Yahoo rate-limits shared CI addresses, so this
-      # will often fetch only part of the market — but records land in var/yfin,
-      # which the cache carries into tomorrow's run, so coverage accumulates
-      # across days instead of restarting. If it fetches nothing at all, the
-      # committed snapshot is used and the build is unaffected.
-      - name: Fundamentals — refresh what has gone stale (best effort)
-        run: python3 scripts/fetch_yfinance.py --liquid-first --workers 4
+      # Best-effort, never fatal, and deliberately narrow: --only-missing skips
+      # everything the committed snapshot already covers, so this closes gaps
+      # (newly listed companies, symbols Yahoo was down for) instead of
+      # re-walking 2,000 names that Yahoo would throttle it out of anyway.
+      # Anything it does fetch lands in var/yfin, which the cache carries into
+      # the next run, so coverage accumulates across days.
+      - name: Fundamentals — close any gaps (best effort)
+        run: python3 scripts/fetch_yfinance.py --only-missing --liquid-first --workers 4
         continue-on-error: true
-        timeout-minutes: 12
+        timeout-minutes: 6
 
       - name: Compute every screener metric
         run: node scripts/build_screener.mjs

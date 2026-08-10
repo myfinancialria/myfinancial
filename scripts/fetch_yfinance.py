@@ -215,6 +215,8 @@ def main() -> int:
     ap.add_argument("--force", action="store_true", help="ignore the cache")
     ap.add_argument("--liquid-first", action="store_true",
                     help="order by rupee turnover so the tradeable names land first")
+    ap.add_argument("--only-missing", action="store_true",
+                    help="skip anything the committed snapshot already covers (what CI wants)")
     args = ap.parse_args()
 
     uni_file = DATA / "nse_universe.json"
@@ -241,6 +243,20 @@ def main() -> int:
 
     CACHE.mkdir(parents=True, exist_ok=True)
     max_age = -1 if args.force else MAX_AGE_S
+
+    # In CI the point is to close gaps, not to re-walk 2,000 companies that the
+    # committed snapshot already covers — Yahoo throttles long runs anyway, so
+    # the budget is better spent on what is actually missing.
+    already = set()
+    if args.only_missing and SNAPSHOT.exists():
+        try:
+            already = {k for k, v in json.loads(SNAPSHOT.read_text()).get("companies", {}).items() if v}
+        except (OSError, ValueError):
+            already = set()
+        if already:
+            before = len(symbols)
+            symbols = [s for s in symbols if s not in already]
+            print(f"[yf] --only-missing: {before - len(symbols)} already covered, {len(symbols)} to chase")
 
     todo = [s for s in symbols if cached(s, max_age) == "stale"]
     print(f"[yf] {len(symbols)} companies · {len(symbols) - len(todo)} already cached · fetching {len(todo)}")
