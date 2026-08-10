@@ -428,7 +428,7 @@ function buildStocks() {
   rankPercentile(rows, "ret3m", "rsRank3m");
   rankPercentile(rows, "avgTurnoverCr", "liquidityRank");
   // sector-relative valuation: cheap vs the market means little, cheap vs peers means something
-  sectorRelative(rows, "pe", "peVsSector");
+  sectorRelative(rows, "pe", "peVsSector", { ratioOnly: true });
   sectorRelative(rows, "roe", "roeVsSector");
   // and the same against the narrower sub-sector, which is the real comparison
   buildPeerGroups(rows, details);
@@ -504,12 +504,16 @@ function buildPeerGroups(rows, details) {
     const m = Math.floor(v.length / 2);
     return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
   };
+  // A loss-making company has no meaningful P/E: the ratio goes negative, and
+  // treating that as "cheap" would rank the worst businesses as the best value.
+  // Non-positive multiples are excluded from medians and from the comparison.
+  const positive = (vals) => vals.filter((x) => typeof x === "number" && x > 0);
 
   let withPeers = 0;
   for (const [key, group] of groups) {
     const med = {
-      pe: median(group.map((r) => r.pe)),
-      pb: median(group.map((r) => r.pb)),
+      pe: median(positive(group.map((r) => r.pe))),
+      pb: median(positive(group.map((r) => r.pb))),
       roe: median(group.map((r) => r.roe)),
       roce: median(group.map((r) => r.roce)),
       evEbitda: median(group.map((r) => r.evEbitda)),
@@ -524,7 +528,7 @@ function buildPeerGroups(rows, details) {
 
     for (const r of group) {
       r.peerCount = group.length;
-      r.peVsPeers = typeof r.pe === "number" && med.pe ? r2(((r.pe - med.pe) / Math.abs(med.pe)) * 100, 1) : null;
+      r.peVsPeers = typeof r.pe === "number" && r.pe > 0 && med.pe ? r2(((r.pe - med.pe) / Math.abs(med.pe)) * 100, 1) : null;
       r.roeVsPeers = typeof r.roe === "number" && med.roe ? r2(((r.roe - med.roe) / Math.abs(med.roe)) * 100, 1) : null;
       const ix = byCap.indexOf(r);
       r.peerRankByCap = ix >= 0 ? ix + 1 : null;
@@ -556,11 +560,20 @@ function buildPeerGroups(rows, details) {
   console.log(`[build] peer groups: ${groups.size} sub-sectors · ${withPeers} companies have a comparison table`);
 }
 
-/** How far a metric sits from its own sector's median, in percent. */
-function sectorRelative(rows, key, out) {
+/**
+ * How far a metric sits from its own sector's median, in percent.
+ *
+ * `ratioOnly` excludes non-positive values, which is required for multiples: a
+ * loss-making company's P/E is negative, and comparing that against a positive
+ * median would report it as dramatically "cheap" — ranking the worst businesses
+ * as the best value. Rates of return (ROE) can legitimately be negative and are
+ * compared as-is.
+ */
+function sectorRelative(rows, key, out, { ratioOnly = false } = {}) {
+  const usable = (v) => typeof v === "number" && Number.isFinite(v) && (!ratioOnly || v > 0);
   const bySector = new Map();
   for (const r of rows) {
-    if (typeof r[key] !== "number" || !r.sector) continue;
+    if (!usable(r[key]) || !r.sector) continue;
     if (!bySector.has(r.sector)) bySector.set(r.sector, []);
     bySector.get(r.sector).push(r[key]);
   }
@@ -571,7 +584,7 @@ function sectorRelative(rows, key, out) {
   }
   for (const r of rows) {
     const med = r.sector ? medians.get(r.sector) : null;
-    r[out] = typeof r[key] === "number" && med ? r2(((r[key] - med) / Math.abs(med)) * 100, 1) : null;
+    r[out] = usable(r[key]) && med ? r2(((r[key] - med) / Math.abs(med)) * 100, 1) : null;
   }
 }
 
