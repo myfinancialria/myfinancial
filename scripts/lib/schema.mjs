@@ -43,7 +43,12 @@ export const STOCK_FIELDS = [
   { key: "ret5y", label: "5-year CAGR", group: "Price", unit: "%", dir: 1, type: "num" },
 
   // -------------------------------- valuation -------------------------------
-  { key: "marketCapCr", label: "Market cap", group: "Valuation", unit: "₹cr", dir: 0, type: "num", col: true },
+  // Not a default column: filed statements do not report a share count, and the
+  // two ways to back it out of the ratios (PAT÷EPS×price, and P/B×book value)
+  // disagree by more than 10% for four names in ten — too unreliable to publish
+  // as a number people filter "large caps only" on. Use NSE index tier for size
+  // until the wide feed supplies a real figure.
+  { key: "marketCapCr", label: "Market cap", group: "Valuation", unit: "₹cr", dir: 0, type: "num", help: "Only present where the wide fundamentals feed supplied it — it is not derived from the filed statements, which report no share count. For size, prefer NSE index tier." },
   { key: "pe", label: "P/E", group: "Valuation", unit: "x", dir: -1, type: "num", col: true, help: "Price paid for ₹1 of yearly profit. Lower is cheaper — but cheap often means the market expects trouble." },
   { key: "forwardPe", label: "Forward P/E", group: "Valuation", unit: "x", dir: -1, type: "num", help: "P/E on next year's expected earnings." },
   { key: "pb", label: "P/B", group: "Valuation", unit: "x", dir: -1, type: "num", col: true, help: "Price against the net assets on the books." },
@@ -51,7 +56,8 @@ export const STOCK_FIELDS = [
   { key: "priceToSales", label: "P/S", group: "Valuation", unit: "x", dir: -1, type: "num" },
   { key: "evEbitda", label: "EV/EBITDA", group: "Valuation", unit: "x", dir: -1, type: "num", help: "Whole-business value against operating cash profit — comparable across debt levels." },
   { key: "earningsYieldPct", label: "Earnings yield", group: "Valuation", unit: "%", dir: 1, type: "num", help: "The inverse of P/E. Compare it against a fixed deposit rate." },
-  { key: "dividendYieldPct", label: "Dividend yield", group: "Valuation", unit: "%", dir: 1, type: "num" },
+  { key: "dividendYieldPct", label: "Dividend yield", group: "Valuation", unit: "%", dir: 1, type: "num", help: "Cash dividends declared over the last twelve months, as a percentage of today's price. Summed from the company's own filed corporate actions." },
+  { key: "dividendPerShare", label: "Dividend / share (TTM)", group: "Valuation", unit: "₹", dir: 1, type: "num", help: "Total cash dividend per share with an ex-date in the last twelve months." },
   { key: "peVsSector", label: "P/E vs sector", group: "Valuation", unit: "%", dir: -1, type: "num", help: "How far the P/E sits from the median of its own sector. Negative = cheaper than peers." },
 
   // ------------------------------ profitability -----------------------------

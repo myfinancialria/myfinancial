@@ -341,6 +341,7 @@ function buildStocks() {
       ? r2(bs.totalLiabilities / netWorth) : null;
     const filedCurrentRatio = bs?.currentAssets != null && bs?.currentLiabilities > 0
       ? r2(bs.currentAssets / bs.currentLiabilities) : null;
+    const dps = d ? trailingDividend(d.corporateActions, Date.parse(t.date + "T00:00:00Z") || Date.now()) : null;
 
     const marketCapCr = w.marketCapCr ?? null;
     const row = {
@@ -383,7 +384,9 @@ function buildStocks() {
       earningsGrowthPct: w.earningsGrowthPct ?? null,
       eps: pick("eps", "eps"),
       bookValue: w.bookValue ?? null,
-      dividendYieldPct: dr.dividendYieldPct ?? w.dividendYieldPct ?? null,
+      dividendPerShare: dps,
+      dividendYieldPct: dr.dividendYieldPct ?? w.dividendYieldPct
+        ?? (dps != null && t.price ? r2((dps / t.price) * 100) : null),
       payoutRatioPct: w.payoutRatioPct ?? null,
       promoterHoldingPct: dr.promoterHoldingPct ?? w.promoterHoldingPct ?? null,
       institutionHoldingPct: w.institutionHoldingPct ?? null,
@@ -488,6 +491,34 @@ function sectorRelative(rows, key, out) {
     const med = r.sector ? medians.get(r.sector) : null;
     r[out] = typeof r[key] === "number" && med ? r2(((r[key] - med) / Math.abs(med)) * 100, 1) : null;
   }
+}
+
+/**
+ * Trailing-twelve-month dividend per share, summed from the filed corporate
+ * actions. The ratios payload carries no dividend yield, but every payout is
+ * announced as an action reading like "Rs.8.0000 per share(800%)Final Dividend",
+ * so the real figure can be reconstructed rather than left blank.
+ *
+ * Only cash dividends count — bonuses and splits appear as actions too and are
+ * not income.
+ */
+function trailingDividend(actions, asOfMs) {
+  if (!Array.isArray(actions) || !actions.length) return null;
+  let total = 0, found = 0;
+  for (const a of actions) {
+    if (!/dividend/i.test(a.type || "")) continue;
+    const m = String(a.detail || "").match(/Rs\.?\s*([\d,]+(?:\.\d+)?)\s*per\s*share/i);
+    if (!m) continue;
+    const amount = Number(m[1].replace(/,/g, ""));
+    if (!Number.isFinite(amount) || amount <= 0) continue;
+    const when = Date.parse(a.date || "");
+    if (!Number.isFinite(when)) continue;
+    // ex-dates in the last year, ignoring any dated in the future
+    const ageDays = (asOfMs - when) / 86_400_000;
+    if (ageDays < 0 || ageDays > 365) continue;
+    total += amount; found++;
+  }
+  return found ? total : null;
 }
 
 const capTier = (cr) =>

@@ -14,7 +14,7 @@ import { shell } from "./shell.mjs";
 
 // Ready-made screens. Each is an ordinary filter set — opening one and then
 // editing it is the intended way to learn what the fields do.
-const STOCK_PRESETS = [
+export const STOCK_PRESETS = [
   {
     id: "quality", name: "Quality compounders",
     why: "Businesses that earn a high return on their own capital without leaning heavily on liabilities, and are still trending up.",
@@ -76,10 +76,11 @@ const STOCK_PRESETS = [
   },
   {
     id: "dividend", name: "Dividend payers",
-    why: "A meaningful yield backed by profits, not by a collapsing share price.",
+    why: "A meaningful yield, summed from the company's own declared dividends over the last year, backed by profits rather than by a collapsing share price.",
     filters: [
-      { f: "dividendYieldPct", op: ">=", a: 2 }, { f: "payoutRatioPct", op: "<=", a: 80 },
-      { f: "roe", op: ">=", a: 10 }, { f: "avgTurnoverCr", op: ">=", a: 2 },
+      { f: "dividendYieldPct", op: ">=", a: 2 },
+      { f: "roe", op: ">=", a: 10 }, { f: "pe", op: "<=", a: 30 },
+      { f: "avgTurnoverCr", op: ">=", a: 2 },
     ],
     sort: { f: "dividendYieldPct", dir: -1 },
   },
@@ -87,7 +88,7 @@ const STOCK_PRESETS = [
     id: "smallcap", name: "Small caps waking up",
     why: "Smaller companies with real liquidity that have just turned up through their long-term average.",
     filters: [
-      { f: "capTier", op: "in", a: ["Small", "Mid"] }, { f: "aboveSma200", op: "true" },
+      { f: "nseTier", op: "in", a: ["Mid cap", "Small cap"] }, { f: "aboveSma200", op: "true" },
       { f: "ret3m", op: ">=", a: 10 }, { f: "avgTurnoverCr", op: ">=", a: 2 },
     ],
     sort: { f: "ret3m", dir: -1 },
@@ -109,7 +110,7 @@ const STOCK_PRESETS = [
   },
 ];
 
-const FUND_PRESETS = [
+export const FUND_PRESETS = [
   {
     id: "consistent", name: "Consistent equity",
     why: "Equity schemes whose average 3-year rolling return has been strong AND which have never lost money over any 3-year window.",
