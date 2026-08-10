@@ -71,13 +71,21 @@ jobs:
       - name: Mutual funds — AMFI + full NAV history
         run: node scripts/fetch_funds.mjs
 
+      # The fundamentals layer is a bonus: a committed snapshot already covers it,
+      # so nothing in this Python block may fail the deploy. The site must publish
+      # from the keyless Node sources whatever happens here.
       - uses: actions/setup-python@v5
+        continue-on-error: true
         with:
           python-version: "3.12"
           cache: pip
+          # pip caching looks for requirements.txt / pyproject.toml by default
+          # and hard-fails when it finds neither, so point it at ours
+          cache-dependency-path: requirements-data.txt
 
       - name: Install the fundamentals fetcher
         run: pip install -r requirements-data.txt
+        continue-on-error: true
 
       # Best-effort, never fatal. Yahoo rate-limits shared CI addresses, so this
       # will often fetch only part of the market — but records land in var/yfin,
