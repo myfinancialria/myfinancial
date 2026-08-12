@@ -19,6 +19,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { shell, esc, CSS } from "./lib/shell.mjs";
 import { screenerPage } from "./lib/screener_page.mjs";
+import { planningPage, advisoryPage, estatePage } from "./lib/page_modules.mjs";
 import { STOCK_FIELDS, FUND_FIELDS } from "./lib/schema.mjs";
 // Hand-written sector research that predates this pipeline. It covers only the
 // curated names, but where it exists it says things no ratio can, so it is
@@ -392,6 +393,20 @@ fs.writeFileSync(path.join(OUT, "screener.html"), screenerPage({
   stockCount: stockRows.length, fundCount: fundRows.length,
   priceDate: stocks.priceDate, navDate: funds.navDate,
 }));
+
+// 1b. the three modules that used to require a running server.
+// The shared engines are copied next to the page scripts so the browser imports
+// the exact same code the server does — one implementation, no drift.
+fs.mkdirSync(path.join(OUT, "js"), { recursive: true });
+for (const f of fs.readdirSync(path.join(ROOT, "shared"))) {
+  if (f.endsWith(".mjs")) fs.copyFileSync(path.join(ROOT, "shared", f), path.join(OUT, "js", f));
+}
+for (const f of fs.readdirSync(path.join(ROOT, "public", "js", "pages"))) {
+  if (f.endsWith(".js")) fs.copyFileSync(path.join(ROOT, "public", "js", "pages", f), path.join(OUT, "js", f));
+}
+fs.writeFileSync(path.join(OUT, "planning.html"), planningPage());
+fs.writeFileSync(path.join(OUT, "advisory.html"), advisoryPage({ priceDate: stocks.priceDate, stockCount: stockRows.length }));
+fs.writeFileSync(path.join(OUT, "estate.html"), estatePage());
 
 // 2. index pages
 const F = (k) => STOCK_FIELDS.find((f) => f.key === k);

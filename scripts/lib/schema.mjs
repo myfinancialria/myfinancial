@@ -121,6 +121,7 @@ export const STOCK_FIELDS = [
 
   // ------------------------------- volatility -------------------------------
   { key: "atrPct", label: "ATR %", group: "Volatility", unit: "%", dir: 0, type: "num", help: "Average daily range as a share of price — how much this share typically moves in a day." },
+  { key: "atr14", label: "ATR (14)", group: "Volatility", unit: "₹", dir: 0, type: "num", help: "Average True Range in rupees. Position sizing and stop distances are set from this, so the risk taken matches how much the share actually moves." },
   { key: "volatility", label: "Volatility", group: "Volatility", unit: "%", dir: -1, type: "num", help: "Annualised standard deviation of daily returns." },
   { key: "beta", label: "Beta", group: "Volatility", unit: "x", dir: 0, type: "num", help: "Move relative to the market. Above 1 amplifies both directions." },
   { key: "bbPercentB", label: "Bollinger %B", group: "Volatility", unit: "n", dir: 0, type: "num", help: "0 = at the lower band, 100 = at the upper band." },

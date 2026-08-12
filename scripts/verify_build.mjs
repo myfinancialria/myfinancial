@@ -30,9 +30,17 @@ const sizeOf = (rel) => { try { return fs.statSync(path.join(DIST, rel)).size; }
 console.log("── verifying the build ─────────────────────────────────────");
 
 // ---------------------------- required pages --------------------------------
-for (const f of ["screener.html", "stocks.html", "funds.html", "app.css"]) {
+for (const f of ["screener.html", "stocks.html", "funds.html", "planning.html", "advisory.html", "estate.html", "app.css"]) {
   if (exists(f) && sizeOf(f) > 200) ok(`${f} (${(sizeOf(f) / 1024).toFixed(0)} KB)`);
   else bad(`${f} is missing or suspiciously small`);
+}
+
+// The three browser-side modules are useless without their engines: the pages
+// import them as ES modules, and a missing file fails silently at runtime with
+// nothing but a console error the visitor never sees.
+for (const f of ["js/tax.mjs", "js/goals.mjs", "js/estate.mjs", "js/util.mjs", "js/planning.js", "js/advisory.js", "js/estate.js"]) {
+  if (exists(f) && sizeOf(f) > 100) ok(`${f}`);
+  else bad(`${f} is missing — the module page that imports it will not run`);
 }
 // .nojekyll is meant to be empty — it exists purely to stop GitHub Pages from
 // running Jekyll, which would drop the directories we generate.

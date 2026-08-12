@@ -128,10 +128,13 @@ const ROUTE_MAP = [
   [/href="\/app#\/equities\/screeners"/g, 'href="screener.html"'],
   [/href="\/app#\/equities"/g, 'href="stocks.html"'],
   [/href="\/app#\/dashboard"/g, 'href="brief.html"'],
-  [/href="\/app#\/planning\/fema"/g, `href="${REPO}#nri--fema" rel="noopener"`],
-  [/href="\/app#\/planning"/g, `href="${REPO}#run-it" rel="noopener"`],
-  [/href="\/app#\/advisory"/g, `href="${REPO}#run-it" rel="noopener"`],
-  [/href="\/app#\/estate"/g, `href="${REPO}#run-it" rel="noopener"`],
+  // These three used to point at the repo because they needed a running server.
+  // They are real static pages now — the tax, goals and Will engines run in the
+  // browser, and the advisory screens run over the published market data.
+  [/href="\/app#\/planning\/fema"/g, 'href="planning.html"'],
+  [/href="\/app#\/planning"/g, 'href="planning.html"'],
+  [/href="\/app#\/advisory"/g, 'href="advisory.html"'],
+  [/href="\/app#\/estate"/g, 'href="estate.html"'],
   [/href="\/app"/g, 'href="stocks.html"'],
   [/href="\/learn"/g, `href="${REPO}#insights" rel="noopener"`],
   [/href="https:\/\/myfinancialria\.github\.io\/myfinancial\/"/g, 'href="brief.html"'],

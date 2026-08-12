@@ -1,83 +1,15 @@
 // ---------------------------------------------------------------------------
-// estate.js — Interactive Will Preparation.
-// Guided wizard data → a structured draft Will consistent with Indian
-// conventions (Indian Succession Act, 1925): testator declaration, revocation
-// clause, executor appointment, specific bequests, residuary clause, guardian
-// nomination for minors, and a two-witness attestation block.
-// The output is a DRAFT for review by a lawyer — registration is optional in
-// India but attestation by two witnesses is mandatory.
+// estate.js — Interactive Will Preparation (server side).
+//
+// WILL_STEPS, generateDraft and estateChecklist now live in shared/estate.mjs so
+// the public static site can run the same wizard in the browser. Only the
+// database-backed persistence remains here.
 // ---------------------------------------------------------------------------
 import { q, insert } from "../lib/db.js";
 import { uid } from "../lib/util.js";
+import { generateDraft, estateChecklist as pureChecklist } from "../../shared/estate.mjs";
 
-export const WILL_STEPS = [
-  { id: "testator", title: "Testator details", fields: ["fullName", "age", "pan", "address", "occupation"] },
-  { id: "family", title: "Family & beneficiaries", fields: ["beneficiaries[]"] },
-  { id: "assets", title: "Asset distribution", fields: ["assets[]"] },
-  { id: "executor", title: "Executor", fields: ["executor", "alternateExecutor"] },
-  { id: "guardian", title: "Guardianship (minors)", fields: ["guardian"] },
-  { id: "special", title: "Special instructions", fields: ["residuaryBeneficiary", "specialInstructions"] },
-  { id: "witnesses", title: "Witnesses", fields: ["witness1", "witness2"] },
-];
-
-const IN_DATE = () => new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
-
-export function generateDraft(d) {
-  const b = (x) => (x || "________________");
-  const beneList = (d.beneficiaries || []).map((x, i) => `${i + 1}. ${x.name} (${x.relation})`).join("\n");
-  const assetClauses = (d.assets || []).map((a, i) => {
-    const to = a.beneficiary || d.residuaryBeneficiary || "my residuary estate";
-    return `${i + 1}. I bequeath my ${a.type?.toLowerCase() || "asset"} — ${a.description}${a.detail ? ` (${a.detail})` : ""} — absolutely to ${to}${a.sharePct && Number(a.sharePct) < 100 ? ` to the extent of ${a.sharePct}%` : ""}.`;
-  }).join("\n\n");
-
-  const minors = (d.beneficiaries || []).filter((x) => Number(x.age) > 0 && Number(x.age) < 18);
-  const guardianClause = d.guardian?.name
-    ? `GUARDIANSHIP\n\nIn the event of my death while any of my children ${minors.length ? `(${minors.map((m) => m.name).join(", ")}) ` : ""}remain minors, I appoint ${d.guardian.name} (${d.guardian.relation || "relation"}), residing at ${b(d.guardian.address)}, as their legal guardian, to care for their person and property until they attain majority.`
-    : "";
-
-  return `LAST WILL AND TESTAMENT
-
-I, ${b(d.fullName)}, ${d.age ? `aged ${d.age} years, ` : ""}${d.occupation ? `${d.occupation}, ` : ""}holding PAN ${b(d.pan)}, residing at ${b(d.address)}, being of sound mind and disposing memory and free from any coercion or undue influence, do hereby declare this to be my LAST WILL AND TESTAMENT, made on this ${IN_DATE()}.
-
-1. REVOCATION
-I hereby revoke all former Wills, codicils and testamentary dispositions made by me at any time heretofore, and declare this to be my only valid Will.
-
-2. FAMILY & BENEFICIARIES
-The following persons are the beneficiaries under this Will:
-${beneList || "________________"}
-
-3. APPOINTMENT OF EXECUTOR
-I appoint ${b(d.executor?.name)} (${d.executor?.relation || "relation"}), residing at ${b(d.executor?.address)}, as the sole Executor of this Will.${d.alternateExecutor?.name ? ` If ${d.executor?.name} is unable or unwilling to act, I appoint ${d.alternateExecutor.name} (${d.alternateExecutor.relation || "relation"}) as the alternate Executor.` : ""} My Executor shall pay my just debts, funeral expenses and taxes before distributing the estate.
-
-4. SPECIFIC BEQUESTS
-${assetClauses || "________________"}
-
-5. RESIDUARY ESTATE
-All the rest, residue and remainder of my estate — movable or immovable, present or future, wheresoever situated — not specifically bequeathed above, I give absolutely to ${b(d.residuaryBeneficiary)}.
-
-${guardianClause ? guardianClause + "\n\n" : ""}${d.specialInstructions ? `SPECIAL INSTRUCTIONS\n\n${d.specialInstructions}\n\n` : ""}6. DECLARATION
-I declare that I am executing this Will voluntarily, that I understand its contents, and that at the time of execution I am in sound health and disposing state of mind.
-
-IN WITNESS WHEREOF, I have signed this Will on the date first written above at ${d.city || "________________"}.
-
-
-_______________________
-${b(d.fullName)} (Testator)
-
-ATTESTATION
-Signed by the above-named Testator as their Last Will in our joint presence, and attested by us in the presence of the Testator and of each other:
-
-Witness 1: ${b(d.witness1?.name)}, ${b(d.witness1?.address)}    Signature: ____________
-Witness 2: ${b(d.witness2?.name)}, ${b(d.witness2?.address)}    Signature: ____________
-
-──────────────────────────────────────────────────────────────────────
-DRAFT generated by myfinancial • ${IN_DATE()}
-• Two independent witnesses (who are NOT beneficiaries) must attest the Will.
-• Registration under the Registration Act, 1908 is optional but recommended.
-• Nominations on bank/demat/insurance accounts do not override a Will —
-  align them to avoid disputes.
-• Have this draft reviewed by a qualified lawyer before execution.`;
-}
+export { WILL_STEPS, generateDraft } from "../../shared/estate.mjs";
 
 export function saveWill(userId, data) {
   const draft = generateDraft(data || {});
@@ -92,18 +24,10 @@ export function getWill(userId) {
   return w ? { id: w.id, data: JSON.parse(w.data || "{}"), draft: w.draft, updated: w.updated } : null;
 }
 
-/** Estate-readiness checklist derived from the client's actual data. */
+/** Estate-readiness checklist derived from the client's actual stored data. */
 export function estateChecklist(userId) {
   const will = q.one("SELECT id FROM wills WHERE user_id = ?", userId);
   const docs = q.all("SELECT category FROM vault_docs WHERE user_id = ?", userId).map((d) => d.category);
   const user = q.one("SELECT * FROM users WHERE id = ?", userId);
-  return [
-    { item: "Will drafted", done: !!will, why: "Without a Will, succession follows personal law (Hindu Succession Act / Indian Succession Act) — slower and possibly contrary to your wishes." },
-    { item: "Will stored in vault", done: docs.includes("WILL"), why: "Executor must be able to locate the signed original." },
-    { item: "Property deeds digitised", done: docs.includes("PROPERTY_DEEDS"), why: "Title chain documents speed up transmission/mutation." },
-    { item: "Insurance policies digitised", done: docs.includes("INSURANCE_POLICIES"), why: "Claims need policy documents; keep nominee details current." },
-    { item: "KYC / identity documents", done: docs.includes("KYC"), why: "Heirs need PAN/Aadhaar copies for transmission requests." },
-    { item: "Nominations aligned with Will", done: false, manual: true, why: "Bank, demat, MF, EPF and insurance nominations should mirror the Will to avoid conflicts." },
-    ...(user?.residency === "NRI" ? [{ item: "Cross-border estate advice", done: false, manual: true, why: "Assets in two countries may need situs-specific Wills and forced-heirship/estate-tax review in your residence country." }] : []),
-  ];
+  return pureChecklist({ hasWill: !!will, vaultCategories: docs, residency: user?.residency || "RESIDENT" });
 }

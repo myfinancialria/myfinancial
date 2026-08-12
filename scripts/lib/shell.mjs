@@ -86,6 +86,9 @@ const NAV = [
   ["stocks", "stocks.html", "Companies"],
   ["screener", "screener.html", "Screener"],
   ["funds", "funds.html", "Mutual Funds"],
+  ["planning", "planning.html", "Planning &amp; Tax"],
+  ["advisory", "advisory.html", "Advisory"],
+  ["estate", "estate.html", "Will &amp; Vault"],
   ["brief", "brief.html", "Daily Brief"],
 ];
 
