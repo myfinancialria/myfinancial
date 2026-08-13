@@ -154,6 +154,24 @@ else {
   if (!missing) ok("every element id the page scripts target exists in the markup");
 }
 
+// ------------------------- sector context coverage ---------------------------
+// The point of the canonical sector layer is that EVERY listed company gets an
+// industry read and a policy read, not just the curated few. If a raw label
+// stops mapping, this silently reverts to the old behaviour.
+{
+  const dir = path.join(DIST, "stock");
+  const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith(".html")) : [];
+  let pulse = 0, policy = 0;
+  for (const f of files) {
+    const html = fs.readFileSync(path.join(dir, f), "utf8");
+    if (html.includes("Industry pulse")) pulse++;
+    if (html.includes("Government support")) policy++;
+  }
+  const pctOf = (n) => (files.length ? (n / files.length) * 100 : 0);
+  if (pctOf(pulse) >= 99 && pctOf(policy) >= 99) ok(`sector context on ${pulse}/${files.length} company pages`);
+  else bad(`industry pulse on ${pulse} and policy on ${policy} of ${files.length} pages — the sector mapping has holes`);
+}
+
 // --------------------------- company page charts -----------------------------
 // The candles are inlined per page, so a page can ship a chart container with no
 // data behind it and fail silently. Sample a few and check both are present.

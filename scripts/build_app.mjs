@@ -25,8 +25,8 @@ import { STOCK_FIELDS, FUND_FIELDS } from "./lib/schema.mjs";
 // Hand-written sector research that predates this pipeline. It covers only the
 // curated names, but where it exists it says things no ratio can, so it is
 // carried onto the new pages rather than dropped.
-import { INDUSTRY, POLICY, PRODUCTS } from "../server/data/sectorIntel.js";
-import { STOCK_MAP, SECTORS } from "../server/data/universe.js";
+import { PRODUCTS } from "../server/data/sectorIntel.js";
+import { canonicalSector, SECTOR_NAMES, INDUSTRY_PULSE, SECTOR_POLICY, POLICY_CAVEAT } from "../shared/sectors.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -195,30 +195,71 @@ ${pg.rows.map((p) => `<tr${p.self ? ' style="background:color-mix(in srgb,var(--
   const gapWarn = m.corpActionGap ? `<div class="card" style="border-color:var(--warn)"><div class="card-b" style="font-size:13px;color:var(--ink-dim)">
 <b style="color:var(--warn)">Note:</b> the price series steps sharply on ${esc(m.corpActionGap)}. That is a corporate action — a split, bonus or demerger — that this feed does not adjust for, so returns spanning that date are not meaningful.</div></div>` : "";
 
-  // ---- curated sector research, for the names that have it ----
-  const secKey = STOCK_MAP[detail.symbol]?.sector;
-  const ind = secKey ? INDUSTRY[secKey] : null;
-  const pol = secKey ? POLICY[secKey] : null;
-  const prods = PRODUCTS[detail.symbol] || null;
+  // ---- sector context, for EVERY listed company ----
+  // The hand-written research covers 14 sector keys and ~60 companies. The
+  // canonical taxonomy maps all 2,000+ onto one of 18 sectors, so the industry
+  // and policy reads below appear on every page rather than a curated few.
+  const secKey = canonicalSector(m.sector, m.industry);
+  const ind = INDUSTRY_PULSE[secKey];
+  const pol = SECTOR_POLICY[secKey];
+  const curated = PRODUCTS[detail.symbol] || null;
   const bullets = (xs) => `<ul style="padding-left:17px;display:grid;gap:7px">${xs.map((x) => `<li style="font-size:13px;color:var(--ink-dim);line-height:1.65">${esc(x)}</li>`).join("")}</ul>`;
 
-  const industryCard = ind ? `<div class="card"><div class="card-h"><div><h2>Industry pulse — ${esc(SECTORS[secKey]?.name || secKey)}</h2>
-<div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none">${esc(ind.asOf || "")}</div></div></div>
+  const industryCard = ind ? `<div class="card"><div class="card-h"><div><h2>Industry pulse — ${esc(SECTOR_NAMES[secKey])}</h2>
+<div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none">how this sector makes money, and what breaks it</div></div>
+<span class="chip">${esc(m.industry || m.sector || "")}</span></div>
 <div class="card-b"><p style="color:var(--ink-dim);font-size:13.5px;line-height:1.8;margin-bottom:14px">${esc(ind.outlook)}</p>
-<div class="grid g2"><div><div class="k" style="margin-bottom:8px">Tailwinds</div>${bullets(ind.drivers || [])}</div>
-<div><div class="k" style="margin-bottom:8px">Risks</div>${bullets(ind.risks || [])}</div></div></div></div>` : "";
+<div class="grid g2"><div><div class="k" style="margin-bottom:8px">What drives it</div>${bullets(ind.drivers || [])}</div>
+<div><div class="k" style="margin-bottom:8px">What breaks it</div>${bullets(ind.risks || [])}</div></div></div></div>` : "";
 
-  const policyCard = pol ? `<div class="card"><div class="card-h"><h2>Government support &amp; budget provisions</h2></div>
+  const policyCard = pol ? `<div class="card"><div class="card-h"><h2>Government support &amp; budget provisions</h2>
+<span class="chip">${esc(SECTOR_NAMES[secKey])}</span></div>
 <div class="card-b"><div class="grid g2"><div><div class="k" style="margin-bottom:8px">Schemes &amp; policy</div>${bullets(pol.schemes || [])}</div>
 <div><div class="k" style="margin-bottom:8px">In the Budget</div>${bullets(pol.budget || [])}</div></div></div>
-${pol.disclaimer ? `<div class="note">${esc(pol.disclaimer)}</div>` : ""}</div>` : "";
+<div class="note">${esc(POLICY_CAVEAT)}</div></div>` : "";
 
-  const productsCard = prods?.length ? `<div class="card"><div class="card-h"><h2>Hero products &amp; market position</h2></div>
-<div class="scroll"><table><thead><tr><th>Product</th><th>What it is</th><th class="num">Share</th></tr></thead>
-<tbody>${prods.map((pr) => `<tr><td><b>${esc(pr.name)}</b>${pr.since ? `<div class="dim" style="font-size:11.5px">since ${esc(pr.since)}</div>` : ""}</td>
-<td style="color:var(--ink-dim);font-size:12.5px;white-space:normal;max-width:520px">${esc(pr.what || pr.detail || "")}</td>
-<td class="num">${pr.share ? esc(String(pr.share)) : "—"}</td></tr>`).join("")}</tbody></table></div>
-<div class="note">Where this company's revenue actually comes from — the products behind the ratios.</div></div>` : "";
+  // Market position, computed rather than asserted. Product-level market shares
+  // are not published for two thousand companies and will not be invented here;
+  // what CAN be measured is how much of its own sub-sector's listed value this
+  // company represents, and how it ranks by size, revenue and profitability.
+  const pgRows = detail.peerGroup?.rows || [];
+  const revRank = (() => {
+    const withRev = pgRows.filter((p) => typeof p.marketCapCr === "number");
+    return withRev.length;
+  })();
+  const positionBits = [];
+  if (m.peerRankByCap && m.peerCount) {
+    positionBits.push(`<div class="stat"><div class="k">Size rank</div><div class="v">#${m.peerRankByCap}<span style="font-size:14px;font-weight:400;color:var(--ink-dim)"> of ${m.peerCount}</span></div>
+<div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none">by market cap in ${esc(m.industry || "its sub-sector")}</div></div>`);
+  }
+  if (typeof m.sectorCapSharePct === "number") {
+    positionBits.push(`<div class="stat"><div class="k">Share of sub-sector</div><div class="v">${num(m.sectorCapSharePct, 1)}%</div>
+<div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none">of the listed value in its sub-sector</div></div>`);
+  }
+  if (typeof m.revenueCr === "number") {
+    positionBits.push(`<div class="stat"><div class="k">Revenue</div><div class="v">${crore(m.revenueCr)}</div>
+<div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none">${m.profitMarginPct != null ? `${num(m.profitMarginPct, 1)}% net margin` : "latest reported"}</div></div>`);
+  }
+  if (typeof m.employees === "number" && m.employees > 0) {
+    positionBits.push(`<div class="stat"><div class="k">Employees</div><div class="v">${Number(m.employees).toLocaleString("en-IN")}</div>
+<div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none">${m.revenueCr ? `₹${num(m.revenueCr / m.employees * 10000000 / 100000, 1)} L revenue each` : ""}</div></div>`);
+  }
+
+  const productsCard = (curated?.length || positionBits.length || detail.description) ? `<div class="card">
+<div class="card-h"><h2>Products &amp; market position</h2>${curated?.length ? '<span class="chip ok">Researched</span>' : ""}</div>
+${positionBits.length ? `<div class="grid g4" style="padding:16px 18px 4px">${positionBits.join("")}</div>` : ""}
+${curated?.length ? `<div class="scroll"><table><thead><tr><th>Product</th><th>What it is</th><th class="num">Position</th></tr></thead>
+<tbody>${curated.map((pr) => {
+    const [nm, share, what] = Array.isArray(pr) ? pr : [pr.name, pr.share, pr.what || pr.detail];
+    return `<tr><td><b>${esc(nm)}</b></td>
+<td style="color:var(--ink-dim);font-size:12.5px;white-space:normal;max-width:520px">${esc(what || "")}</td>
+<td class="num">${share ? esc(String(share)) : "—"}</td></tr>`;
+  }).join("")}</tbody></table></div>` : ""}
+${detail.description ? `<div class="card-b" style="color:var(--ink-dim);font-size:13px;line-height:1.75;border-top:1px solid var(--line)">
+<div class="k" style="margin-bottom:7px">What it sells, in the company's own words</div>${esc(detail.description)}</div>` : ""}
+<div class="note">${curated?.length
+    ? "The product table is hand-researched. "
+    : ""}Position is measured, not asserted: rank and share are computed from the market capitalisation of every listed company in this sub-sector. A share of listed value is not a share of revenue &mdash; product-level market shares are not published consistently across the market, so none are claimed here.</div></div>` : "";
 
   const body = `
 <div class="head">
@@ -244,7 +285,6 @@ ${hasCandles ? `<div class="card"><div class="card-h"><div><h2>Price</h2>
   </div>
 ${rangeBar(m.low52w, m.high52w, m.price, "today")}</div>
 ${stageNote ? `<div class="note"><b>Stage ${m.stage} — ${esc(m.stageName)}.</b> ${esc(stageNote)} The 50- and 200-day averages are computed on daily closes and sampled at each week's close, so they mean the same thing on both views.</div>` : ""}</div>` : ""}
-${detail.description ? `<div class="card"><div class="card-h"><h2>What this company does</h2></div><div class="card-b" style="color:var(--ink-dim);line-height:1.75;font-size:14px">${esc(detail.description)}</div></div>` : ""}
 <div class="metricflow">${STOCK_GROUPS.map((g) => metricTable(STOCK_FIELDS, m, g)).join("")}</div>
 ${panes.length ? `<div class="card"><div class="card-h"><h2>Financial statements</h2><span class="chip">₹ crore · last 5 years</span></div>
 <div class="tabs" style="display:flex;border-bottom:1px solid var(--line)">${panes.map(([l], i) => `<button class="btn" style="border:none;border-bottom:2px solid ${i === 0 ? "var(--ink)" : "transparent"}" data-t="${esc(l)}">${esc(l)}</button>`).join("")}</div>

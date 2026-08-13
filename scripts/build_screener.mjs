@@ -24,6 +24,7 @@ import * as ta from "./lib/ta.mjs";
 import * as fm from "./lib/fundmetrics.mjs";
 import { STOCK_FIELDS, FUND_FIELDS, clientMeta } from "./lib/schema.mjs";
 import { scanPatterns, PATTERN_LABELS, PATTERN_NOTES } from "./lib/patterns.mjs";
+import { canonicalSector, SECTOR_NAMES } from "../shared/sectors.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -357,6 +358,7 @@ function buildStocks() {
       sector: ix?.industry || w.sector || d?.profile?.sector || null,
       industry: w.industry || ix?.industry || null,
       nseTier: ix?.nseTier || null,
+      sectorGroup: SECTOR_NAMES[canonicalSector(ix?.industry || w.sector || d?.profile?.sector, w.industry || ix?.industry)] || null,
       inNifty50: ix ? !!ix.inNifty50 : false,
       inNifty500: ix ? !!ix.inNifty500 : false,
       sectorIndex: ix?.sectorIndices?.[0] || null,
@@ -669,8 +671,18 @@ function buildPeerGroups(rows, details) {
     const byCap = group.filter((r) => typeof r.marketCapCr === "number")
       .sort((a, b) => b.marketCapCr - a.marketCapCr);
 
+    // A company's share of the combined market capitalisation of everything
+    // listed in its sub-sector. This is a real, computable stand-in for
+    // "market position" — not a market share of revenue, which would need
+    // per-company sales data nobody publishes consistently, but an honest
+    // measure of how much of the listed sub-sector this company IS.
+    const groupCap = byCap.reduce((a, r) => a + r.marketCapCr, 0);
+
     for (const r of group) {
       r.peerCount = group.length;
+      r.sectorCapSharePct = groupCap > 0 && typeof r.marketCapCr === "number"
+        ? r2((r.marketCapCr / groupCap) * 100, 1) : null;
+      r.peerGroupCapCr = groupCap > 0 ? r2(groupCap, 0) : null;
       r.peVsPeers = typeof r.pe === "number" && r.pe > 0 && med.pe ? r2(((r.pe - med.pe) / Math.abs(med.pe)) * 100, 1) : null;
       r.roeVsPeers = typeof r.roe === "number" && med.roe ? r2(((r.roe - med.roe) / Math.abs(med.roe)) * 100, 1) : null;
       const ix = byCap.indexOf(r);
