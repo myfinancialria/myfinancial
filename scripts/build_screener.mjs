@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import * as ta from "./lib/ta.mjs";
 import * as fm from "./lib/fundmetrics.mjs";
 import { STOCK_FIELDS, FUND_FIELDS, clientMeta } from "./lib/schema.mjs";
+import { scanPatterns, PATTERN_LABELS, PATTERN_NOTES } from "./lib/patterns.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -280,6 +281,8 @@ function technicals(bars, benchCloses) {
 // =============================================================================
 // 3. Build the stock index
 // =============================================================================
+let patterns = { detected: 0, hits: [] };
+
 function buildStocks() {
   console.log("[build] stitching daily bhavcopies…");
   const { series, dates } = loadPriceSeries();
@@ -438,9 +441,129 @@ function buildStocks() {
     if (d) d.metrics = row;
   }
   console.log(`[build] universe: ${rows.length} listed companies screened · ${skippedNotListed} ETFs/delisted skipped · ${skippedShort} too little history`);
+  patterns = buildPatterns(rows, series, details);
   const missing = universe.symbols.filter((s) => !series[s.symbol]).map((s) => s.symbol);
   if (missing.length) console.log(`[build] ${missing.length} listed symbols never appear in the bhavcopy window (suspended/newly listed)`);
   return { rows, details, dates };
+}
+
+/**
+ * Chart patterns, detected at build time and shipped ready to draw.
+ *
+ * Detection runs over the split-adjusted daily series; the payload carries the
+ * candles, the two moving averages and the volume needed to render the chart,
+ * plus enough company and sub-sector context that a reader can judge the name
+ * rather than just the shape. A pattern without the business behind it is a
+ * drawing, so each hit ships its ratios and the medians of the sub-sector it
+ * competes in.
+ */
+const CHART_BARS = 170;                 // trading days shown by default
+const MAX_CHART_BARS = 260;             // ceiling when a long base needs more room
+
+function buildPatterns(rows, series, details) {
+  const bySymbol = new Map(rows.map((r) => [r.symbol, r]));
+  const hits = [];
+
+  for (const r of rows) {
+    // Patterns on an illiquid share are noise: the pivots are made of a handful
+    // of trades and the breakout cannot be acted on.
+    if ((r.avgTurnoverCr ?? 0) < 3) continue;
+    const bars = series[r.symbol];
+    if (!bars || bars.length < 260) continue;
+
+    const closes = bars.map((b) => b[ta.C]);
+    const s50 = ta.sma(closes, 50);
+    const s200 = ta.sma(closes, 200);
+    const hit = scanPatterns(bars, { sma50: s50, sma200: s200 });
+    if (!hit) continue;
+
+    // The chart window has to contain the WHOLE pattern, or the drawing shows a
+    // cup with no left rim and a head and shoulders missing a shoulder. Start
+    // from the earliest anchor with a little room to its left, then widen to the
+    // default and clamp so a very long base does not ship a thousand candles.
+    const earliest = Math.min(...hit.anchors.map((a) => a.i));
+    let from = Math.max(0, Math.min(bars.length - CHART_BARS, earliest - 15));
+    if (bars.length - from > MAX_CHART_BARS) from = bars.length - MAX_CHART_BARS;
+    const view = bars.slice(from);
+    const anchors = hit.anchors
+      .map((a) => ({ ...a, i: a.i - from }))
+      .filter((a) => a.i >= 0 && a.i < view.length);
+    // If the geometry still will not fit, the drawing would mislead — skip it.
+    if (anchors.length < hit.anchors.length) continue;
+
+    const d = details.get(r.symbol);
+    const pg = d?.peerGroup || null;
+
+    hits.push({
+      symbol: r.symbol,
+      name: r.name,
+      pattern: hit.pattern,
+      patternLabel: PATTERN_LABELS[hit.pattern],
+      bias: hit.bias,
+      status: hit.status,
+      entry: hit.entry, stop: hit.stop, target1: hit.target1, target2: hit.target2,
+      neckline: hit.neckline, depthPct: hit.depthPct,
+      riskReward: hit.riskReward,
+      confirm: hit.confirm,
+      anchors,
+
+      // ---- chart series: date, o, h, l, c, volume ----
+      bars: view.map((b) => [b[ta.D], r2(b[ta.O]), r2(b[ta.H]), r2(b[ta.L]), r2(b[ta.C]), b[ta.V]]),
+      sma50: s50.slice(from).map((x) => r2(x)),
+      sma200: s200.slice(from).map((x) => r2(x)),
+
+      // ---- who this company is ----
+      company: {
+        sector: r.sector, industry: r.industry, nseTier: r.nseTier,
+        description: (d?.description || "").slice(0, 420) || null,
+        listed: r.listed, employees: r.employees ?? null,
+        marketCapCr: r.marketCapCr, price: r.price, change1d: r.change1d,
+        high52w: r.high52w, low52w: r.low52w, pctFrom52wHigh: r.pctFrom52wHigh,
+        avgTurnoverCr: r.avgTurnoverCr, avgDeliveryPct20: r.avgDeliveryPct20,
+        ret1y: r.ret1y, ret3m: r.ret3m, beta: r.beta, atrPct: r.atrPct,
+        rsi14: r.rsi14, adx14: r.adx14, stage: r.stage, stageName: r.stageName,
+      },
+      // ---- the numbers, and the same numbers for its sub-sector ----
+      ratios: {
+        pe: r.pe, pb: r.pb, evEbitda: r.evEbitda, roe: r.roe, roce: r.roce,
+        profitMarginPct: r.profitMarginPct, liabilitiesToEquity: r.liabilitiesToEquity,
+        dividendYieldPct: r.dividendYieldPct, promoterHoldingPct: r.promoterHoldingPct,
+        revenueGrowthPct: r.revenueGrowthPct, peVsPeers: r.peVsPeers, roeVsPeers: r.roeVsPeers,
+      },
+      peerMedians: pg ? pg.medians : null,
+      peerCount: r.peerCount ?? null,
+      peers: pg ? pg.rows.filter((p) => !p.self).slice(0, 5).map((p) => ({
+        symbol: p.symbol, name: p.name, pe: p.pe, roe: p.roe, marketCapCr: p.marketCapCr, ret1y: p.ret1y,
+      })) : [],
+    });
+  }
+
+  // Selection matters as much as detection. Taking a flat top-N by confirmation
+  // score fills the whole list with one or two pattern types that happen to be
+  // common this week — and because hundreds of hits tie on a perfect 100, the
+  // tie-break decides everything. Ranking by risk-reward there was actively
+  // bad: it surfaced the most extreme geometry, which is usually the least
+  // reliable. So take the best few of EACH pattern type, tie-broken by
+  // liquidity, which keeps the list varied and the names tradeable.
+  const PER_PATTERN = 10;
+  const byType = new Map();
+  for (const h of hits) {
+    if (!byType.has(h.pattern)) byType.set(h.pattern, []);
+    byType.get(h.pattern).push(h);
+  }
+  const capped = [];
+  for (const [, list] of byType) {
+    list.sort((a, b) => b.confirm.score - a.confirm.score
+      || (b.company.avgTurnoverCr ?? 0) - (a.company.avgTurnoverCr ?? 0));
+    capped.push(...list.slice(0, PER_PATTERN));
+  }
+  capped.sort((a, b) => b.confirm.score - a.confirm.score
+    || (b.company.avgTurnoverCr ?? 0) - (a.company.avgTurnoverCr ?? 0));
+  const byPattern = {};
+  for (const h of capped) byPattern[h.patternLabel] = (byPattern[h.patternLabel] || 0) + 1;
+  console.log(`[build] chart patterns: ${hits.length} detected on liquid names, shipping the ${capped.length} best-confirmed`);
+  console.log(`[build]   ${Object.entries(byPattern).map(([k, v]) => `${k} ${v}`).join(" · ")}`);
+  return { detected: hits.length, hits: capped };
 }
 
 /** Equal-weight composite of the most liquid names — a benchmark with no feed. */
@@ -765,6 +888,15 @@ const fundIndexSize = writeJson(path.join(OUT, "funds.json"), {
 });
 
 fs.rmSync(DETAIL, { recursive: true, force: true });
+const patternSize = writeJson(path.join(OUT, "patterns.json"), {
+  generated: new Date().toISOString(),
+  priceDate: stocks.dates[stocks.dates.length - 1],
+  detected: patterns.detected,
+  count: patterns.hits.length,
+  notes: PATTERN_NOTES,
+  hits: patterns.hits,
+});
+
 let detailBytes = 0;
 for (const [sym, d] of stocks.details) detailBytes += writeJson(path.join(DETAIL, "stock", `${encodeURIComponent(sym)}.json`), d);
 for (const [code, d] of funds.details) detailBytes += writeJson(path.join(DETAIL, "fund", `${code}.json`), d);
@@ -785,5 +917,6 @@ console.log(`[build] stocks : ${stocks.rows.length} companies · ${withFund} wit
 console.log(`[build]          index ${kb(stockIndexSize)} · price date ${stocks.dates[stocks.dates.length - 1]}`);
 console.log(`[build] funds  : ${funds.rows.length} schemes · ${liveFunds} live · NAV date ${funds.navDate}`);
 console.log(`[build]          index ${kb(fundIndexSize)}`);
+console.log(`[build] patterns: ${patterns.hits.length} charts · ${kb(patternSize)}`);
 console.log(`[build] detail : ${stocks.details.size + funds.details.size} per-item files · ${mb(detailBytes)} total`);
 console.log(`[build] done in ${((Date.now() - t0) / 1000).toFixed(1)}s → dist/data/`);

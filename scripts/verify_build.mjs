@@ -38,7 +38,7 @@ for (const f of ["screener.html", "stocks.html", "funds.html", "planning.html", 
 // The three browser-side modules are useless without their engines: the pages
 // import them as ES modules, and a missing file fails silently at runtime with
 // nothing but a console error the visitor never sees.
-for (const f of ["js/tax.mjs", "js/goals.mjs", "js/estate.mjs", "js/util.mjs", "js/planning.js", "js/advisory.js", "js/estate.js"]) {
+for (const f of ["js/tax.mjs", "js/goals.mjs", "js/estate.mjs", "js/util.mjs", "js/planning.js", "js/advisory.js", "js/estate.js", "js/patterns.js"]) {
   if (exists(f) && sizeOf(f) > 100) ok(`${f}`);
   else bad(`${f} is missing — the module page that imports it will not run`);
 }
@@ -103,6 +103,22 @@ else {
   const withFundamentals = (stocks.rows || []).filter((r) => r[F.hasFundamentals] === true).length;
   if (withFundamentals === 0) warn("no company fundamentals in this build — run `npm run data:fundamentals` locally and commit the snapshot");
   else ok(`${withFundamentals} companies carry fundamentals`);
+}
+
+// ------------------------------ chart patterns ------------------------------
+const patterns = readJson(path.join(DIST, "data", "patterns.json"));
+if (!patterns) warn("data/patterns.json missing — the chart-patterns tab will be empty");
+else {
+  const n = patterns.hits?.length || 0;
+  if (n >= 10) ok(`${n} chart patterns drawn (of ${patterns.detected} detected)`);
+  else warn(`only ${n} chart patterns — a quiet market, or detection has broken`);
+  // A chart is worthless if its geometry falls outside the window it ships.
+  const broken = (patterns.hits || []).filter((h) =>
+    !h.bars?.length || !h.anchors?.length
+    || h.anchors.some((a) => a.i < 0 || a.i >= h.bars.length)
+    || h.sma50?.length !== h.bars.length || h.sma200?.length !== h.bars.length).length;
+  if (broken === 0) ok("every pattern chart has in-range anchors and aligned moving averages");
+  else bad(`${broken} pattern charts would draw incorrectly`);
 }
 
 // ------------------------------- fund index ---------------------------------

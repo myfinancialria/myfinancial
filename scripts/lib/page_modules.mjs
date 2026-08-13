@@ -47,6 +47,11 @@ const MODULE_CSS = `
 .locked{text-align:center;padding:34px 20px}
 .sig{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);border:1px solid var(--line-2);padding:3px 9px}
 .setup{border:1px solid var(--warn);padding:13px 16px;color:var(--ink-dim);font-size:13px;line-height:1.7;background:color-mix(in srgb,var(--warn) 7%,transparent)}
+.pattern-card{margin-top:18px}
+.pattern-card h2 a{text-decoration:none}
+.pattern-card h2 a:hover{text-decoration:underline}
+.legend{display:flex;gap:16px;flex-wrap:wrap;padding:2px 18px 14px;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint)}
+.legend .sw{display:inline-block;width:14px;height:2px;margin-right:5px;vertical-align:middle}
 @media print{nav.site,footer.site,.tabsbar,.noprint{display:none!important}.draft{border:none;max-height:none;padding:0}}
 `;
 
@@ -211,6 +216,7 @@ export function advisoryPage({ priceDate, stockCount }) {
 <div class="tabsbar">
   <button class="tabbtn on" data-tab="quality">Long-term ideas</button>
   <button class="tabbtn" data-tab="swing">Swing setups</button>
+  <button class="tabbtn" data-tab="patterns">Chart patterns</button>
   <button class="tabbtn" data-tab="momentum">Momentum</button>
   <button class="tabbtn" data-tab="income">Income &amp; hedging</button>
 </div>
@@ -230,6 +236,29 @@ export function advisoryPage({ priceDate, stockCount }) {
     <span class="chip" id="swingCount"></span></div>
     <div class="scroll"><table id="swingTbl"></table></div>
     <div class="note">Entry, stop and target are derived from the 14-day Average True Range &mdash; the stop sits 1.5&times; ATR below entry and the target 3&times; ATR above, so every setup shown carries a 2:1 reward-to-risk by construction. A wide ATR means a wider stop and a smaller position, not a tighter stop.</div>
+  </div>
+</div>
+
+<div class="panel" data-panel="patterns" hidden>
+  <div class="card"><div class="card-h"><div><h2>Classical chart patterns, drawn</h2>
+    <div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none" id="patStatusLine">Loading&hellip;</div></div>
+    <span class="chip" id="patCount"></span></div>
+    <div class="card-b"><div class="formgrid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
+      <div class="f"><label>Direction</label><select id="patBias">
+        <option value="">Both</option><option value="BULLISH">Bullish</option><option value="BEARISH">Bearish</option></select></div>
+      <div class="f"><label>Pattern</label><select id="patType"><option value="">Every pattern</option></select></div>
+      <div class="f"><label>Stage</label><select id="patStatus">
+        <option value="">Any</option><option value="FORMING">Still forming</option>
+        <option value="BREAKOUT">Broken out</option><option value="BREAKDOWN">Broken down</option></select></div>
+      <div class="f"><label>Minimum confirmation</label><select id="patScore">
+        <option value="0">Any</option><option value="50">Good (50+)</option><option value="80" selected>Strong (80+)</option></select></div>
+    </div></div>
+    <div class="note">Detected on split-adjusted daily closes for every company trading at least &#8377;3 crore a day, then ranked by how well volume and the moving averages confirm the shape. A pattern is a description of what price has already done &mdash; the measured target is a convention, not a forecast, and roughly half of all textbook patterns fail.</div>
+  </div>
+
+  <div id="patList"></div>
+  <div style="display:flex;justify-content:center;margin-top:16px">
+    <button class="btn" id="patMore" hidden>Show more</button>
   </div>
 </div>
 

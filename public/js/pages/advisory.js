@@ -160,13 +160,28 @@ function hedge() {
 }
 
 // ---------------------------------- boot ------------------------------------
+/** Tabs are addressable (#patterns), so a view can be linked to directly. */
+async function openTab(tab, { push = true } = {}) {
+  const btn = [...document.querySelectorAll(".tabbtn")].find((b) => b.dataset.tab === tab);
+  if (!btn) return;
+  document.querySelectorAll(".tabbtn").forEach((x) => x.classList.toggle("on", x === btn));
+  document.querySelectorAll(".panel").forEach((p) => { p.hidden = p.dataset.panel !== tab; });
+  if (push && location.hash.slice(1) !== tab) history.replaceState(null, "", "#" + tab);
+  // The pattern payload ships candles for every chart, so it is fetched the
+  // first time that tab is opened rather than on every visit to this page.
+  if (tab === "patterns") {
+    const { initPatterns } = await import("./patterns.js");
+    initPatterns();
+  }
+}
+
 (async function boot() {
   document.querySelectorAll(".tabbtn").forEach((b) => {
-    b.onclick = () => {
-      document.querySelectorAll(".tabbtn").forEach((x) => x.classList.toggle("on", x === b));
-      document.querySelectorAll(".panel").forEach((p) => { p.hidden = p.dataset.panel !== b.dataset.tab; });
-    };
+    b.onclick = () => openTab(b.dataset.tab);
   });
+  window.addEventListener("hashchange", () => openTab(location.hash.slice(1) || "quality", { push: false }));
+  const initial = location.hash.slice(1);
+  if (initial) openTab(initial, { push: false });
   $("hedgeValue").oninput = hedge;
   $("hedgeBeta").oninput = hedge;
   hedge();
