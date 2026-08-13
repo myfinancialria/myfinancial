@@ -17,6 +17,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import crypto from "node:crypto";
 import { shell, esc, CSS } from "./lib/shell.mjs";
 import { screenerPage } from "./lib/screener_page.mjs";
 import { planningPage, advisoryPage, estatePage } from "./lib/page_modules.mjs";
@@ -397,16 +398,37 @@ fs.writeFileSync(path.join(OUT, "screener.html"), screenerPage({
 // 1b. the three modules that used to require a running server.
 // The shared engines are copied next to the page scripts so the browser imports
 // the exact same code the server does — one implementation, no drift.
+//
+// Everything is served with Cache-Control: max-age=600 and no versioning, which
+// means that for ten minutes after a deploy a returning visitor can get NEW html
+// running against an OLD cached script. That is not theoretical: renaming an
+// element id once left the page rendering nothing at all, because the stale
+// script was writing into a container the new markup no longer had. So every
+// asset reference carries a build hash, and a mismatched pair can never load.
+const jsSources = [];
+const readAll = (dir, ext) => fs.readdirSync(dir).filter((f) => f.endsWith(ext))
+  .map((f) => ({ name: f, body: fs.readFileSync(path.join(dir, f), "utf8") }));
+const sharedFiles = readAll(path.join(ROOT, "shared"), ".mjs");
+const pageFiles = readAll(path.join(ROOT, "public", "js", "pages"), ".js");
+jsSources.push(...sharedFiles, ...pageFiles);
+
+const BUILD = crypto.createHash("sha256")
+  .update(jsSources.map((f) => f.name + f.body).join("\n"))
+  .update(String(stocks.generated || "") + String(funds.generated || ""))
+  .digest("hex").slice(0, 10);
+
+/** Point every relative import, dynamic import and data fetch at this build. */
+const version = (src) => src
+  .replace(/from "\.\/([\w.-]+\.mjs)"/g, `from "./$1?v=${BUILD}"`)
+  .replace(/import\("\.\/([\w.-]+\.js)"\)/g, `import("./$1?v=${BUILD}")`)
+  .replace(/fetch\("(data\/[\w.-]+\.json)"\)/g, `fetch("$1?v=${BUILD}")`);
+
 fs.mkdirSync(path.join(OUT, "js"), { recursive: true });
-for (const f of fs.readdirSync(path.join(ROOT, "shared"))) {
-  if (f.endsWith(".mjs")) fs.copyFileSync(path.join(ROOT, "shared", f), path.join(OUT, "js", f));
-}
-for (const f of fs.readdirSync(path.join(ROOT, "public", "js", "pages"))) {
-  if (f.endsWith(".js")) fs.copyFileSync(path.join(ROOT, "public", "js", "pages", f), path.join(OUT, "js", f));
-}
-fs.writeFileSync(path.join(OUT, "planning.html"), planningPage());
-fs.writeFileSync(path.join(OUT, "advisory.html"), advisoryPage({ priceDate: stocks.priceDate, stockCount: stockRows.length }));
-fs.writeFileSync(path.join(OUT, "estate.html"), estatePage());
+for (const f of jsSources) fs.writeFileSync(path.join(OUT, "js", f.name), version(f.body));
+
+fs.writeFileSync(path.join(OUT, "planning.html"), planningPage({ build: BUILD }));
+fs.writeFileSync(path.join(OUT, "advisory.html"), advisoryPage({ priceDate: stocks.priceDate, stockCount: stockRows.length, build: BUILD }));
+fs.writeFileSync(path.join(OUT, "estate.html"), estatePage({ build: BUILD }));
 
 // 2. index pages
 const F = (k) => STOCK_FIELDS.find((f) => f.key === k);

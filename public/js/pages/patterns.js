@@ -241,8 +241,11 @@ function wireHover(h) {
     const rect = svg.getBoundingClientRect();
     const frac = (clientX - rect.left) / rect.width;              // viewBox is linear
     const vx = frac * W;
-    if (vx < 0 || vx > PLOT) { leave(); return; }
-    const i = Math.max(0, Math.min(n - 1, Math.round((vx / PLOT) * (n - 1))));
+    if (vx < 0) { leave(); return; }
+    // Past the plot the cursor is over the label gutter. Snapping to the last
+    // candle there is friendlier than blanking the readout, which felt broken
+    // whenever the pointer drifted a few pixels to the right of the chart.
+    const i = Math.max(0, Math.min(n - 1, Math.round((Math.min(vx, PLOT) / PLOT) * (n - 1))));
     const b = h.bars[i];
     const x = (i / Math.max(1, n - 1)) * PLOT;
 

@@ -105,6 +105,55 @@ else {
   else ok(`${withFundamentals} companies carry fundamentals`);
 }
 
+// --------------------------- cache-busting -----------------------------------
+// GitHub Pages serves everything with max-age=600 and no versioning, so without
+// a build stamp on each URL a visitor can get new HTML running against an old
+// cached script. That once left a page rendering nothing at all. Every asset
+// reference must therefore carry ?v=<build>.
+{
+  const pages = ["planning.html", "advisory.html", "estate.html"];
+  let unversioned = 0, builds = new Set();
+  for (const p of pages) {
+    let html = "";
+    try { html = fs.readFileSync(path.join(DIST, p), "utf8"); } catch { continue; }
+    for (const m of html.matchAll(/src="(js\/[\w.-]+\.js)(\?v=([a-f0-9]+))?"/g)) {
+      if (!m[3]) unversioned++; else builds.add(m[3]);
+    }
+  }
+  for (const f of (fs.existsSync(path.join(DIST, "js")) ? fs.readdirSync(path.join(DIST, "js")) : [])) {
+    const body = fs.readFileSync(path.join(DIST, "js", f), "utf8");
+    for (const m of body.matchAll(/from "\.\/[\w.-]+\.mjs(\?v=([a-f0-9]+))?"/g)) {
+      if (!m[2]) unversioned++; else builds.add(m[2]);
+    }
+    for (const m of body.matchAll(/fetch\("data\/[\w.-]+\.json(\?v=([a-f0-9]+))?"/g)) {
+      if (!m[2]) unversioned++; else builds.add(m[2]);
+    }
+    for (const m of body.matchAll(/import\("\.\/[\w.-]+\.js(\?v=([a-f0-9]+))?"\)/g)) {
+      if (!m[2]) unversioned++; else builds.add(m[2]);
+    }
+  }
+  if (unversioned) bad(`${unversioned} asset references carry no build stamp — a stale cache could break the page`);
+  else if (builds.size === 1) ok(`every asset reference stamped with build ${[...builds][0]}`);
+  else if (builds.size > 1) bad(`mixed build stamps (${[...builds].join(", ")}) — assets would load inconsistently`);
+}
+
+// Element ids the page scripts write into must exist in the markup they ship
+// with. This is exactly the coupling that broke when a container was renamed.
+{
+  const pairs = [
+    ["advisory.html", ["qualityTbl", "swingTbl", "momTbl", "incTbl", "patTable", "patStatusLine", "patCount", "patBias", "patType", "patStatus", "patScore"]],
+    ["planning.html", ["taxVerdict", "taxHeads", "taxTotals", "taxSlabs", "taxRecs", "cashStats", "cashNotes", "goalStats", "goalChart", "goalSip", "solveSip"]],
+    ["estate.html", ["willDraft", "beneList", "assetList", "checkList", "checkScore", "vaultLocked", "vaultOpen", "docTbl", "vaultPass"]],
+  ];
+  let missing = 0;
+  for (const [page, ids] of pairs) {
+    let html = "";
+    try { html = fs.readFileSync(path.join(DIST, page), "utf8"); } catch { bad(`${page} unreadable`); continue; }
+    for (const id of ids) if (!html.includes(`id="${id}"`)) { bad(`${page} has no #${id}, but its script writes to it`); missing++; }
+  }
+  if (!missing) ok("every element id the page scripts target exists in the markup");
+}
+
 // ------------------------------ chart patterns ------------------------------
 const patterns = readJson(path.join(DIST, "data", "patterns.json"));
 if (!patterns) warn("data/patterns.json missing — the chart-patterns tab will be empty");

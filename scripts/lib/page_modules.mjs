@@ -109,7 +109,7 @@ const money = (id, label, bind, hint) =>
 // ===========================================================================
 // 1. Planning, Tax & Goals
 // ===========================================================================
-export function planningPage() {
+export function planningPage({ build = '' } = {}) {
   const body = `
 <div class="head">
   <div class="eyebrow">Planning · Tax · Goals</div>
@@ -238,14 +238,14 @@ export function planningPage() {
     description: "Full FY 2025-26 income-tax computation across old and new regimes, cash-flow and protection review, and multi-goal Monte Carlo feasibility. Runs entirely in your browser; nothing is sent anywhere.",
     body, active: "planning",
     head: `<style>${MODULE_CSS}</style>`,
-    bodyEnd: `<script type="module" src="js/planning.js"></script>`,
+    bodyEnd: `<script type="module" src="js/planning.js${build ? "?v=" + build : ""}"></script>`,
   });
 }
 
 // ===========================================================================
 // 2. Advisory & Signals
 // ===========================================================================
-export function advisoryPage({ priceDate, stockCount }) {
+export function advisoryPage({ priceDate, stockCount, build = '' }) {
   const body = `
 <div class="head">
   <div class="eyebrow">Advisory &amp; Signals</div>
@@ -340,14 +340,14 @@ export function advisoryPage({ priceDate, stockCount }) {
     description: `Quality, value, swing and momentum screens over all ${stockCount} NSE-listed companies, rebuilt each market day from official exchange data. Every idea shows the rules it passed. Educational research, not investment advice.`,
     body, active: "advisory",
     head: `<style>${MODULE_CSS}</style>`,
-    bodyEnd: `<script type="module" src="js/advisory.js"></script>`,
+    bodyEnd: `<script type="module" src="js/advisory.js${build ? "?v=" + build : ""}"></script>`,
   });
 }
 
 // ===========================================================================
 // 3. Will & Vault
 // ===========================================================================
-export function estatePage() {
+export function estatePage({ build = '' } = {}) {
   const body = `
 <div class="head">
   <div class="eyebrow">Will &amp; Vault</div>
@@ -457,6 +457,6 @@ export function estatePage() {
     description: "A guided Will wizard following Indian Succession Act conventions, an estate-readiness checklist, and an AES-256-GCM encrypted vault. Everything runs in your browser and never leaves the device.",
     body, active: "estate",
     head: `<style>${MODULE_CSS}</style>`,
-    bodyEnd: `<script type="module" src="js/estate.js"></script>`,
+    bodyEnd: `<script type="module" src="js/estate.js${build ? "?v=" + build : ""}"></script>`,
   });
 }
