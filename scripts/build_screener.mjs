@@ -411,9 +411,29 @@ function buildStocks() {
       description: w.description || d?.profile?.description || null,
       website: w.website || null,
       isin: row.isin, listed: row.listed,
-      // weekly bars keep a 5-year chart under ~15 KB per company
-      bars: ta.toWeekly(bars).map((b) => [b[0], r2(b[4]), b[5]]),
-      recentDaily: bars.slice(-120).map((b) => [b[0], r2(b[1]), r2(b[2]), r2(b[3]), r2(b[4]), b[5], b[DELIV_PCT]]),
+      // Candles on both timeframes. The moving averages are computed on the
+      // DAILY series in both cases and merely sampled at each week's close, so
+      // "50-DMA" means the same line on the weekly chart as on the daily one —
+      // a 50-period average of weekly bars would be a different thing wearing
+      // the same label.
+      ...(() => {
+        const closeSeries = bars.map((b) => b[ta.C]);
+        const s50 = ta.sma(closeSeries, 50), s200 = ta.sma(closeSeries, 200);
+        const weekly = ta.toWeekly(bars);
+        const idxOfDate = new Map(bars.map((b, i) => [b[ta.D], i]));
+        const dFrom = Math.max(0, bars.length - 380);          // ~18 months daily
+        const wFrom = Math.max(0, weekly.length - 265);        // ~5 years weekly
+        const ohlc = (b) => [b[ta.D], r2(b[ta.O]), r2(b[ta.H]), r2(b[ta.L]), r2(b[ta.C]), b[ta.V]];
+        const wIdx = weekly.slice(wFrom).map((w) => idxOfDate.get(w[ta.D]));
+        return {
+          daily: bars.slice(dFrom).map(ohlc),
+          dailySma50: s50.slice(dFrom).map((x) => r2(x)),
+          dailySma200: s200.slice(dFrom).map((x) => r2(x)),
+          weekly: weekly.slice(wFrom).map(ohlc),
+          weeklySma50: wIdx.map((i) => (i == null ? null : r2(s50[i]))),
+          weeklySma200: wIdx.map((i) => (i == null ? null : r2(s200[i]))),
+        };
+      })(),
       metrics: row,
       deep: d ? {
         statements: d.statements || null,
@@ -672,6 +692,7 @@ function buildPeerGroups(rows, details) {
         medians: med,
         rows: list.map((p) => ({
           symbol: p.symbol, name: p.name, self: p.symbol === r.symbol,
+          price: p.price ?? null, change1d: p.change1d ?? null,
           marketCapCr: p.marketCapCr ?? null, pe: p.pe ?? null, pb: p.pb ?? null,
           roe: p.roe ?? null, roce: p.roce ?? null,
           profitMarginPct: p.profitMarginPct ?? null,

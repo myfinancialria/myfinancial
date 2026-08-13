@@ -34,6 +34,7 @@ const OUT = path.join(ROOT, "dist");
 const DATA_OUT = path.join(OUT, "data");
 const DETAIL = path.join(ROOT, "var", "detail");
 
+let BUILD_STAMP = "";
 const readJson = (p, fb = null) => { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return fb; } };
 const num = (x, d = 2) => (typeof x === "number" && Number.isFinite(x) ? x.toLocaleString("en-IN", { maximumFractionDigits: d, minimumFractionDigits: d }) : "—");
 const pct = (x, d = 1) => (typeof x === "number" && Number.isFinite(x) ? `${x > 0 ? "+" : ""}${x.toFixed(d)}%` : "—");
@@ -109,7 +110,14 @@ ${rows.map((f) => `<tr><td><b>${esc(f.label)}</b>${f.help ? `<div class="dim" st
 
 function stockPage(detail) {
   const m = detail.metrics;
-  const bars = detail.bars || [];
+  const bars = detail.weekly || [];
+  const hasCandles = (detail.daily || []).length > 20;
+  // Inlined rather than fetched: the chart then paints with the first frame,
+  // with no extra request and no empty box while it loads.
+  const chartData = hasCandles ? JSON.stringify({
+    daily: detail.daily, dailySma50: detail.dailySma50, dailySma200: detail.dailySma200,
+    weekly: detail.weekly, weeklySma50: detail.weeklySma50, weeklySma200: detail.weeklySma200,
+  }) : null;
   const stageNote = {
     1: "Basing — the long-term average has flattened after a decline. This is where bottoms form, but also where things go nowhere for a long time.",
     2: "Advancing — price is above a rising 30-week average. Weinstein's only buying stage.",
@@ -160,17 +168,17 @@ function stockPage(detail) {
 <div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none">${pg.count} listed ${pg.count === 1 ? "company" : "companies"} in this sub-sector · largest by market cap${m.peerRankByCap ? ` · this one ranks #${m.peerRankByCap}` : ""}</div></div>
 <span class="chip ok">Sub-sector peers</span></div>
 <div class="scroll"><table>
-<thead><tr><th>Company</th><th class="num">Market cap</th><th class="num">P/E</th><th class="num">P/B</th><th class="num">ROE</th><th class="num">ROCE</th><th class="num">Net margin</th><th class="num">Div yield</th><th class="num">1-year</th></tr></thead>
+<thead><tr><th>Company</th><th class="num">CMP</th><th class="num">Market cap</th><th class="num">P/E</th><th class="num">P/B</th><th class="num">ROE</th><th class="num">ROCE</th><th class="num">Net margin</th><th class="num">Div yield</th><th class="num">1-year</th></tr></thead>
 <tbody>
 ${pg.rows.map((p) => `<tr${p.self ? ' style="background:color-mix(in srgb,var(--ink) 7%,transparent)"' : ""}>
 <td>${p.self ? `<b>${esc(p.name)}</b> <span class="badge">this company</span>` : `<a href="./${encodeURIComponent(p.symbol)}.html" style="font-weight:650">${esc(p.name)}</a>`}<div class="sym dim" style="font-size:10.5px">${esc(p.symbol)}</div></td>
-<td class="num">${crore(p.marketCapCr)}</td><td class="num">${num(p.pe)}</td><td class="num">${num(p.pb)}</td>
+<td class="num">${p.price == null ? "—" : "₹" + num(p.price, 2)}${p.change1d == null ? "" : `<div class="dim" style="font-size:10.5px">${pct(p.change1d, 2)}</div>`}</td><td class="num">${crore(p.marketCapCr)}</td><td class="num">${num(p.pe)}</td><td class="num">${num(p.pb)}</td>
 <td class="num">${p.roe == null ? "—" : num(p.roe, 1) + "%"}</td><td class="num">${p.roce == null ? "—" : num(p.roce, 1) + "%"}</td>
 <td class="num">${p.profitMarginPct == null ? "—" : num(p.profitMarginPct, 1) + "%"}</td>
 <td class="num">${p.dividendYieldPct == null ? "—" : num(p.dividendYieldPct, 2) + "%"}</td>
 <td class="num ${cls(p.ret1y)}">${pct(p.ret1y)}</td></tr>`).join("")}
 <tr class="strong" style="border-top:1px solid var(--line-2)"><td><b>Sub-sector median</b></td>
-<td class="num dim">—</td><td class="num">${num(pg.medians.pe)}</td><td class="num">${num(pg.medians.pb)}</td>
+<td class="num dim">—</td><td class="num dim">—</td><td class="num">${num(pg.medians.pe)}</td><td class="num">${num(pg.medians.pb)}</td>
 <td class="num">${pg.medians.roe == null ? "—" : num(pg.medians.roe, 1) + "%"}</td>
 <td class="num">${pg.medians.roce == null ? "—" : num(pg.medians.roce, 1) + "%"}</td>
 <td class="num">${pg.medians.profitMarginPct == null ? "—" : num(pg.medians.profitMarginPct, 1) + "%"}</td>
@@ -222,30 +230,33 @@ ${pol.disclaimer ? `<div class="note">${esc(pol.disclaimer)}</div>` : ""}</div>`
 ${stats.map(([k, v, s]) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div>${s ? `<div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none">${s}</div>` : ""}</div>`).join("")}
 </div>
 ${gapWarn}
-${bars.length > 5 ? `<div class="card"><div class="card-h"><div><h2>Price — ${Math.round(bars.length / 52)} years of weekly closes</h2>
-<div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none">official NSE closing prices</div></div><span class="chip ok">Real prices</span></div>
-<div class="card-b">${lineChart(bars.map((b) => [b[0], b[1]]), { money: true })}
+${hasCandles ? `<div class="card"><div class="card-h"><div><h2>Price</h2>
+<div class="k" id="scSpan" style="margin-top:3px;letter-spacing:.05em;text-transform:none"></div></div>
+<div class="tfbar"><button class="tfbtn on" data-tf="daily">Daily</button><button class="tfbtn" data-tf="weekly">Weekly</button></div></div>
+<div class="card-b">
+  <div class="chartwrap" id="scWrap"><div id="scChart"></div><div class="tip" id="scTip" hidden></div></div>
+  <div class="legend">
+    <span><i class="sw" style="background:var(--up)"></i>up</span>
+    <span><i class="sw" style="background:var(--down)"></i>down</span>
+    <span><i class="sw dash" style="background:var(--ink-dim)"></i>50-DMA</span>
+    <span><i class="sw" style="background:var(--ink-faint)"></i>200-DMA</span>
+    <span class="dim">hover any candle for its open, high, low, close and volume</span>
+  </div>
 ${rangeBar(m.low52w, m.high52w, m.price, "today")}</div>
-${stageNote ? `<div class="note"><b>Stage ${m.stage} — ${esc(m.stageName)}.</b> ${esc(stageNote)}</div>` : ""}</div>` : ""}
+${stageNote ? `<div class="note"><b>Stage ${m.stage} — ${esc(m.stageName)}.</b> ${esc(stageNote)} The 50- and 200-day averages are computed on daily closes and sampled at each week's close, so they mean the same thing on both views.</div>` : ""}</div>` : ""}
 ${detail.description ? `<div class="card"><div class="card-h"><h2>What this company does</h2></div><div class="card-b" style="color:var(--ink-dim);line-height:1.75;font-size:14px">${esc(detail.description)}</div></div>` : ""}
-<div class="grid g2">${STOCK_GROUPS.map((g) => metricTable(STOCK_FIELDS, m, g)).join("")}</div>
+<div class="metricflow">${STOCK_GROUPS.map((g) => metricTable(STOCK_FIELDS, m, g)).join("")}</div>
 ${panes.length ? `<div class="card"><div class="card-h"><h2>Financial statements</h2><span class="chip">₹ crore · last 5 years</span></div>
 <div class="tabs" style="display:flex;border-bottom:1px solid var(--line)">${panes.map(([l], i) => `<button class="btn" style="border:none;border-bottom:2px solid ${i === 0 ? "var(--ink)" : "transparent"}" data-t="${esc(l)}">${esc(l)}</button>`).join("")}</div>
 ${panes.map(([l, h], i) => h.replace('class="pane"', `class="pane" ${i ? 'style="display:none"' : ""}`)).join("")}
 </div>` : ""}
 ${peerCard}
 ${holdCard}
-${peers}
 ${productsCard}
 ${industryCard}
 ${policyCard}
 <p class="sub" style="margin-top:24px"><a href="../screener.html" style="text-decoration:underline">← Screen every company</a> · <a href="../stocks.html" style="text-decoration:underline">All companies</a></p>
-<script>
-document.querySelectorAll('.tabs button').forEach(function(b){b.onclick=function(){
-  document.querySelectorAll('.tabs button').forEach(function(x){x.style.borderBottomColor=x===b?'var(--ink)':'transparent'});
-  document.querySelectorAll('.pane').forEach(function(p){p.style.display=p.dataset.p===b.dataset.t?'':'none'});
-}});
-</script>`;
+${chartData ? `<script type="application/json" id="scData">${chartData.replace(/</g, "\\u003c")}</script>` : ""}`;
 
   const desc = `${detail.name} (${detail.symbol}) share price ₹${num(m.price)}, ${pct(m.ret1y)} over a year`
     + `${m.pe ? `, P/E ${num(m.pe)}×` : ""}${m.roe ? `, ROE ${num(m.roe, 1)}%` : ""}. `
@@ -253,6 +264,7 @@ document.querySelectorAll('.tabs button').forEach(function(b){b.onclick=function
   return shell({
     title: `${detail.name} (${detail.symbol}) — share price, ratios & technicals | myfinancial`,
     description: desc, body, active: "stocks", base: "../",
+    bodyEnd: hasCandles ? `<script type="module" src="../js/stockchart.js${BUILD_STAMP ? `?v=${BUILD_STAMP}` : ""}"></script>` : "",
   });
 }
 
@@ -423,6 +435,7 @@ const version = (src) => src
   .replace(/import\("\.\/([\w.-]+\.js)"\)/g, `import("./$1?v=${BUILD}")`)
   .replace(/fetch\("(data\/[\w.-]+\.json)"\)/g, `fetch("$1?v=${BUILD}")`);
 
+BUILD_STAMP = BUILD;
 fs.mkdirSync(path.join(OUT, "js"), { recursive: true });
 for (const f of jsSources) fs.writeFileSync(path.join(OUT, "js", f.name), version(f.body));
 

@@ -154,6 +154,32 @@ else {
   if (!missing) ok("every element id the page scripts target exists in the markup");
 }
 
+// --------------------------- company page charts -----------------------------
+// The candles are inlined per page, so a page can ship a chart container with no
+// data behind it and fail silently. Sample a few and check both are present.
+{
+  const dir = path.join(DIST, "stock");
+  const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith(".html")) : [];
+  const sample = files.filter((_, i) => i % Math.max(1, Math.floor(files.length / 25)) === 0).slice(0, 25);
+  let noData = 0, noModule = 0, badShape = 0;
+  for (const f of sample) {
+    const html = fs.readFileSync(path.join(dir, f), "utf8");
+    if (!html.includes('id="scWrap"')) continue;             // too little history to chart
+    if (!/js\/stockchart\.js/.test(html)) { noModule++; continue; }
+    const m = html.match(/id="scData">([\s\S]*?)<\/script>/);
+    if (!m) { noData++; continue; }
+    try {
+      const j = JSON.parse(m[1]);
+      if (!j.daily?.length || !j.weekly?.length
+        || j.dailySma50.length !== j.daily.length || j.weeklySma200.length !== j.weekly.length) badShape++;
+    } catch { badShape++; }
+  }
+  if (noModule) bad(`${noModule} company pages draw a chart container but never load the chart module`);
+  else if (noData) bad(`${noData} company pages have a chart container with no inlined data`);
+  else if (badShape) bad(`${badShape} company pages have candle data whose moving averages do not align`);
+  else ok(`company charts intact across ${sample.length} sampled pages (daily + weekly candles, aligned averages)`);
+}
+
 // ------------------------------ chart patterns ------------------------------
 const patterns = readJson(path.join(DIST, "data", "patterns.json"));
 if (!patterns) warn("data/patterns.json missing — the chart-patterns tab will be empty");

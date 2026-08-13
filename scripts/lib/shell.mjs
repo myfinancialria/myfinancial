@@ -64,6 +64,28 @@ tbody tr:hover{background:color-mix(in srgb,var(--ink) 4%,transparent)}
 .num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:12px}
 .up{color:var(--up)}.down{color:var(--down)}.dim{color:var(--ink-dim)}.faint{color:var(--ink-faint)}
 .scroll{overflow-x:auto;max-width:100%}
+/* Metric cards vary a lot in height — Valuation has a dozen rows, Ownership two.
+   A grid leaves ragged holes under the short ones, so they flow down columns
+   instead and pack tight. break-inside keeps a card whole. */
+.metricflow{column-count:1;column-gap:16px;margin-top:18px}
+@media(min-width:720px){.metricflow{column-count:2}}
+@media(min-width:1180px){.metricflow{column-count:3}}
+.metricflow>.card{break-inside:avoid;-webkit-column-break-inside:avoid;page-break-inside:avoid;margin:0 0 16px;display:inline-block;width:100%}
+/* candle chart shared by company pages */
+.tfbar{display:flex;border:1px solid var(--line-2)}
+.tfbtn{background:none;border:none;color:var(--ink-dim);padding:7px 15px;cursor:pointer;font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-family:inherit}
+.tfbtn.on{background:var(--inv-bg);color:var(--inv-fg);font-weight:650}
+.chartwrap{position:relative}
+.chartwrap .tip{position:absolute;top:10px;z-index:5;pointer-events:none;background:var(--paper);border:1px solid var(--line-2);
+  padding:9px 12px;font-size:12px;line-height:1.5;box-shadow:0 6px 22px rgba(0,0,0,.28);min-width:172px}
+.tip-d{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--ink-faint);margin-bottom:5px}
+.tip-g{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:2px 8px;align-items:baseline}
+.tip-g span{font-family:var(--mono);font-size:10px;color:var(--ink-faint)}
+.tip-g b{font-variant-numeric:tabular-nums;font-size:12px}
+.tip-r{margin-top:5px;font-size:11.5px;font-variant-numeric:tabular-nums}
+.legend{display:flex;gap:15px;flex-wrap:wrap;padding:10px 0 2px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint)}
+.legend .sw{display:inline-block;width:15px;height:2px;margin-right:5px;vertical-align:middle}
+.legend .sw.dash{background:none!important;border-top:2px dashed currentColor}
 .grid{display:grid;gap:16px}
 .g2{grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
 .g4{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
