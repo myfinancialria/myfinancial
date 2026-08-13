@@ -166,7 +166,7 @@ async function openTab(tab, { push = true } = {}) {
   if (!btn) return;
   document.querySelectorAll(".tabbtn").forEach((x) => x.classList.toggle("on", x === btn));
   document.querySelectorAll(".panel").forEach((p) => { p.hidden = p.dataset.panel !== tab; });
-  if (push && location.hash.slice(1) !== tab) history.replaceState(null, "", "#" + tab);
+  if (push && location.hash.slice(1).split("/")[0] !== tab) history.replaceState(null, "", "#" + tab);
   // The pattern payload ships candles for every chart, so it is fetched the
   // first time that tab is opened rather than on every visit to this page.
   if (tab === "patterns") {
@@ -179,8 +179,8 @@ async function openTab(tab, { push = true } = {}) {
   document.querySelectorAll(".tabbtn").forEach((b) => {
     b.onclick = () => openTab(b.dataset.tab);
   });
-  window.addEventListener("hashchange", () => openTab(location.hash.slice(1) || "quality", { push: false }));
-  const initial = location.hash.slice(1);
+  window.addEventListener("hashchange", () => openTab(location.hash.slice(1).split("/")[0] || "quality", { push: false }));
+  const initial = location.hash.slice(1).split("/")[0];
   if (initial) openTab(initial, { push: false });
   $("hedgeValue").oninput = hedge;
   $("hedgeBeta").oninput = hedge;

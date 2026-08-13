@@ -47,11 +47,58 @@ const MODULE_CSS = `
 .locked{text-align:center;padding:34px 20px}
 .sig{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);border:1px solid var(--line-2);padding:3px 9px}
 .setup{border:1px solid var(--warn);padding:13px 16px;color:var(--ink-dim);font-size:13px;line-height:1.7;background:color-mix(in srgb,var(--warn) 7%,transparent)}
-.pattern-card{margin-top:18px}
-.pattern-card h2 a{text-decoration:none}
-.pattern-card h2 a:hover{text-decoration:underline}
-.legend{display:flex;gap:16px;flex-wrap:wrap;padding:2px 18px 14px;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint)}
-.legend .sw{display:inline-block;width:14px;height:2px;margin-right:5px;vertical-align:middle}
+/* ---------------------------- pattern browser ---------------------------- */
+.ptbl{font-size:13px}
+.ptbl th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+.ptbl th.sortable:hover{color:var(--ink)}
+.ptbl th .ar{margin-left:4px;color:var(--ink)}
+.ptbl tr.prow{cursor:pointer}
+.ptbl tr.prow:hover{background:color-mix(in srgb,var(--ink) 5%,transparent)}
+.ptbl tr.prow.on{background:color-mix(in srgb,var(--ink) 8%,transparent)}
+.ptbl tr.prow.on td{border-bottom-color:transparent;font-weight:650}
+.ptbl .sub2{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);margin-top:2px}
+.ptbl td,.ptbl th{padding:9px 11px}
+.pill{display:inline-block;font-size:11px;padding:2px 8px;border:1px solid var(--line-2);white-space:nowrap}
+.pill.bull{color:var(--up);border-color:color-mix(in srgb,var(--up) 55%,transparent)}
+.pill.bear{color:var(--down);border-color:color-mix(in srgb,var(--down) 55%,transparent)}
+.stage{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em}
+.stage.s-breakout{color:var(--up)}.stage.s-breakdown{color:var(--down)}.stage.s-forming{color:var(--ink-dim)}
+.score{display:inline-block;min-width:30px;text-align:center;padding:1px 6px;font-family:var(--mono);font-size:11px}
+.score.s3{background:color-mix(in srgb,var(--up) 22%,transparent);color:var(--up)}
+.score.s2{background:color-mix(in srgb,var(--ink) 10%,transparent)}
+.score.s1{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn)}
+.ptbl tr.drow td{padding:0;background:var(--paper-3);border-bottom:1px solid var(--line-2)}
+#patDetail{padding:18px}
+
+/* the trade, kept in its own band so nothing can sit on top of it */
+.plan{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:16px}
+.plan-i{background:var(--paper-2);padding:13px 16px}
+.plan-k{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint)}
+.plan-v{font-size:21px;font-weight:800;letter-spacing:-.02em;margin-top:4px;font-variant-numeric:tabular-nums}
+.plan-s{font-size:11.5px;color:var(--ink-dim);margin-top:3px}
+.plan-i.up .plan-v{color:var(--up)}.plan-i.down .plan-v{color:var(--down)}
+
+.alert{border:1px solid var(--warn);background:color-mix(in srgb,var(--warn) 8%,transparent);padding:11px 15px;
+  font-size:12.5px;line-height:1.7;color:var(--ink-dim);margin-bottom:14px}
+.alert.bad{border-color:var(--down);background:color-mix(in srgb,var(--down) 9%,transparent)}
+.alert b{color:var(--ink)}
+.chartwrap{position:relative;border:1px solid var(--line);background:var(--paper-2)}
+.chartwrap .tip{position:absolute;top:12px;z-index:5;pointer-events:none;background:var(--paper);border:1px solid var(--line-2);
+  padding:9px 12px;font-size:12px;line-height:1.5;box-shadow:0 6px 22px rgba(0,0,0,.28);min-width:172px}
+.tip-d{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--ink-faint);margin-bottom:5px}
+.tip-g{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:2px 8px;align-items:baseline}
+.tip-g span{font-family:var(--mono);font-size:10px;color:var(--ink-faint)}
+.tip-g b{font-variant-numeric:tabular-nums;font-size:12px}
+.tip-r{margin-top:5px;font-size:11.5px;font-variant-numeric:tabular-nums}
+.legend{display:flex;gap:15px;flex-wrap:wrap;padding:9px 2px 14px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint)}
+.legend .sw{display:inline-block;width:15px;height:2px;margin-right:5px;vertical-align:middle}
+.legend .sw.dash{background:none!important;border-top:2px dashed currentColor}
+.dsec{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:20px 0 10px;padding-top:14px;border-top:1px solid var(--line)}
+.dsec h3{font-size:13px;font-weight:700;margin:0}
+.dtext{color:var(--ink-dim);font-size:13px;line-height:1.72;margin-bottom:12px}
+.dtext a{text-decoration:underline}
+table.rt{font-size:13px}
+@media(max-width:760px){.ptbl td,.ptbl th{padding:7px 8px;font-size:12px}#patDetail{padding:12px}}
 @media print{nav.site,footer.site,.tabsbar,.noprint{display:none!important}.draft{border:none;max-height:none;padding:0}}
 `;
 
@@ -256,9 +303,8 @@ export function advisoryPage({ priceDate, stockCount }) {
     <div class="note">Detected on split-adjusted daily closes for every company trading at least &#8377;3 crore a day, then ranked by how well volume and the moving averages confirm the shape. A pattern is a description of what price has already done &mdash; the measured target is a convention, not a forecast, and roughly half of all textbook patterns fail.</div>
   </div>
 
-  <div id="patList"></div>
-  <div style="display:flex;justify-content:center;margin-top:16px">
-    <button class="btn" id="patMore" hidden>Show more</button>
+  <div class="card"><div class="scroll"><table id="patTable" class="ptbl"></table></div>
+    <div class="note">Select any row to open its chart, the pattern drawn on it, and the company behind it. Click a column heading to sort.</div>
   </div>
 </div>
 
