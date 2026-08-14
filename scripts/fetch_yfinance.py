@@ -217,6 +217,9 @@ def main() -> int:
                     help="order by rupee turnover so the tradeable names land first")
     ap.add_argument("--only-missing", action="store_true",
                     help="skip anything the committed snapshot already covers (what CI wants)")
+    ap.add_argument("--refresh-oldest", type=int, default=0,
+                    help="also re-fetch the N stalest cached records, so a daily run rotates "
+                         "through the whole universe instead of freezing it")
     args = ap.parse_args()
 
     uni_file = DATA / "nse_universe.json"
@@ -224,6 +227,7 @@ def main() -> int:
         return print("data/nse_universe.json missing — run: npm run data:universe") or 1
     symbols = [s["symbol"] for s in json.loads(uni_file.read_text())["symbols"]]
     universe_size = len(symbols)          # --limit must not distort the reported coverage
+    all_symbols = list(symbols)           # rotation works over the whole universe
 
     # Fetching in liquidity order means an interrupted run still leaves the
     # part of the market anyone would actually screen fully covered.
@@ -259,6 +263,29 @@ def main() -> int:
             print(f"[yf] --only-missing: {before - len(symbols)} already covered, {len(symbols)} to chase")
 
     todo = [s for s in symbols if cached(s, max_age) == "stale"]
+
+    # --only-missing alone would freeze the snapshot: gaps get filled once and
+    # nothing already covered is ever looked at again, so earnings per share and
+    # book value drift further from reality every quarter. Rotating a slice of
+    # the oldest records through each run means the whole universe refreshes on
+    # a predictable cycle without ever asking Yahoo for two thousand symbols in
+    # one go, which is what gets an address throttled.
+    if args.refresh_oldest > 0:
+        aged = []
+        for sym in all_symbols:
+            try:
+                aged.append((cache_path(sym).stat().st_mtime, sym))
+            except OSError:
+                continue
+        aged.sort()
+        rotate = [sym for _, sym in aged[: args.refresh_oldest] if sym not in todo]
+        if rotate:
+            oldest_days = (time.time() - aged[0][0]) / 86400 if aged else 0
+            print(f"[yf] rotating {len(rotate)} stalest records (oldest {oldest_days:.1f} days) "
+                  f"— full cycle every ~{max(1, len(all_symbols) // max(1, args.refresh_oldest))} runs")
+            for sym in rotate:
+                cache_path(sym).unlink(missing_ok=True)   # force a re-fetch
+            todo = todo + rotate
     print(f"[yf] {len(symbols)} companies · {len(symbols) - len(todo)} already cached · fetching {len(todo)}")
 
     started = time.time()

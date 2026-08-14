@@ -93,11 +93,17 @@ else {
     warn(`${((near50 / rets.length) * 100).toFixed(1)}% of 1-year returns cluster near -50% — possible unadjusted splits/bonuses`);
   } else ok("no suspicious cluster of -50% returns");
 
+  // Freshness is the whole point of a daily rebuild, and it failed silently
+  // once already: sessions fetched before NSE published were blacklisted as
+  // holidays and never retried, so the site kept rebuilding happily against a
+  // price date that had stopped moving. Weekends and holidays make a couple of
+  // days normal; four is not.
   const priceDate = stocks.priceDate;
   if (priceDate) {
     const age = (Date.now() - Date.parse(priceDate + "T12:00:00Z")) / 86_400_000;
-    if (age <= 6) ok(`prices dated ${priceDate} (${age.toFixed(0)} days old)`);
-    else warn(`prices dated ${priceDate} — ${age.toFixed(0)} days old`);
+    if (age <= 4) ok(`prices dated ${priceDate} (${age.toFixed(0)} days old)`);
+    else if (age <= 6) warn(`prices dated ${priceDate} — ${age.toFixed(0)} days old; check for skipped sessions`);
+    else bad(`prices dated ${priceDate} — ${age.toFixed(0)} days old. The daily refresh is not reaching the exchange.`);
   } else bad("no priceDate on the stock index");
 
   const withFundamentals = (stocks.rows || []).filter((r) => r[F.hasFundamentals] === true).length;

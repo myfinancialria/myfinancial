@@ -317,7 +317,7 @@ function buildStocks() {
 
   const rows = [];
   const details = new Map();
-  let skippedNotListed = 0, skippedShort = 0;
+  let skippedNotListed = 0, skippedShort = 0, repriced = 0;
   for (const [symbol, bars] of Object.entries(series)) {
     // The bhavcopy EQ series also carries ETFs (GOLDBEES, NIFTYBEES…) and names
     // that have since delisted. EQUITY_L is the exchange's own list of what is
@@ -335,6 +335,28 @@ function buildStocks() {
     // Prefer the filed Upstox figure where we have it; fall back to the wide feed.
     const pick = (deepKey, wideKey) => (dr[deepKey] ?? null) ?? (w[wideKey] ?? null);
 
+    // ---- valuation, recomputed against TODAY's close ----
+    // Market cap, P/E, P/B and their derivatives are price ratios, so a snapshot
+    // taken days ago disagrees with the price shown beside it — the page would
+    // say ₹1,335 and 24.0x when 24.0x was true at a different price entirely.
+    // The per-share inputs (shares outstanding, EPS, book value) only move on
+    // results days, so the honest split is to keep those from the snapshot and
+    // recompute every ratio from the close this build is publishing.
+    const px = t.price;
+    const shares = w.sharesOutstanding ?? null;
+    const liveCap = shares && px ? r2((shares * px) / 1e7, 2) : null;
+    const liveP = (perShare) => (perShare && perShare > 0 && px ? r2(px / perShare) : null);
+    const marketCapCr = liveCap ?? w.marketCapCr ?? null;
+    const livePe = liveP(w.eps);
+    const livePb = liveP(w.bookValue);
+    const liveEvEbitda = (() => {
+      if (!marketCapCr || !w.ebitdaCr || w.ebitdaCr <= 0) return null;
+      const ev = marketCapCr + (w.totalDebtCr ?? 0) - (w.totalCashCr ?? 0);
+      return r2(ev / w.ebitdaCr);
+    })();
+    const livePs = marketCapCr && w.revenueCr > 0 ? r2(marketCapCr / w.revenueCr) : null;
+    if (liveCap) repriced++;
+
     // The filed balance sheet carries net worth and the liability split but not
     // borrowings, so a true debt/equity cannot be derived from it. What CAN be
     // derived honestly is overall leverage and the current ratio — named for
@@ -347,7 +369,6 @@ function buildStocks() {
       ? r2(bs.currentAssets / bs.currentLiabilities) : null;
     const dps = d ? trailingDividend(d.corporateActions, Date.parse(t.date + "T00:00:00Z") || Date.now()) : null;
 
-    const marketCapCr = w.marketCapCr ?? null;
     const row = {
       symbol,
       name: m.name || w.longName || d?.name || symbol,
@@ -366,12 +387,12 @@ function buildStocks() {
       // ---------- fundamentals ----------
       marketCapCr,
       capTier: capTier(marketCapCr),
-      pe: pick("pe", "pe"),
+      pe: livePe ?? pick("pe", "pe"),
       forwardPe: w.forwardPe ?? null,
-      pb: pick("pb", "pb"),
+      pb: livePb ?? pick("pb", "pb"),
       pegRatio: w.pegRatio ?? null,
-      priceToSales: w.priceToSales ?? null,
-      evEbitda: pick("evEbitda", "evEbitda"),
+      priceToSales: livePs ?? w.priceToSales ?? null,
+      evEbitda: liveEvEbitda ?? pick("evEbitda", "evEbitda"),
       roe: pick("roe", "roe"),
       roa: pick("roa", "roa"),
       roce: dr.roce ?? null,
@@ -462,6 +483,7 @@ function buildStocks() {
     const d = details.get(row.symbol);
     if (d) d.metrics = row;
   }
+  console.log(`[build] valuation repriced to the ${dates[dates.length - 1]} close for ${repriced} companies`);
   console.log(`[build] universe: ${rows.length} listed companies screened · ${skippedNotListed} ETFs/delisted skipped · ${skippedShort} too little history`);
   patterns = buildPatterns(rows, series, details);
   const missing = universe.symbols.filter((s) => !series[s.symbol]).map((s) => s.symbol);

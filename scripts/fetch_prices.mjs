@@ -113,8 +113,26 @@ const to = new Date();
 to.setUTCHours(0, 0, 0, 0);
 const from = SINCE ? new Date(SINCE + "T00:00:00Z") : (() => { const f = new Date(to); f.setUTCFullYear(f.getUTCFullYear() - YEARS); return f; })();
 
+// A session is only recorded as non-trading once it is old enough that NSE has
+// certainly published it. Anything newer that 404s is simply "not up yet".
+//
+// This matters more than it sounds: the blacklist was permanent, so a run that
+// happened before the exchange published — a manual build at 7pm, or the
+// schedule drifting ahead of publication — marked that day non-trading FOREVER
+// and every later run skipped it. Three real trading days were lost that way,
+// which is exactly how a daily site quietly stops being daily.
+const SETTLE_DAYS = 5;
+const settled = (isoDay) => (Date.now() - Date.parse(`${isoDay}T12:00:00Z`)) / 86_400_000 > SETTLE_DAYS;
+
 let holidays = new Set();
 try { holidays = new Set(JSON.parse(fs.readFileSync(MISS, "utf8"))); } catch { /* first run */ }
+
+// Self-heal: drop any recent entry, so days blacklisted too eagerly get retried.
+const forgot = [...holidays].filter((d) => !settled(d));
+if (forgot.length) {
+  for (const d of forgot) holidays.delete(d);
+  console.log(`[px] retrying ${forgot.length} recently-skipped session(s): ${forgot.join(", ")}`);
+}
 
 const all = sessions(from, to);
 const todo = all.filter((d) => {
@@ -125,7 +143,7 @@ const todo = all.filter((d) => {
 
 console.log(`[px] ${iso(from)} → ${iso(to)} · ${all.length} weekday sessions · ${all.length - todo.length} already cached · fetching ${todo.length}`);
 
-let ok = 0, holiday = 0;
+let ok = 0, holiday = 0, notYet = 0;
 const newHolidays = [];
 await pool(todo, CONCURRENCY, async (d) => {
   const day = iso(d);
@@ -137,15 +155,17 @@ await pool(todo, CONCURRENCY, async (d) => {
   }
   // 404 (null) or an HTML error page means the exchange was shut that day
   if (!text || text.length < 5000 || !/SYMBOL/i.test(text.slice(0, 200))) {
-    newHolidays.push(day); holiday++; return null;
+    if (settled(day)) newHolidays.push(day);      // genuinely a non-trading day
+    else notYet++;                                 // just not published yet
+    holiday++; return null;
   }
   const parsed = parseBhav(text);
-  if (!parsed) { newHolidays.push(day); holiday++; return null; }
+  if (!parsed) { if (settled(day)) newHolidays.push(day); else notYet++; holiday++; return null; }
   fs.writeFileSync(path.join(BHAV, `${day}.json`), JSON.stringify(parsed));
   ok++;
   return true;
 }, (done, total) => {
-  process.stdout.write(`\r[px] ${bar(done, total)} · sessions ${ok} · non-trading ${holiday}   `);
+  process.stdout.write(`\r[px] ${bar(done, total)} · sessions ${ok} · non-trading ${holiday - notYet}${notYet ? ` · awaiting publication ${notYet}` : ""}   `);
 });
 if (todo.length) process.stdout.write("\n");
 
@@ -153,7 +173,7 @@ for (const h of newHolidays) holidays.add(h);
 fs.writeFileSync(MISS, JSON.stringify([...holidays].sort()));
 
 const cached = fs.readdirSync(BHAV).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f));
-console.log(`[px] done in ${fmtDuration(Date.now() - t0)} · ${cached.length} trading sessions cached · ${holidays.size} non-trading days recorded`);
+console.log(`[px] done in ${fmtDuration(Date.now() - t0)} · ${cached.length} trading sessions cached · ${holidays.size} non-trading days recorded${notYet ? ` · ${notYet} session(s) not yet published, will retry` : ""}`);
 if (cached.length) {
   const sorted = cached.map((f) => f.replace(".json", "")).sort();
   console.log(`[px] coverage ${sorted[0]} → ${sorted[sorted.length - 1]}`);

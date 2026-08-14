@@ -9,10 +9,12 @@
 #   AMFI NAVAll       every mutual fund scheme + today's NAV
 #   mfapi.in          each scheme's full NAV history
 #
-# Company fundamentals (P/E, ROE, market cap…) are NOT fetched here: the free
-# endpoint rate-limits shared CI addresses hard. They are refreshed locally with
-# `npm run data:fundamentals` and committed as data/fundamentals_wide.json,
-# which this build reads. That keeps the nightly build unattended and reliable.
+# Company fundamentals come from a committed snapshot plus a rotating top-up,
+# because the free endpoint rate-limits shared CI addresses hard. That is fine
+# for the SLOW-moving parts (earnings per share, book value, share count, which
+# only move on results days) — and the price ratios built on them, P/E, P/B,
+# market cap and EV/EBITDA, are recomputed against today's close on every build,
+# so nothing on the page is quoted at a price that is no longer current.
 # ---------------------------------------------------------------------------
 name: Daily rebuild (GitHub Pages)
 
@@ -92,9 +94,11 @@ jobs:
       # (newly listed companies, symbols Yahoo was down for) instead of
       # re-walking 2,000 names that Yahoo would throttle it out of anyway.
       # Anything it does fetch lands in var/yfin, which the cache carries into
-      # the next run, so coverage accumulates across days.
+      # the next run, so coverage accumulates across days. --refresh-oldest also
+      # rotates ~150 of the stalest records through each run, so the whole
+      # universe refreshes about every two weeks instead of freezing forever.
       - name: Fundamentals — close any gaps (best effort)
-        run: python3 scripts/fetch_yfinance.py --only-missing --liquid-first --workers 4
+        run: python3 scripts/fetch_yfinance.py --only-missing --refresh-oldest 150 --liquid-first --workers 4
         continue-on-error: true
         timeout-minutes: 6
 
