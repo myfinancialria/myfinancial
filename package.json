@@ -1,7 +1,7 @@
 {
   "name": "myfinancial",
   "version": "1.0.0",
-  "description": "myfinancial — enterprise-grade financial planning, direct mutual funds, equity analytics, quantitative screeners, advisory signals and estate planning platform for Resident Indians & NRIs.",
+  "description": "myfinancial \u2014 enterprise-grade financial planning, direct mutual funds, equity analytics, quantitative screeners, advisory signals and estate planning platform for Resident Indians & NRIs.",
   "type": "module",
   "main": "server/index.js",
   "scripts": {
@@ -16,15 +16,17 @@
     "data:funds": "node scripts/fetch_funds.mjs",
     "data:fundamentals": "python3 scripts/fetch_yfinance.py --liquid-first",
     "data:upstox": "node scripts/fetch_upstox_fundamentals.mjs",
-    "data": "npm run data:universe && npm run data:prices && npm run data:indices && npm run data:funds",
+    "data": "npm run data:universe && npm run data:prices && npm run data:indices && npm run data:funds && npm run data:holdings",
     "build:screener": "node scripts/build_screener.mjs",
     "build:app": "node scripts/build_app.mjs",
-    "build": "npm run build:screener && npm run build:app && node scripts/build_pages.mjs && npm run build:web",
+    "build": "npm run build:screener && npm run build:holdings && npm run build:app && node scripts/build_pages.mjs && npm run build:web",
     "verify": "node scripts/verify_build.mjs",
     "serve": "cd dist && python3 -m http.server 8080",
     "data:all": "npm run data && npm run data:fundamentals",
     "build:web": "npm --prefix web ci --silent && npm --prefix web run build",
-    "dev:web": "npm --prefix web run dev"
+    "dev:web": "npm --prefix web run dev",
+    "data:holdings": "node scripts/fetch_holdings.mjs",
+    "build:holdings": "node scripts/build_holdings.mjs"
   },
   "dependencies": {
     "express": "^4.19.2",

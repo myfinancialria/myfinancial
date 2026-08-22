@@ -169,6 +169,63 @@ export const loadFund = (code: string) =>
 
 export const loadSectors = () => get<Sectors>("sectors.json", (r) => r as Sectors);
 
+/* -------------------------------------------------------------------------
+   Scheme holdings.
+
+   Sourced from each AMC's SEBI-mandated portfolio disclosure. This is NOT
+   live data and cannot be: portfolios are disclosed monthly (within 10 days
+   of month end) and fortnightly for debt, so the freshest holdings that exist
+   anywhere are days old. `asOn` is the date the portfolio was held, not the
+   date it was published.
+------------------------------------------------------------------------- */
+
+export interface Holding {
+  isin: string; name: string; industry: string | null;
+  pct: number | null; valueLakh: number | null;
+  section: "EQUITY" | "DEBT" | "MONEY_MARKET" | "CASH" | "DERIVATIVE" | "FUND_UNITS" | "FOREIGN" | "OTHER";
+  /** NSE symbol when the holding is a listed Indian company, else null. */
+  symbol: string | null;
+  sector: string | null;
+}
+
+export interface NearbyScheme { code: string; name: string; amc: string; pct: number }
+
+export interface SchemeHoldings {
+  code: string; name: string; amc: string; category: string; categoryGroup: string;
+  asOn: string; kind: "MONTHLY" | "FORTNIGHTLY" | "QUARTERLY" | "HALF_YEARLY";
+  matchScore: number; disclosedAs: string;
+  holdings: Holding[];
+  counts: { total: number; equity: number; mapped: number };
+  equityPct: number | null;
+  investedPct: number | null;
+  nearest: NearbyScheme[];
+}
+
+export interface HoldingsIndex {
+  generated: string;
+  asOn: string | null;
+  count: number;
+  amcs: { amc: string; kind: string; asOn: string }[];
+  schemes: {
+    code: string; name: string; amc: string; asOn: string; kind: string;
+    holdings: number; equity: number; equityPct: number | null;
+    top: { n: string; p: number | null; s: string | null }[];
+  }[];
+}
+
+export const loadHoldingsIndex = () => get<HoldingsIndex>("holdings.json", (r) => r as HoldingsIndex);
+
+/** Resolves to null (not a throw) when a scheme has no published disclosure. */
+export const loadHoldings = (code: string): Promise<SchemeHoldings | null> => {
+  const file = `holdings/${encodeURIComponent(code)}.json`;
+  if (!cache.has(file)) {
+    cache.set(file, fetch(DATA_BASE + file)
+      .then((r) => (r.status === 404 ? null : r.ok ? r.json() : Promise.reject(new Error(`${file}: HTTP ${r.status}`))))
+      .catch((e) => { cache.delete(file); throw e; }));
+  }
+  return cache.get(file)!;
+};
+
 /** The pre-rendered page for a company, still the canonical deep link. */
 export const staticStockUrl = (symbol: string) =>
   import.meta.env.BASE_URL.replace(/app\/?$/, "") + "stock/" + encodeURIComponent(symbol) + ".html";

@@ -74,6 +74,18 @@ const parseAmfiDate = (s) => {
  * The AMC and the SEBI scheme-type still arrive as bare heading lines above the
  * rows they apply to, so parsing has to carry that context downward.
  */
+/**
+ * Strip AMFI's regulatory footnote from a scheme name. "(Existing Number of
+ * Segregated Portfolios - 2)" is a disclosure about the scheme, not part of
+ * what it is called, and leaving it in stops the name matching anything.
+ */
+function cleanSchemeName(name) {
+  return String(name)
+    .replace(/\s*\([^)]*segregated[^)]*\)\s*/gi, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function parseNavAll(text) {
   const lines = text.split("\n");
   const header = lines.find((l) => /scheme\s*code/i.test(l) && l.includes(";")) || "";
@@ -120,14 +132,27 @@ function parseNavAll(text) {
       && name.toLowerCase().includes("direct") && name.toLowerCase().includes("growth");
     if (!fromCols && !fromName) continue;
     // IDCW is a different option on the same portfolio, never a growth plan.
-    if (/idcw|dividend|bonus|segregated/i.test(`${name} ${option}`)) continue;
+    if (/idcw|dividend|bonus/i.test(`${name} ${option}`)) continue;
+
+    // Side-pockets vs their parent scheme. AMFI writes BOTH into the name and
+    // they look alike, so the old blanket /segregated/ test threw away nine
+    // live Direct-Growth schemes — Nippon's Aggressive Hybrid and Equity
+    // Savings, Franklin's Credit Risk among them.
+    //
+    //   parent      "... Fund (Existing Number of Segregated Portfolios - 2)"
+    //   side-pocket "UTI - Credit Risk Fund (Segregated - 06032020)"
+    //
+    // The parent states a COUNT; the side-pocket carries the DATE it was
+    // carved out on. Only the latter is a separate instrument.
+    if (/segregated\s*[-–—]?\s*\d{6,8}\b/i.test(name)) continue;
 
     const navf = parseFloat(parts[iNav]);
     if (!Number.isFinite(navf) || navf <= 0) continue;
 
     const isin = iIsin >= 0 ? parts[iIsin] : null;
     rows.push({
-      code: parts[iCode], name, isin: isin && isin !== "-" ? isin : null,
+      code: parts[iCode], name: cleanSchemeName(name), rawName: name,
+      isin: isin && isin !== "-" ? isin : null,
       amc: curAmc.replace(/ Mutual Fund$/i, "").trim(),
       amfiType: curType, plan, option,
       nav: navf, navDate: parts[iDate], navDateMs: parseAmfiDate(parts[iDate]),

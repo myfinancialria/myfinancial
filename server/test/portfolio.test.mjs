@@ -27,6 +27,7 @@ test("the % column is read as a fraction, not a percentage", () => {
     [null, null, "Grand Total", null, null, null, 1, null],
   ]));
   // 0.0822 in the file means 8.22% of net assets.
+  assert.equal(p.scale, 100, "Grand Total of 1 means the column is fractions");
   assert.equal(Math.round(p.holdings[0].pct * 100) / 100, 8.22);
 });
 
@@ -70,15 +71,31 @@ test("a fund over 100% invested against a negative payable is accepted", () => {
   assert.ok(validate(p).ok, validate(p).problems.join("; "));
 });
 
-test("a file quoting percents instead of fractions is refused, not silently scaled", () => {
+test("a file quoting percentages is read as percentages, not rescaled", () => {
+  // Shriram files Grand Total 100 with HDFC Bank at 7.14; Groww and Nippon
+  // file Grand Total 1 with the same idea expressed as 0.0714. Both are valid
+  // readings of "% to Net Assets" and only the Grand Total says which is meant,
+  // so the convention is detected rather than assumed in either direction.
   const p = parseSheet(sheet([
     [null, null, "EQUITY & EQUITY RELATED", null, null, null, null, null],
-    hold("INE040A01034", "HDFC Bank Limited", "Banks", 100),
+    hold("INE040A01034", "HDFC Bank Ltd.", "Banks", 7.14),
     [null, null, "Grand Total", null, null, null, 100, null],
   ]));
+  assert.equal(p.scale, 1, "already percentages");
+  assert.equal(p.holdings[0].pct, 7.14);
+  assert.ok(validate(p).ok);
+});
+
+test("a Grand Total that is neither 1 nor 100 is refused, not guessed at", () => {
+  const p = parseSheet(sheet([
+    [null, null, "EQUITY & EQUITY RELATED", null, null, null, null, null],
+    hold("INE040A01034", "HDFC Bank Limited", "Banks", 5),
+    [null, null, "Grand Total", null, null, null, 7.5, null],
+  ]));
+  assert.equal(p.scale, null);
   const v = validate(p);
   assert.equal(v.ok, false);
-  assert.match(v.problems.join(" "), /percents, not fractions/);
+  assert.match(v.problems.join(" "), /weight convention is unknown/);
 });
 
 test("nothing below the Grand Total is read as a holding", () => {

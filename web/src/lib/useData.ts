@@ -22,7 +22,8 @@ export const usePatterns = () => useAsync<Patterns>(loadPatterns);
 
 /* Per-item loaders. Keyed on the identifier so switching company or scheme
    re-runs the fetch, and the module-level cache makes a revisit instant. */
-import { loadStock, loadFund, loadSectors, type StockDetail, type FundDetail, type Sectors } from "./data";
+import { loadStock, loadFund, loadSectors, loadHoldings,
+  type StockDetail, type FundDetail, type Sectors, type SchemeHoldings } from "./data";
 import { useCallback } from "react";
 
 export function useStock(symbol: string) {
@@ -32,3 +33,7 @@ export function useFund(code: string) {
   return useAsync<FundDetail>(useCallback(() => loadFund(code), [code]));
 }
 export const useSectors = () => useAsync<Sectors>(loadSectors);
+
+export function useHoldings(code: string) {
+  return useAsync<SchemeHoldings | null>(useCallback(() => loadHoldings(code), [code]));
+}

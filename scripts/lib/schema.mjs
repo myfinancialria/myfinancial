@@ -23,6 +23,7 @@ export const STOCK_FIELDS = [
   // filterable field but not a default column — it would just repeat itself.
   { key: "name", label: "Company", group: "Company", type: "text", col: true },
   { key: "symbol", label: "Symbol", group: "Company", type: "text" },
+  { key: "isin", label: "ISIN", group: "Company", type: "text", help: "ISO 6166 identifier. This is what mutual fund portfolio disclosures are keyed on, so it is the join between a scheme's holdings and this company." },
   { key: "sector", label: "Sector", group: "Company", type: "cat", col: true },
   { key: "sectorGroup", label: "Sector group", group: "Company", type: "cat", help: "One of 18 canonical sectors. The raw feeds carry 58 different sector strings with duplicates like Textile/Textiles and Metal/Metals & Mining; this collapses them so a sector filter actually selects a sector." },
   { key: "industry", label: "Sub-sector", group: "Company", type: "cat", col: true, help: "The narrow industry a company competes in — e.g. Energy → Oil & Gas Refining & Marketing. Peer comparisons are built on this, not on the broad sector." },

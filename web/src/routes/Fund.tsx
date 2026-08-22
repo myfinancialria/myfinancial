@@ -1,9 +1,10 @@
 import { useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
-import { useFund, useFunds } from "../lib/useData";
+import { useFund, useFunds, useHoldings } from "../lib/useData";
 import { Card, CardHead, Chip, Label, ErrorNote, Skeleton } from "../components/ui";
 import { Reveal, Stagger, StaggerItem } from "../components/motion";
 import LineChart from "../components/LineChart";
+import Holdings from "../components/Holdings";
 import { byUnit, inr, nf, plainPct, tone } from "../lib/format";
 import { staticFundUrl, type RollingBucket } from "../lib/data";
 
@@ -71,6 +72,7 @@ export default function Fund() {
   const { code = "" } = useParams();
   const index = useFunds();
   const detail = useFund(code);
+  const holdings = useHoldings(code);
 
   const row = useMemo(
     () => index.data?.rows.find((r) => String(r.code) === String(code)) ?? null,
@@ -156,6 +158,8 @@ export default function Fund() {
           </div>
         </Card>
       </Reveal>
+
+      {holdings.data && <Holdings h={holdings.data} />}
 
       {(d?.rolling3y || d?.rolling5y) && (
         <div className="mt-6 grid gap-6 lg:grid-cols-2">

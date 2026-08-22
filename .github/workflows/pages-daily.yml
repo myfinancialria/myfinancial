@@ -102,8 +102,26 @@ jobs:
         continue-on-error: true
         timeout-minutes: 6
 
+      # Portfolio disclosures. NOT live data: SEBI requires monthly disclosure
+      # within 10 days of month end (fortnightly for debt), so this polls daily
+      # and picks each filing up within hours of it appearing. A published
+      # filing never changes, so anything already cached is never refetched —
+      # on a normal day this is a few listing-page requests and no downloads.
+      #
+      # Best-effort: an AMC redesigning its download page must not take the
+      # whole site down for it.
+      - name: Holdings — AMC portfolio disclosures (best effort)
+        run: node scripts/fetch_holdings.mjs
+        continue-on-error: true
+        timeout-minutes: 8
+
       - name: Compute every screener metric
         run: node scripts/build_screener.mjs
+
+      # Reads whatever disclosures are cached; a no-op when there are none.
+      - name: Scheme holdings and fund overlap
+        run: node scripts/build_holdings.mjs
+        continue-on-error: true
 
       - name: Render the site
         run: node scripts/build_app.mjs

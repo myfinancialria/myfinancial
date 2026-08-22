@@ -362,6 +362,42 @@ else bad("screener.html looks incomplete");
   }
 }
 
+// ------------------------------ scheme holdings ------------------------------
+// Holdings cover only the AMCs whose disclosures can be fetched without a
+// browser, so partial coverage is expected and is NOT a failure. What would be
+// a failure is publishing weights that do not add up, or an index pointing at
+// scheme files that are not there.
+{
+  const idx = readJson(path.join(DIST, "data", "holdings.json"));
+  if (!idx) {
+    warn("no scheme holdings published — fund pages will show no portfolio");
+  } else {
+    const n = idx.schemes?.length ?? 0;
+    ok(`${n} schemes with published holdings, freshest as at ${idx.asOn}`);
+
+    // A disclosure more than ~70 days old means the poller has stopped finding
+    // new filings: monthly plus a 10-day filing window is ~40 days at worst.
+    const age = idx.asOn ? Math.round((Date.now() - Date.parse(`${idx.asOn}T12:00:00Z`)) / 86400000) : 999;
+    if (age > 70) bad(`freshest holdings are ${age} days old — the disclosure poller has stopped working`);
+    else ok(`holdings are ${age} days old (monthly disclosure plus filing window)`);
+
+    let missing = 0, badSum = 0, unmapped = 0, checked = 0;
+    for (const s of (idx.schemes ?? []).filter((_, i) => i % Math.max(1, Math.ceil(n / 30)) === 0)) {
+      const f = readJson(path.join(DIST, "data", "holdings", `${s.code}.json`));
+      if (!f) { missing++; continue; }
+      checked++;
+      const sum = (f.holdings ?? []).reduce((a, h) => a + (h.pct ?? 0), 0);
+      if (sum < 1 || sum > 110) badSum++;
+      if (f.counts?.equity > 4 && f.counts.mapped / f.counts.equity < 0.5) unmapped++;
+    }
+    if (missing) bad(`${missing} schemes are in holdings.json but have no holdings file`);
+    else ok(`sampled ${checked} scheme files — all present`);
+    if (badSum) bad(`${badSum} sampled schemes have weights that do not sum to a portfolio`);
+    else if (checked) ok("sampled scheme weights all sum to a plausible portfolio");
+    if (unmapped) warn(`${unmapped} sampled schemes matched under half their stocks to an NSE company`);
+  }
+}
+
 // -------------------------------- daily brief --------------------------------
 // The brief is a bonus page and never blocks a deploy, but it has silently
 // emptied itself once already, so its state is at least reported.

@@ -100,10 +100,25 @@ export function parseSheet(rows, { sheetName = "" } = {}) {
   const asOn = parseAsOn(asOnCell);
   const schemeName = pickSchemeName(above, sheetName);
 
+  // ---- pass 1: find the Grand Total, which declares the convention --------
+  // Groww and Nippon file fractions (Grand Total 1); Shriram files percentages
+  // (Grand Total 100). Both are valid readings of "% to Net Assets" and the
+  // file itself is the only thing that says which. Deciding from the Grand
+  // Total rather than guessing is what stops HDFC Bank being published at 714%.
+  let grandTotal = null;
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!Array.isArray(r)) continue;
+    if (/^grand\s*total$/i.test(String(r[iName] ?? "").trim())) { grandTotal = num(r[iPct]); break; }
+  }
+  const scale = grandTotal !== null && Math.abs(grandTotal - 1) < 0.02 ? 100
+    : grandTotal !== null && Math.abs(grandTotal - 100) < 2 ? 1
+      : null;                                   // unrecognised — validate() rejects
+
+  // ---- pass 2: read the holdings ------------------------------------------
   const holdings = [];
   const sectionTotals = {};
   let section = "OTHER", heading = "";
-  let grandTotal = null;
 
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const r = rows[i];
@@ -111,7 +126,7 @@ export function parseSheet(rows, { sheetName = "" } = {}) {
     const label = String(r[iName] ?? "").trim();
     const pct = num(r[iPct]);
 
-    if (/^grand\s*total$/i.test(label)) { grandTotal = pct; break; }   // nothing below matters
+    if (/^grand\s*total$/i.test(label)) break;                        // nothing below matters
 
     if (TOTAL_RE.test(label)) {
       if (pct !== null) sectionTotals[section] = (sectionTotals[section] ?? 0) + pct;
@@ -132,12 +147,12 @@ export function parseSheet(rows, { sheetName = "" } = {}) {
       industry: iInd >= 0 ? (String(r[iInd] ?? "").trim() || null) : null,
       quantity: iQty >= 0 ? num(r[iQty]) : null,
       marketValueLakh: iMv >= 0 ? num(r[iMv]) : null,
-      pct: pct === null ? null : pct * 100,      // fraction -> percent
+      pct: pct === null || scale === null ? null : pct * scale,
       section,
     });
   }
 
-  return { sheetName, schemeName, asOn, holdings, sectionTotals, grandTotal, heading };
+  return { sheetName, schemeName, asOn, holdings, sectionTotals, grandTotal, scale, heading };
 }
 
 /**
@@ -150,16 +165,25 @@ export function parseSheet(rows, { sheetName = "" } = {}) {
  * the cell that actually names a fund, then strip the code and the blurb.
  */
 export function pickSchemeName(cells, fallback = "") {
+  const clean = (c) => String(c ?? "")
+    .replace(/\s+/g, " ").trim()
+    .replace(/^[A-Z]{2,6}\s*\d{0,4}\s*-\s*/, "")            // "IB03-", "RLMF001-"
+    .replace(/\s*\((?:an?|the)?\s*open[- ]ended[^)]*\)\s*/i, " ")  // the SEBI blurb
+    .replace(/\s*\([^)]{40,}\)\s*/g, " ")                    // any long parenthetical
+    .replace(/\s+/g, " ").trim();
+
+  // Disclosure sheets are padded with riskometer copy and suitability notes.
+  const prose = /investors?\s|suitable|seeking|risk-?o-?meter|principal will be|consult their|^\W/i;
+
   const cands = (cells || [])
-    .map((c) => String(c ?? "").replace(/\s+/g, " ").trim())
-    .filter((c) => c.length > 6 && !/portfolio\s*(statement\s*)?as on/i.test(c));
-  const named = cands.filter((c) => /\b(fund|scheme|plan|etf)\b/i.test(c));
-  const best = (named.length ? named : cands).sort((a, b) => b.length - a.length)[0] || fallback;
-  return String(best)
-    .replace(/^[A-Z]{2,6}\s*\d{0,4}\s*-\s*/, "")   // "IB03-" / "RLMF001-"
-    .replace(/\s*\([^)]*open[- ]ended[^)]*\)\s*$/i, "")  // the SEBI blurb
-    .replace(/\s*\((?:[^()]*(?:\([^()]*\))?)*\)\s*$/, (m) => (m.length > 40 ? "" : m))
-    .trim();
+    .map(clean)
+    .filter((c) => c.length > 5 && c.length < 110 && !prose.test(c)
+      && !/portfolio\s*(statement\s*)?as on/i.test(c));
+
+  const named = cands.filter((c) => /\b(fund|scheme|etf|plan)\b/i.test(c));
+  // Real names are short; anything long that survived is still descriptive.
+  const best = (named.length ? named : cands).sort((a, b) => a.length - b.length)[0];
+  return best || clean(fallback) || String(fallback || "").trim();
 }
 
 /** "Portfolio as on 31-JUL-2026" and "as on July 31,2026" -> "2026-07-31" */
@@ -190,11 +214,7 @@ export function validate(parsed) {
 
   // The Grand Total is the file's OWN arithmetic, so it is the honest check.
   if (parsed.grandTotal === null) problems.push("no Grand Total row");
-  else if (Math.abs(parsed.grandTotal - 1) > 0.02) {
-    problems.push(Math.abs(parsed.grandTotal - 100) < 2
-      ? "Grand Total is 100 — this file uses percents, not fractions"
-      : `Grand Total is ${parsed.grandTotal}, expected 1`);
-  }
+  else if (parsed.scale === null) problems.push(`Grand Total is ${parsed.grandTotal} — neither 1 nor 100, so the weight convention is unknown`);
 
   // Holdings deliberately do NOT have to sum to 100. Cash, TREPS and net
   // receivables carry no ISIN, so they are not holdings — and a fund can be
