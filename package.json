@@ -1,7 +1,7 @@
 {
   "name": "myfinancial",
   "version": "1.0.0",
-  "description": "myfinancial \u2014 enterprise-grade financial planning, direct mutual funds, equity analytics, quantitative screeners, advisory signals and estate planning platform for Resident Indians & NRIs.",
+  "description": "myfinancial — enterprise-grade financial planning, direct mutual funds, equity analytics, quantitative screeners, advisory signals and estate planning platform for Resident Indians & NRIs.",
   "type": "module",
   "main": "server/index.js",
   "scripts": {
@@ -29,7 +29,8 @@
   "dependencies": {
     "express": "^4.19.2",
     "lightweight-charts": "^4.2.3",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "xlsx": "^0.18.5"
   },
   "engines": {
     "node": ">=22"
