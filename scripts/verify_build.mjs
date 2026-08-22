@@ -273,6 +273,105 @@ else bad("screener.html looks incomplete");
   else ok(`${blocks.length} inline script blocks parse cleanly`);
 }
 
+// ============================ the React app =================================
+// The app is a second front end over the same published data. It renders
+// nothing itself — every surface is a fetch — so an empty data directory
+// produces a page that loads, paints its chrome, and silently shows nothing.
+// These checks are the reason that cannot ship.
+
+{
+  const shell = (() => { try { return fs.readFileSync(path.join(DIST, "app", "index.html"), "utf8"); } catch { return ""; } })();
+  if (!shell) bad("app/index.html is missing — the React app did not build");
+  else {
+    // Every hashed asset the shell references must actually exist. A stale
+    // index.html pointing at a bundle from a previous build is a white screen.
+    const refs = [...shell.matchAll(/(?:src|href)="([^"]*\/assets\/[^"]+)"/g)].map((m) => m[1]);
+    const missing = refs.filter((r) => !exists(r.replace(/^\/myfinancial\//, "")));
+    if (!refs.length) bad("app/index.html references no bundles at all");
+    else if (missing.length) bad(`app shell references ${missing.length} missing bundle(s): ${missing.join(", ")}`);
+    else ok(`app shell references ${refs.length} bundles, all present`);
+  }
+
+  // The 404 shim is what makes a deep link like /app/company/RELIANCE work on a
+  // host with no rewrite rules. Without it every shared link 404s.
+  const notFound = (() => { try { return fs.readFileSync(path.join(DIST, "404.html"), "utf8"); } catch { return ""; } })();
+  if (/spa:redirect/.test(notFound) && /\/app\//.test(notFound)) ok("404 shim will route deep app links back to the shell");
+  else bad("404.html no longer parks deep app paths — every shared app link would 404");
+}
+
+// --------------------- per-company detail the app fetches --------------------
+{
+  const dir = path.join(DIST, "data", "stock");
+  const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith(".json")) : [];
+  const expected = stocks?.rows?.length ?? 0;
+  if (files.length < expected * 0.95) {
+    bad(`only ${files.length} per-company detail files for ${expected} companies — the app's company pages would 404`);
+  } else {
+    ok(`${files.length} per-company detail files published`);
+    // Sample the contents rather than trusting the count: a directory full of
+    // {} would pass a file count and fail every page.
+    const sample = files.filter((_, i) => i % Math.ceil(files.length / 40) === 0).slice(0, 40);
+    let noCandles = 0, noDeep = 0, noPeers = 0, noSector = 0;
+    for (const f of sample) {
+      const d = readJson(path.join(dir, f));
+      if (!d?.daily?.length || !d.weekly?.length) noCandles++;
+      if (!d?.deep?.statements?.pnl?.length) noDeep++;
+      if (!d?.peerGroup?.rows?.length) noPeers++;
+      if (!d?.sectorKey) noSector++;
+    }
+    if (noCandles) bad(`${noCandles}/${sample.length} sampled companies ship no candles`);
+    else ok(`sampled ${sample.length} companies — all carry daily and weekly candles`);
+    if (noSector) bad(`${noSector}/${sample.length} sampled companies have no sector key — industry and policy would not render`);
+    else ok("every sampled company resolves to a canonical sector");
+    // Filed statements and peer groups are genuinely absent for some names, so
+    // these are warnings about coverage, not failures.
+    if (noDeep > sample.length * 0.25) warn(`${noDeep}/${sample.length} sampled companies have no filed statements`);
+    if (noPeers > sample.length * 0.25) warn(`${noPeers}/${sample.length} sampled companies have no peer group`);
+  }
+}
+
+// ---------------------- per-scheme detail the app fetches --------------------
+{
+  const dir = path.join(DIST, "data", "fund");
+  const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith(".json")) : [];
+  const expected = funds?.rows?.length ?? 0;
+  if (files.length < expected * 0.95) {
+    bad(`only ${files.length} per-scheme detail files for ${expected} schemes — the app's fund pages would 404`);
+  } else {
+    ok(`${files.length} per-scheme detail files published`);
+    const sample = files.filter((_, i) => i % Math.ceil(files.length / 25) === 0).slice(0, 25);
+    const noSeries = sample.filter((f) => !(readJson(path.join(dir, f))?.navSeries?.length > 1)).length;
+    if (noSeries) bad(`${noSeries}/${sample.length} sampled schemes ship no NAV series — the fund chart would be blank`);
+    else ok(`sampled ${sample.length} schemes — all carry a NAV series`);
+  }
+}
+
+// ----------------------------- sector research ------------------------------
+{
+  const sec = readJson(path.join(DIST, "data", "sectors.json"));
+  if (!sec?.names) bad("data/sectors.json missing — industry pulse and policy would not render in the app");
+  else {
+    const keys = Object.keys(sec.names);
+    const noPulse = keys.filter((k) => !sec.pulse?.[k]?.outlook);
+    const noPolicy = keys.filter((k) => !sec.policy?.[k]?.schemes?.length);
+    if (noPulse.length) bad(`${noPulse.length} sectors have no industry pulse: ${noPulse.join(", ")}`);
+    else ok(`industry pulse written for all ${keys.length} canonical sectors`);
+    if (noPolicy.length) bad(`${noPolicy.length} sectors have no policy section: ${noPolicy.join(", ")}`);
+    else ok(`government support written for all ${keys.length} sectors`);
+    if (!sec.caveat) warn("sectors.json carries no caveat line");
+  }
+}
+
+// -------------------------------- daily brief --------------------------------
+// The brief is a bonus page and never blocks a deploy, but it has silently
+// emptied itself once already, so its state is at least reported.
+{
+  const kb = sizeOf("brief.html") / 1024;
+  if (!exists("brief.html")) warn("brief.html missing — the daily brief did not render");
+  else if (kb < 40) warn(`brief.html is only ${kb.toFixed(0)} KB — the fund universe behind it is probably empty`);
+  else ok(`daily brief rendered (${kb.toFixed(0)} KB)`);
+}
+
 console.log("────────────────────────────────────────────────────────────");
 if (failures) {
   console.log(`✗ ${failures} check${failures === 1 ? "" : "s"} failed${warnings ? `, ${warnings} warning${warnings === 1 ? "" : "s"}` : ""} — NOT publishing.`);

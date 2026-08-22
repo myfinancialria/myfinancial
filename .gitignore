@@ -16,3 +16,4 @@ dist/
 
 # the app's dependencies (package-lock is committed; node_modules is not)
 web/node_modules/
+web/tsconfig.tsbuildinfo

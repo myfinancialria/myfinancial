@@ -88,6 +88,95 @@ export interface Patterns {
 
 export const loadPatterns = () => get<Patterns>("patterns.json", (r) => r as Patterns);
 
+/* -------------------------------------------------------------------------
+   Per-item detail. The index rows carry every screenable measure; these carry
+   what does not fit in a row — price history, filed statements, shareholding,
+   the peer table, the NAV series. One file per item, fetched on demand.
+------------------------------------------------------------------------- */
+
+export interface StatementRow { fy: string; period?: string; [k: string]: any }
+
+export interface Spec { k: string; label: string; strong?: boolean }
+
+export interface Statements {
+  real: boolean; bankFormat: boolean; source: string; units: string; type: string;
+  note?: string;
+  pnl: StatementRow[]; balanceSheet: StatementRow[]; cashFlow: StatementRow[];
+  specs: { pnl: Spec[]; bs: Spec[]; cf: Spec[] };
+}
+
+export interface Holdings {
+  periods: string[];
+  rows: { key: string; label: string; values: (number | null)[] }[];
+  latest?: Record<string, number | null>;
+  prev?: Record<string, number | null>;
+}
+
+export interface Deep {
+  statements?: Statements | null;
+  holdings?: Holdings | null;
+  competitors?: string[] | null;
+  sectorBenchmarks?: { key: string; name: string; company: number | null; sector: number | null; unit: string }[];
+  corporateActions?: { type: string; date: string; detail: string; announced?: string }[];
+  asOf?: string;
+}
+
+export interface PeerGroup {
+  name: string; count: number;
+  medians: Row;
+  rows: (Row & { self?: boolean })[];
+}
+
+export interface StockDetail {
+  symbol: string; name: string; sector: string; industry: string; sectorKey: string;
+  description?: string; website?: string; isin?: string; listed?: string;
+  daily: [string, number, number, number, number, number][];
+  dailySma50: (number | null)[]; dailySma200: (number | null)[];
+  weekly: [string, number, number, number, number, number][];
+  weeklySma50: (number | null)[]; weeklySma200: (number | null)[];
+  deep?: Deep | null;
+  peerGroup?: PeerGroup | null;
+  /** Hand-researched, where it exists: [name, market position, what it is]. */
+  products?: [string, string, string][] | null;
+}
+
+export interface FundDetail extends Row {
+  code: string; name: string; amc: string; category: string;
+  nav: number; navDate: string;
+  navSeries: [string, number][];
+  rolling3y?: RollingBucket; rolling5y?: RollingBucket;
+}
+
+export interface RollingBucket {
+  windows: number; avg: number; min: number; max: number; median: number;
+  pctPositive: number; pctAbove8: number; pctAbove12: number;
+}
+
+export interface SectorPulse { outlook: string; drivers: string[]; risks: string[] }
+export interface SectorPolicy { schemes: string[]; budget: string[] }
+export interface Sectors {
+  names: Record<string, string>;
+  pulse: Record<string, SectorPulse>;
+  policy: Record<string, SectorPolicy>;
+  caveat: string;
+}
+
+export const loadStock = (symbol: string) =>
+  get<StockDetail>(`stock/${encodeURIComponent(symbol)}.json`, (r) => r as StockDetail);
+
+export const loadFund = (code: string) =>
+  get<FundDetail>(`fund/${encodeURIComponent(code)}.json`, (r) => r as FundDetail);
+
+export const loadSectors = () => get<Sectors>("sectors.json", (r) => r as Sectors);
+
 /** The pre-rendered page for a company, still the canonical deep link. */
 export const staticStockUrl = (symbol: string) =>
   import.meta.env.BASE_URL.replace(/app\/?$/, "") + "stock/" + encodeURIComponent(symbol) + ".html";
+
+/** The pre-rendered page for a scheme. */
+export const staticFundUrl = (code: string) =>
+  import.meta.env.BASE_URL.replace(/app\/?$/, "") + "fund/" + encodeURIComponent(code) + ".html";
+
+/** A page outside the app but inside the site (the daily brief, for instance). */
+export const siteUrl = (page: string) =>
+  import.meta.env.BASE_URL.replace(/app\/?$/, "") + page;

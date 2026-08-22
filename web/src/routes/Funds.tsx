@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import { useFunds } from "../lib/useData";
 import { Card, CardHead, Label, Chip, Button, ErrorNote, Skeleton } from "../components/ui";
@@ -118,8 +119,10 @@ export default function Funds() {
                         if (!m) return null;
                         if (ci === 0) return (
                           <td key={k} className="px-3 py-2.5">
-                            <span className="block font-semibold">{r.name}</span>
-                            <span className="block font-mono text-[10px] text-ink-faint">{r.amc}</span>
+                            <Link to={`/fund/${encodeURIComponent(String(r.code))}`} className="group block">
+                              <span className="block font-semibold group-hover:text-accent">{r.name}</span>
+                              <span className="block font-mono text-[10px] text-ink-faint">{r.amc}</span>
+                            </Link>
                           </td>
                         );
                         if (k === "stars") return (

@@ -1,12 +1,20 @@
 import { NavLink, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useState, type ReactNode } from "react";
+import { siteUrl } from "../lib/data";
 
+// Eight surfaces is more than a single row carries on a laptop, so the nav
+// wraps rather than hiding anything behind an overflow menu — every section
+// should be one click from every other one.
 const NAV = [
   { to: "/", label: "Overview", end: true },
+  { to: "/stocks", label: "Companies" },
   { to: "/screener", label: "Screener" },
   { to: "/patterns", label: "Patterns" },
   { to: "/funds", label: "Funds" },
+  { to: "/advisory", label: "Advisory" },
+  { to: "/planning", label: "Planning & Tax" },
+  { to: "/estate", label: "Will & Vault" },
 ];
 
 function ThemeToggle() {
@@ -50,12 +58,12 @@ export default function Shell({ children, asOf }: { children: ReactNode; asOf?: 
             my<b className="font-sans not-italic font-extrabold tracking-[-0.04em]">financial</b>
           </Link>
 
-          <nav className="flex items-center gap-1">
+          <nav className="flex flex-wrap items-center gap-x-0.5 gap-y-1">
             {NAV.map((n) => (
-              <NavLink key={n.to} to={n.to} end={n.end} className="relative px-2.5 py-1.5">
+              <NavLink key={n.to} to={n.to} end={n.end} className="relative px-2 py-1.5">
                 {({ isActive }) => (
                   <>
-                    <span className={`font-mono text-[10.5px] uppercase tracking-[0.14em] transition-colors
+                    <span className={`whitespace-nowrap font-mono text-[10.5px] uppercase tracking-[0.1em] transition-colors
                       ${isActive ? "text-ink" : "text-ink-faint hover:text-ink-dim"}`}>
                       {n.label}
                     </span>
@@ -64,7 +72,7 @@ export default function Shell({ children, asOf }: { children: ReactNode; asOf?: 
                       // as a single object rather than four independent ones
                       <motion.span
                         layoutId="nav-underline"
-                        className="absolute inset-x-1.5 -bottom-[13px] h-px bg-ink"
+                        className="absolute inset-x-1.5 -bottom-[5px] h-px bg-ink"
                         transition={{ type: "spring", stiffness: 420, damping: 34 }}
                       />
                     )}
@@ -93,6 +101,13 @@ export default function Shell({ children, asOf }: { children: ReactNode; asOf?: 
 
       <footer className="border-t border-line">
         <div className="mx-auto max-w-[1560px] px-5 py-7 text-[11.5px] leading-relaxed text-ink-faint sm:px-8">
+          <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1.5">
+            <a href={siteUrl("index.html")} className="underline transition-colors hover:text-ink">Site home</a>
+            <a href={siteUrl("brief.html")} className="underline transition-colors hover:text-ink">Daily brief</a>
+            <a href={siteUrl("stocks.html")} className="underline transition-colors hover:text-ink">Company reports</a>
+            <a href={siteUrl("funds.html")} className="underline transition-colors hover:text-ink">Scheme reports</a>
+            <a href="https://github.com/myfinancialria/myfinancial" rel="noopener" className="underline transition-colors hover:text-ink">Source</a>
+          </div>
           Educational research only — not investment advice under SEBI (Investment Advisers) Regulations, 2013.
           Prices, volumes and delivery percentages are official NSE bhavcopy data; mutual fund NAVs are official AMFI data.
           Every return, ratio and risk figure is computed from that published data. Past performance does not indicate future results.

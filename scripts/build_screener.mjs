@@ -9,7 +9,8 @@
 //        ↓
 //   dist/data/stocks.json      compact row per company — this is the screener
 //   dist/data/funds.json       compact row per scheme
-//   dist/data/stock/<SYM>.json price history + detail for one company page
+//   dist/data/stock/<SYM>.json price history + filed detail for one company
+//   dist/data/sectors.json     industry pulse + policy, keyed by canonical sector
 //   dist/data/fund/<CODE>.json NAV history + detail for one scheme page
 //
 // Everything the screener can filter on is computed HERE, once, at build time.
@@ -24,7 +25,8 @@ import * as ta from "./lib/ta.mjs";
 import * as fm from "./lib/fundmetrics.mjs";
 import { STOCK_FIELDS, FUND_FIELDS, clientMeta } from "./lib/schema.mjs";
 import { scanPatterns, PATTERN_LABELS, PATTERN_NOTES } from "./lib/patterns.mjs";
-import { canonicalSector, SECTOR_NAMES } from "../shared/sectors.mjs";
+import { canonicalSector, SECTOR_NAMES, INDUSTRY_PULSE, SECTOR_POLICY, POLICY_CAVEAT } from "../shared/sectors.mjs";
+import { PRODUCTS } from "../server/data/sectorIntel.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -942,19 +944,51 @@ const fundIndexSize = writeJson(path.join(OUT, "funds.json"), {
   ...fundPack,
 });
 
-// The React app fetches candles per company, so the chart slice of each detail
-// record is published as its own small file. The static pages keep inlining the
-// same numbers — they must paint without a request — so this is additive rather
-// than a move.
+// Per-item directories are rebuilt from scratch: a symbol that leaves the
+// universe (delisted, merged, renamed) must not leave a stale file behind
+// still being served as if it were current. `chart` is the name this used to
+// publish under, and is removed so old deploys do not accumulate.
+for (const dir of ["stock", "fund", "chart"]) fs.rmSync(path.join(OUT, dir), { recursive: true, force: true });
+
+// The React app is a second front end over this same data, so every surface the
+// static pages render must be reachable as JSON too — not just the candles.
+// This publishes the whole detail record per company (price history, filed
+// statements, shareholding, peer group) minus the `metrics` block, because the
+// app already holds every one of those 99 fields from stocks.json and would
+// otherwise download them twice.
+//
+// The static pages keep inlining their own copy: they must paint without a
+// request. This is additive, not a move.
 let chartBytes = 0;
 for (const [sym, d] of stocks.details) {
   if (!d.daily?.length) continue;
-  chartBytes += writeJson(path.join(OUT, "chart", `${encodeURIComponent(sym)}.json`), {
+  chartBytes += writeJson(path.join(OUT, "stock", `${encodeURIComponent(sym)}.json`), {
+    symbol: d.symbol, name: d.name, sector: d.sector, industry: d.industry,
+    sectorKey: canonicalSector(d.sector, d.industry),
+    description: d.description, website: d.website, isin: d.isin, listed: d.listed,
     daily: d.daily, dailySma50: d.dailySma50, dailySma200: d.dailySma200,
     weekly: d.weekly, weeklySma50: d.weeklySma50, weeklySma200: d.weeklySma200,
+    deep: d.deep, peerGroup: d.peerGroup,
+    products: PRODUCTS[sym] || null,
   });
 }
-console.log(`[build] charts  : ${stocks.details.size} per-company candle files · ${mb(chartBytes)}`);
+console.log(`[build] company : ${stocks.details.size} per-company detail files · ${mb(chartBytes)}`);
+
+// Scheme detail: the NAV series and the rolling-return distributions are what
+// a fund page is actually made of, and neither fits in the index row.
+let fundDetailBytes = 0;
+for (const [code, d] of funds.details) {
+  fundDetailBytes += writeJson(path.join(OUT, "fund", `${code}.json`), d);
+}
+console.log(`[build] scheme  : ${funds.details.size} per-scheme detail files · ${mb(fundDetailBytes)}`);
+
+// Sector research travels as data rather than as bundled JavaScript, so the app
+// picks up edits to shared/sectors.mjs on the next data refresh without a
+// rebuild of the front end.
+const sectorSize = writeJson(path.join(OUT, "sectors.json"), {
+  names: SECTOR_NAMES, pulse: INDUSTRY_PULSE, policy: SECTOR_POLICY, caveat: POLICY_CAVEAT,
+});
+console.log(`[build] sectors : ${Object.keys(SECTOR_NAMES).length} sectors · ${kb(sectorSize)}`);
 
 fs.rmSync(DETAIL, { recursive: true, force: true });
 const patternSize = writeJson(path.join(OUT, "patterns.json"), {

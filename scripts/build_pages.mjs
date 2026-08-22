@@ -50,6 +50,15 @@ async function yahooQuote(sym) {
 const universe = await getUniverse();                       // real AMFI parse
 console.log(`[pages] AMFI universe: ${universe.count} Direct-Growth schemes · NAV date ${universe.navDate}`);
 
+// AMFI has changed this file's host and its columns before, and a parser that
+// quietly returns nothing publishes a brief with no funds in it — which is what
+// happened for four days in August 2026. Refuse to render rather than ship an
+// empty page that looks fine. This step is continue-on-error in CI, so the rest
+// of the site still deploys; the failure just becomes visible.
+if (universe.count < 500) {
+  throw new Error(`only ${universe.count} Direct-Growth schemes parsed from AMFI — the format has probably changed again`);
+}
+
 // enrich the leaders of the buckets people actually browse (bounded & polite)
 const SHOW_BUCKETS = [
   ["equity_largecap", "Large Cap"], ["equity_flexi", "Flexi / Multi Cap"], ["equity_midcap", "Mid Cap"],

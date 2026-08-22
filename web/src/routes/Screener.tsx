@@ -1,14 +1,15 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { useStocks } from "../lib/useData";
 import { Card, CardHead, Label, Chip, Button, ErrorNote, Skeleton } from "../components/ui";
 import { Reveal } from "../components/motion";
 import { byUnit, nf, tone } from "../lib/format";
 import type { Index, Row, FieldMeta } from "../lib/data";
-
-type Op = ">=" | "<=" | "between" | "=" | ">" | "<" | "notnull" | "true" | "false" | "in" | "contains";
-interface Filter { f: string; op: Op; a?: any; b?: any }
+import {
+  encodeScreen, decodeScreen, listSaved, saveScreen, deleteScreen,
+  toCsv, downloadCsv, type Filter, type Op, type Screen,
+} from "../lib/screens";
 
 const OPS: Record<string, [Op, string][]> = {
   num: [[">=", "at least"], ["<=", "at most"], ["between", "between"], ["=", "equals"], [">", "over"], ["<", "under"], ["notnull", "has a value"]],
@@ -148,21 +149,92 @@ function FilterRow({ idx, filter, data, onChange, onRemove }: {
   );
 }
 
+
+/* ------------------------------ column picker ----------------------------- */
+function ColumnPicker({ data, cols, setCols, onClose }: {
+  data: Index; cols: string[]; setCols: (c: string[]) => void; onClose: () => void;
+}) {
+  const groups = useMemo(() => {
+    const g: Record<string, FieldMeta[]> = {};
+    for (const m of data.meta) (g[m.g] ??= []).push(m);
+    return g;
+  }, [data]);
+
+  const toggle = (k: string) =>
+    setCols(cols.includes(k) ? cols.filter((c) => c !== k) : [...cols, k]);
+
+  return (
+    <motion.div layout initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+      exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.22 }}
+      className="overflow-hidden border-t border-line">
+      <div className="flex flex-wrap items-center gap-2 px-5 pt-4">
+        <span className="text-[12px] text-ink-dim">
+          <b className="text-ink tnum">{cols.length}</b> of {data.meta.length} measures shown.
+          The name column is always first; conditions and the sort column are added automatically.
+        </span>
+        <div className="ml-auto flex gap-2">
+          <Button onClick={() => setCols(data.meta.filter((m) => m.c).map((m) => m.k))}>Reset</Button>
+          <Button onClick={onClose}>Done</Button>
+        </div>
+      </div>
+      <div className="grid gap-5 px-5 py-4 sm:grid-cols-2 xl:grid-cols-3">
+        {Object.entries(groups).map(([g, items]) => (
+          <div key={g}>
+            <Label className="mb-2">{g}</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {items.map((m) => (
+                <button key={m.k} onClick={() => toggle(m.k)} title={m.h}
+                  className={`border px-2 py-1 text-[11px] transition-colors
+                    ${cols.includes(m.k)
+                      ? "border-ink bg-ink text-paper"
+                      : "border-line-2 text-ink-dim hover:border-ink hover:text-ink"}`}>
+                  {m.l}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
 export default function Screener() {
   const { data, loading, error } = useStocks();
-  const [filters, setFilters] = useState<Filter[]>(PRESETS[0].filters);
-  const [preset, setPreset] = useState<string | null>(PRESETS[0].id);
-  const [q, setQ] = useState("");
-  const [sort, setSort] = useState<{ f: string; dir: 1 | -1 }>({ f: "roce", dir: -1 });
-  const [shown, setShown] = useState(50);
+  const [params, setParams] = useSearchParams();
 
+  // A shared link carries the whole screen, so it is read once on mount and
+  // then the URL is left alone — editing conditions must not rewrite history
+  // on every keystroke.
+  const shared = useRef(decodeScreen(params.get("s") ?? "")).current;
+
+  const [filters, setFilters] = useState<Filter[]>(shared?.filters ?? PRESETS[0].filters);
+  const [preset, setPreset] = useState<string | null>(shared ? null : PRESETS[0].id);
+  const [q, setQ] = useState(shared?.q ?? "");
+  const [sort, setSort] = useState<{ f: string; dir: 1 | -1 }>(shared?.sort ?? { f: "roce", dir: -1 });
+  const [shown, setShown] = useState(50);
+  const [chosen, setChosen] = useState<string[] | null>(shared?.cols?.length ? shared.cols : null);
+  const [picking, setPicking] = useState(false);
+  const [saved, setSaved] = useState<Screen[]>(() => listSaved());
+  const [flash, setFlash] = useState("");
+
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(""), 2600);
+    return () => clearTimeout(t);
+  }, [flash]);
+
+  // `chosen` is what the user picked; `cols` is what the table actually shows —
+  // the picked set plus anything a condition or the sort refers to, because a
+  // row you cannot see the reason for is not a result you can check.
   const cols = useMemo(() => {
     if (!data) return [];
-    const base = data.meta.filter((m) => m.c).map((m) => m.k);
+    const base = chosen ? [...chosen] : data.meta.filter((m) => m.c).map((m) => m.k);
+    if (!base.includes("name")) base.unshift("name");
     for (const f of filters) if (!base.includes(f.f)) base.push(f.f);
     if (!base.includes(sort.f)) base.push(sort.f);
     return base.filter((k) => data.byKey[k]);
-  }, [data, filters, sort.f]);
+  }, [data, chosen, filters, sort.f]);
 
   const rows = useMemo(() => {
     if (!data) return [];
@@ -185,9 +257,49 @@ export default function Screener() {
 
   const applyPreset = (p: typeof PRESETS[number]) => {
     setPreset(p.id); setFilters(p.filters.map((f) => ({ ...f })));
-    setSort({ f: p.sort, dir: -1 }); setShown(50);
+    setSort({ f: p.sort, dir: -1 }); setShown(50); setChosen(null);
   };
   const current = PRESETS.find((p) => p.id === preset);
+
+  const definition = { filters, sort, q, cols: chosen ?? [] };
+
+  const applyScreen = (sc: Screen) => {
+    setFilters(sc.filters.map((f) => ({ ...f })));
+    setSort(sc.sort); setQ(sc.q ?? "");
+    setChosen(sc.cols?.length ? sc.cols : null);
+    setPreset(null); setShown(50);
+  };
+
+  const doSave = () => {
+    const name = prompt("Name this screen", current?.name ?? "My screen")?.trim();
+    if (!name) return;
+    setSaved(saveScreen({ name, ...definition }));
+    setFlash(`Saved “${name}” to this browser.`);
+  };
+
+  const doShare = async () => {
+    const url = `${location.origin}${location.pathname}#/screener?s=${encodeScreen(definition)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setFlash("Link copied — it carries the whole screen, so it works for anyone you send it to.");
+    } catch {
+      // Clipboard is refused without a user gesture in some browsers, and over
+      // plain http everywhere. Falling back to the URL bar still hands the
+      // link over rather than failing silently.
+      setParams({ s: encodeScreen(definition) }, { replace: true });
+      setFlash("Link is in the address bar — copy it from there.");
+    }
+  };
+
+  const doExport = () => {
+    if (!data) return;
+    const columns = cols.map((k) => ({ key: k, label: data.byKey[k]?.l ?? k }));
+    downloadCsv(
+      `myfinancial-screen-${data.priceDate ?? "export"}.csv`,
+      toCsv(rows, [{ key: "symbol", label: "Symbol" }, ...columns.filter((c) => c.key !== "symbol")]),
+    );
+    setFlash(`Exported ${nf(rows.length, 0)} rows with ${columns.length} columns.`);
+  };
 
   return (
     <>
@@ -213,6 +325,24 @@ export default function Screener() {
             <Button key={p.id} active={preset === p.id} onClick={() => applyPreset(p)}>{p.name}</Button>
           ))}
         </div>
+
+        {saved.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Label>Your screens</Label>
+            {saved.map((sc) => (
+              <span key={sc.name} className="group flex items-center border border-line-2 transition-colors hover:border-ink">
+                <button onClick={() => applyScreen(sc)}
+                  className="px-3 py-1.5 text-[11.5px] text-ink-dim transition-colors group-hover:text-ink">
+                  {sc.name}
+                  <span className="ml-2 font-mono text-[9.5px] text-ink-faint">{sc.filters.length}</span>
+                </button>
+                <button title={`Delete “${sc.name}”`}
+                  onClick={() => { if (confirm(`Delete the saved screen “${sc.name}”?`)) setSaved(deleteScreen(sc.name)); }}
+                  className="border-l border-line-2 px-2 py-1.5 text-[11px] text-ink-faint transition-colors hover:text-down">×</button>
+              </span>
+            ))}
+          </div>
+        )}
         <AnimatePresence mode="wait">
           {current && (
             <motion.p key={current.id}
@@ -269,7 +399,32 @@ export default function Screener() {
       <Reveal className="mt-6">
         <Card>
           <CardHead title="Results" sub={`Sorted by ${data?.byKey[sort.f]?.l ?? sort.f}`}
-            right={<Chip>{nf(Math.min(shown, rows.length), 0)} shown</Chip>} />
+            right={
+              <div className="flex flex-wrap items-center gap-2">
+                <Button onClick={() => setPicking((v) => !v)} active={picking}>
+                  Columns <span className="ml-1.5 opacity-70">{cols.length}</span>
+                </Button>
+                <Button onClick={doSave}>Save screen</Button>
+                <Button onClick={doShare}>Share link</Button>
+                <Button onClick={doExport} active>Export CSV</Button>
+                <Chip>{nf(Math.min(shown, rows.length), 0)} shown</Chip>
+              </div>
+            } />
+          <AnimatePresence initial={false}>
+            {picking && data && (
+              <ColumnPicker key="picker" data={data} cols={chosen ?? data.meta.filter((m) => m.c).map((m) => m.k)}
+                setCols={setChosen} onClose={() => setPicking(false)} />
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
+            {flash && (
+              <motion.div key={flash} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2 }}
+                className="overflow-hidden border-t border-line bg-ink/[0.04]">
+                <div className="px-5 py-2.5 text-[12px] text-ink-dim">{flash}</div>
+              </motion.div>
+            )}
+          </AnimatePresence>
           {loading ? <Skeleton className="h-[420px]" /> : (
             <div className="overflow-x-auto">
               <table className="w-full text-[12.5px]">
@@ -324,6 +479,11 @@ export default function Screener() {
               <Button onClick={() => setShown((s) => s + 100)}>Show more ({nf(rows.length - shown, 0)} left)</Button>
             </div>
           )}
+          <div className="border-t border-line px-5 py-3.5 text-[11.5px] leading-relaxed text-ink-faint">
+            A saved screen lives in this browser only — there is no account behind it. A shared link carries the
+            whole definition rather than an id, so it keeps working even though nothing is stored on a server.
+            The CSV exports every matching row, not just the ones on screen.
+          </div>
         </Card>
       </Reveal>
     </>

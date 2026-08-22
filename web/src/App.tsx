@@ -14,6 +14,13 @@ const Screener = lazy(() => import("./routes/Screener"));
 const Patterns = lazy(() => import("./routes/Patterns"));
 const Funds = lazy(() => import("./routes/Funds"));
 const Company = lazy(() => import("./routes/Company"));
+const Stocks = lazy(() => import("./routes/Stocks"));
+const Fund = lazy(() => import("./routes/Fund"));
+const Advisory = lazy(() => import("./routes/Advisory"));
+// Planning and Estate pull in the shared tax/goals/estate engines, so they are
+// split hardest: someone screening stocks should never download the Monte Carlo.
+const Planning = lazy(() => import("./routes/Planning"));
+const Estate = lazy(() => import("./routes/Estate"));
 
 const Fallback = () => (
   <div className="space-y-4 pt-10">
@@ -37,7 +44,12 @@ export default function App() {
               <Route path="/screener" element={<Screener />} />
               <Route path="/patterns" element={<Patterns />} />
               <Route path="/funds" element={<Funds />} />
+              <Route path="/fund/:code" element={<Fund />} />
+              <Route path="/stocks" element={<Stocks />} />
               <Route path="/company/:symbol" element={<Company />} />
+              <Route path="/advisory" element={<Advisory />} />
+              <Route path="/planning" element={<Planning />} />
+              <Route path="/estate" element={<Estate />} />
               <Route path="*" element={<Overview />} />
             </Routes>
           </Suspense>

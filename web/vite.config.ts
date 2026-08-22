@@ -33,6 +33,19 @@ function serveBuiltData() {
 export default defineConfig({
   base: BASE,
   plugins: [react(), tailwind(), serveBuiltData()],
+  resolve: {
+    alias: {
+      // The tax, goals and estate engines live one level up and are imported by
+      // BOTH the Node server and this app. Aliasing rather than copying is the
+      // whole point: a slab change edits one file, and every surface moves.
+      "@shared": path.resolve(__dirname, "../shared"),
+    },
+  },
+  server: {
+    // dev-only: Vite refuses to serve outside its root without this, and the
+    // shared engines are outside it by design.
+    fs: { allow: [path.resolve(__dirname), path.resolve(__dirname, "..")] },
+  },
   build: {
     outDir: path.resolve(__dirname, "../dist/app"),
     emptyOutDir: true,

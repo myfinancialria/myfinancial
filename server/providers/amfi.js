@@ -20,7 +20,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const VAR = path.join(__dirname, "..", "..", "var");
 const NAV_CACHE = path.join(VAR, "amfi_navall.txt");
 const ENRICH_CACHE = path.join(VAR, "mfapi_enrich.json");
-const AMFI_URL = "https://www.amfiindia.com/spages/NAVAll.txt";
+const AMFI_URL = "https://portal.amfiindia.com/spages/NAVAll.txt";
 const MFAPI = (code) => `https://api.mfapi.in/mf/${code}`;
 const NAV_MAX_AGE_MS = 12 * 3600_000;
 
@@ -123,26 +123,79 @@ async function navAllText() {
   return text;
 }
 
+/**
+ * Parse AMFI's NAVAll.txt.
+ *
+ * In August 2026 AMFI moved this file to portal.amfiindia.com AND split Plan
+ * and Option into their own columns, stripping "Direct" and "Growth" out of
+ * the scheme name. A parser that matched on the name — and read NAV by fixed
+ * position — silently returned zero schemes, which is exactly the failure this
+ * kind of code is prone to: no error, just an empty universe.
+ *
+ * So columns are located by their HEADER, and a scheme counts as Direct-Growth
+ * if either the dedicated columns say so or, on the older layout, the name
+ * does. That survives the change in both directions.
+ *
+ * This mirrors scripts/fetch_funds.mjs deliberately: two independent readers of
+ * the same upstream file must not disagree about what it says.
+ */
 function parseNavAll(text) {
+  const lines = text.split("\n");
+  const header = lines.find((l) => /scheme\s*code/i.test(l) && l.includes(";")) || "";
+  const cols = header.split(";").map((h) => h.trim().toLowerCase());
+  const at = (...names) => {
+    for (const n of names) {
+      const i = cols.findIndex((c) => c === n || c.startsWith(n));
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+  const iCode = at("scheme code");
+  const iName = at("scheme name");
+  const iPlan = at("plan");
+  const iOption = at("option");
+  const iNav = at("net asset value", "nav");
+  const iDate = at("date");
+  if (iCode < 0 || iName < 0 || iNav < 0 || iDate < 0) {
+    throw new Error(`NAVAll header not recognised: "${header.slice(0, 120)}"`);
+  }
+
   const rows = [];
   let curCat = "", curAmc = "";
-  for (let line of text.split("\n")) {
-    line = line.trim();
+  for (const raw of lines) {
+    const line = raw.trim();
     if (!line) continue;
     if (!line.includes(";")) {
-      if (line.includes("Scheme") && line.includes("(")) curCat = line;
-      else if (line.includes("Mutual Fund")) curAmc = line;
+      if (/scheme/i.test(line) && line.includes("(")) curCat = line;
+      else if (/mutual fund/i.test(line)) curAmc = line;
       continue;
     }
-    const parts = line.split(";");
-    if (parts.length < 6 || parts[0] === "Scheme Code") continue;
-    const [code, , , name, nav, dt] = parts;
-    const nl = name.toLowerCase();
-    if (!nl.includes("direct") || !nl.includes("growth")) continue;
-    if (/idcw|dividend|bonus|segregated/.test(nl)) continue;
-    const navf = parseFloat(nav);
-    if (!isFinite(navf)) continue;
-    rows.push({ code: code.trim(), name: name.trim(), amc: curAmc.replace(/ Mutual Fund$/i, ""), rawCat: curCat, nav: navf, navDate: dt.trim() });
+    const parts = line.split(";").map((x) => x.trim());
+    if (parts[iCode] === undefined || /^scheme code$/i.test(parts[iCode])) continue;
+
+    const name = parts[iName] || "";
+    const plan = iPlan >= 0 ? (parts[iPlan] || "") : "";
+    const option = iOption >= 0 ? (parts[iOption] || "") : "";
+
+    const hay = `${plan} ${option}`.toLowerCase();
+    const fromCols = plan && option && hay.includes("direct") && hay.includes("growth");
+    const fromName = !plan && !option
+      && name.toLowerCase().includes("direct") && name.toLowerCase().includes("growth");
+    if (!fromCols && !fromName) continue;
+    // IDCW is a different option on the same portfolio, never a growth plan.
+    if (/idcw|dividend|bonus|segregated/i.test(`${name} ${option}`)) continue;
+
+    const navf = parseFloat(parts[iNav]);
+    if (!Number.isFinite(navf) || navf <= 0) continue;
+
+    rows.push({
+      code: parts[iCode],
+      name,
+      amc: curAmc.replace(/ Mutual Fund$/i, "").trim(),
+      rawCat: curCat,
+      nav: navf,
+      navDate: parts[iDate],
+    });
   }
   return rows;
 }
