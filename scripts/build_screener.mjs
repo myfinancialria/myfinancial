@@ -942,6 +942,20 @@ const fundIndexSize = writeJson(path.join(OUT, "funds.json"), {
   ...fundPack,
 });
 
+// The React app fetches candles per company, so the chart slice of each detail
+// record is published as its own small file. The static pages keep inlining the
+// same numbers — they must paint without a request — so this is additive rather
+// than a move.
+let chartBytes = 0;
+for (const [sym, d] of stocks.details) {
+  if (!d.daily?.length) continue;
+  chartBytes += writeJson(path.join(OUT, "chart", `${encodeURIComponent(sym)}.json`), {
+    daily: d.daily, dailySma50: d.dailySma50, dailySma200: d.dailySma200,
+    weekly: d.weekly, weeklySma50: d.weeklySma50, weeklySma200: d.weeklySma200,
+  });
+}
+console.log(`[build] charts  : ${stocks.details.size} per-company candle files · ${mb(chartBytes)}`);
+
 fs.rmSync(DETAIL, { recursive: true, force: true });
 const patternSize = writeJson(path.join(OUT, "patterns.json"), {
   generated: new Date().toISOString(),

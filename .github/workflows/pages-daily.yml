@@ -108,6 +108,14 @@ jobs:
       - name: Render the site
         run: node scripts/build_app.mjs
 
+      # The React app is a second front end over the SAME published data — it
+      # fetches dist/data/*.json rather than carrying a copy — so it builds
+      # after the data does, straight into dist/app/.
+      - name: Install the app's dependencies
+        run: npm --prefix web ci
+      - name: Build the app
+        run: npm --prefix web run build
+
       - name: Daily brief + landing page
         run: node scripts/build_pages.mjs
         env:

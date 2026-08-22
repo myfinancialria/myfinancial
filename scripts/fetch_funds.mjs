@@ -34,7 +34,8 @@ const CONCURRENCY = Number(arg("concurrency", 8)) || 8;
 // NAV history is append-only, so a day-old copy is only ever missing one point.
 const histCache = makeCache(path.join(VAR, "mfhist"), FORCE ? -1 : 20);
 
-const AMFI_URL = "https://www.amfiindia.com/spages/NAVAll.txt";
+// AMFI moved this file to portal.amfiindia.com; the old host now 302s here.
+const AMFI_URL = "https://portal.amfiindia.com/spages/NAVAll.txt";
 
 // --------------------------- the AMFI universe -------------------------------
 async function navAllText() {
@@ -58,14 +59,46 @@ const parseAmfiDate = (s) => {
 };
 
 /**
- * NAVAll is a flat text file where the AMC and the SEBI scheme-type appear as
- * bare heading lines above the rows they apply to, so parsing has to carry that
- * context downward rather than read it off each row.
+ * Parse NAVAll.
+ *
+ * The layout is not stable. It used to be six semicolon-separated columns with
+ * the plan and option buried in the scheme name ("... - Direct Plan - Growth").
+ * In August 2026 AMFI split those into their own `Plan` and `Option` columns
+ * and stripped them out of the name — which silently reduced a name-matching
+ * filter to zero schemes and took the nightly build down for four days.
+ *
+ * So columns are located by their HEADER rather than by position, and a scheme
+ * counts as Direct-Growth if either the dedicated columns say so or, on the
+ * older layout, the name does. That survives the change in both directions.
+ *
+ * The AMC and the SEBI scheme-type still arrive as bare heading lines above the
+ * rows they apply to, so parsing has to carry that context downward.
  */
 function parseNavAll(text) {
+  const lines = text.split("\n");
+  const header = lines.find((l) => /scheme\s*code/i.test(l) && l.includes(";")) || "";
+  const cols = header.split(";").map((h) => h.trim().toLowerCase());
+  const at = (...names) => {
+    for (const n of names) {
+      const i = cols.findIndex((c) => c === n || c.startsWith(n));
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+  const iCode = at("scheme code");
+  const iIsin = at("isin div payout", "isin");
+  const iName = at("scheme name");
+  const iPlan = at("plan");
+  const iOption = at("option");
+  const iNav = at("net asset value", "nav");
+  const iDate = at("date");
+  if (iCode < 0 || iName < 0 || iNav < 0 || iDate < 0) {
+    throw new Error(`NAVAll header not recognised: "${header.slice(0, 120)}"`);
+  }
+
   const rows = [];
   let curType = "", curAmc = "";
-  for (const raw of text.split("\n")) {
+  for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
     if (!line.includes(";")) {
@@ -73,18 +106,31 @@ function parseNavAll(text) {
       else if (/mutual fund/i.test(line)) curAmc = line;
       continue;
     }
-    const parts = line.split(";");
-    if (parts.length < 6 || parts[0] === "Scheme Code") continue;
-    const [code, isinG, , name, nav, dt] = parts.map((s) => s.trim());
-    const nl = name.toLowerCase();
-    if (!nl.includes("direct") || !nl.includes("growth")) continue;
-    if (/idcw|dividend|bonus|segregated/.test(nl)) continue;
-    const navf = parseFloat(nav);
+    const parts = line.split(";").map((x) => x.trim());
+    if (parts[iCode] === undefined || /^scheme code$/i.test(parts[iCode])) continue;
+
+    const name = parts[iName] || "";
+    const plan = iPlan >= 0 ? (parts[iPlan] || "") : "";
+    const option = iOption >= 0 ? (parts[iOption] || "") : "";
+
+    // Direct + Growth, however this edition of the file chooses to say it.
+    const hay = `${plan} ${option}`.toLowerCase();
+    const fromCols = plan && option && hay.includes("direct") && hay.includes("growth");
+    const fromName = !plan && !option
+      && name.toLowerCase().includes("direct") && name.toLowerCase().includes("growth");
+    if (!fromCols && !fromName) continue;
+    // IDCW is a different option on the same portfolio, never a growth plan.
+    if (/idcw|dividend|bonus|segregated/i.test(`${name} ${option}`)) continue;
+
+    const navf = parseFloat(parts[iNav]);
     if (!Number.isFinite(navf) || navf <= 0) continue;
+
+    const isin = iIsin >= 0 ? parts[iIsin] : null;
     rows.push({
-      code, name, isin: isinG && isinG !== "-" ? isinG : null,
+      code: parts[iCode], name, isin: isin && isin !== "-" ? isin : null,
       amc: curAmc.replace(/ Mutual Fund$/i, "").trim(),
-      amfiType: curType, nav: navf, navDate: dt, navDateMs: parseAmfiDate(dt),
+      amfiType: curType, plan, option,
+      nav: navf, navDate: parts[iDate], navDateMs: parseAmfiDate(parts[iDate]),
     });
   }
   return rows;

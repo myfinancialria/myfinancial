@@ -525,6 +525,28 @@ for (const f of fs.readdirSync(path.join(DETAIL, "fund"))) {
   bytes += html.length; nFund++;
 }
 
+// GitHub Pages serves /404.html for any unmatched path across the whole site.
+// For app routes that is a client-side route, not a missing page, so park the
+// path and hand control to the app shell. Anything else gets a real 404.
+fs.writeFileSync(path.join(OUT, "404.html"), `<!doctype html><html lang="en-IN"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Not found | myfinancial</title><link rel="stylesheet" href="/myfinancial/app.css">
+<script>
+(function () {
+  var p = location.pathname;
+  if (p.indexOf("/myfinancial/app/") === 0) {
+    sessionStorage.setItem("spa:redirect", p + location.search + location.hash);
+    location.replace("/myfinancial/app/");
+  }
+})();
+</script></head><body>
+<div class="wrap" style="padding-top:80px">
+  <h1>Not found</h1>
+  <p class="sub">That page does not exist. Try the <a href="/myfinancial/app/" style="text-decoration:underline">app</a>,
+  the <a href="/myfinancial/screener.html" style="text-decoration:underline">screener</a>, or
+  <a href="/myfinancial/" style="text-decoration:underline">the home page</a>.</p>
+</div></body></html>`);
+
 fs.writeFileSync(path.join(OUT, ".nojekyll"), "");
 console.log(`[app] screener.html · stocks.html (${stockRows.length}) · funds.html (${fundRows.filter((r) => !r.stale).length} live)`);
 console.log(`[app] ${nStock} company pages + ${nFund} scheme pages · ${(bytes / 1024 / 1024).toFixed(1)} MB of HTML`);

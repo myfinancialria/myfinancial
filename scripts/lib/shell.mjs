@@ -105,6 +105,7 @@ footer.site a{color:var(--ink-dim);text-decoration:underline}
 `;
 
 const NAV = [
+  ["app", "app/", "App"],
   ["stocks", "stocks.html", "Companies"],
   ["screener", "screener.html", "Screener"],
   ["funds", "funds.html", "Mutual Funds"],

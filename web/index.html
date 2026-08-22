@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en-IN" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>myfinancial — Indian market intelligence</title>
+    <meta name="description" content="Every NSE-listed company and every mutual fund scheme, screened on real exchange data. Rebuilt each market day." />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230a0a0b'/><text x='50' y='71' font-size='58' text-anchor='middle' fill='%23fff' font-family='Georgia'>m</text></svg>" />
+    <script>
+      // Apply the stored theme before first paint so there is no flash.
+      (function () {
+        var t = localStorage.getItem("myfin.theme") || "dark";
+        document.documentElement.classList.toggle("dark", t === "dark");
+        document.documentElement.dataset.theme = t;
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

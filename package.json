@@ -19,10 +19,12 @@
     "data": "npm run data:universe && npm run data:prices && npm run data:indices && npm run data:funds",
     "build:screener": "node scripts/build_screener.mjs",
     "build:app": "node scripts/build_app.mjs",
-    "build": "npm run build:screener && npm run build:app && node scripts/build_pages.mjs",
+    "build": "npm run build:screener && npm run build:app && node scripts/build_pages.mjs && npm run build:web",
     "verify": "node scripts/verify_build.mjs",
     "serve": "cd dist && python3 -m http.server 8080",
-    "data:all": "npm run data && npm run data:fundamentals"
+    "data:all": "npm run data && npm run data:fundamentals",
+    "build:web": "npm --prefix web ci --silent && npm --prefix web run build",
+    "dev:web": "npm --prefix web run dev"
   },
   "dependencies": {
     "express": "^4.19.2",
