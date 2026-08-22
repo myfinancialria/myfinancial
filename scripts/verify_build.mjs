@@ -369,7 +369,18 @@ else bad("screener.html looks incomplete");
 // scheme files that are not there.
 {
   const idx = readJson(path.join(DIST, "data", "holdings.json"));
-  if (!idx) {
+  // Distinguish "we have no filings" from "we have filings and failed to build
+  // them". The first is expected — coverage is limited to AMCs that publish
+  // without a browser. The second means the build step broke, which is exactly
+  // what happened when SheetJS was missing in CI and continue-on-error turned
+  // it into a green deploy that published nothing.
+  const cached = (() => {
+    try { return Object.keys(readJson(path.join(ROOT, "var", "holdings", "manifest.json"))?.files ?? {}).length; }
+    catch { return 0; }
+  })();
+  if (!idx && cached) {
+    bad(`${cached} disclosures are cached but no holdings were published — the holdings build failed`);
+  } else if (!idx) {
     warn("no scheme holdings published — fund pages will show no portfolio");
   } else {
     const n = idx.schemes?.length ?? 0;
