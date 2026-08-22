@@ -21,8 +21,19 @@
 // fraction is asserted against the Grand Total rather than assumed.
 // ---------------------------------------------------------------------------
 
-const ISIN_RE = /^IN[A-Z0-9]{10}$/;
-const isIsin = (v) => typeof v === "string" && ISIN_RE.test(v.trim());
+// ISO 6166: two-letter country code, nine alphanumerics, one check digit.
+// Matching only "IN..." silently dropped every overseas feeder and ETF —
+// Nippon's Japan Equity, US Equity and Hang Seng BeES parsed as empty and were
+// reported as "no portfolio table", which is not what was wrong with them.
+const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
+const isIsin = (v) => typeof v === "string" && ISIN_RE.test(v.trim().toUpperCase());
+
+/**
+ * Indian listed EQUITY specifically — the only thing that can be matched
+ * against the NSE universe. INE is the company-share series; INF is mutual
+ * fund units, IN0/IN1/IN2 are government and other debt.
+ */
+export const isIndianEquityIsin = (isin) => /^INE[A-Z0-9]{8}[0-9]$/.test(String(isin || "").toUpperCase());
 
 /** Rows that close a section rather than hold anything. */
 const TOTAL_RE = /^(sub\s*total|total|grand\s*total)$/i;
@@ -68,23 +79,26 @@ export function parseSheet(rows, { sheetName = "" } = {}) {
   const headerIdx = rows.findIndex((r) => Array.isArray(r) && r.some((c) => String(c).trim().toUpperCase() === "ISIN"));
   if (headerIdx < 0) return null;
 
-  const header = rows[headerIdx].map((c) => String(c ?? "").trim());
+  // Header labels vary between AMCs even though the columns do not. Groww
+  // writes "% To Net Assets" and "Market Value (In Rs. lakh)"; Nippon writes
+  // "% to NAV" and "Market/Fair Value\r\n( Rs. in Lacs)" — embedded newline and
+  // all. So labels are whitespace-normalised and matched loosely, which is the
+  // difference between one parser and one parser per AMC.
+  const header = rows[headerIdx].map((c) => String(c ?? "").replace(/\s+/g, " ").trim());
   const find = (re) => header.findIndex((c) => re.test(c));
   const iIsin = find(/^ISIN$/i);
   const iName = find(/name of (the )?instrument/i);
   const iInd = find(/rating|industry/i);
   const iQty = find(/^quantity/i);
-  const iMv = find(/market value/i);
-  const iPct = find(/%\s*to net assets/i);
+  const iMv = find(/market\s*\/?\s*(fair\s*)?value|fair value/i);
+  const iPct = find(/%\s*to\s*(net\s*asset|nav)/i);
   if (iIsin < 0 || iName < 0 || iPct < 0) return null;
 
   // The header rows above the table carry the scheme name and the as-on date.
   const above = rows.slice(0, headerIdx).flat().filter((c) => typeof c === "string");
-  const asOnCell = above.find((c) => /portfolio as on/i.test(c)) || "";
+  const asOnCell = above.find((c) => /portfolio\s*(statement\s*)?as on/i.test(c)) || "";
   const asOn = parseAsOn(asOnCell);
-  const nameCell = above.find((c) => c && !/portfolio as on/i.test(c) && c.length > 4) || sheetName;
-  // "IB03-Groww Aggressive Hybrid Fund" — the AMC's internal code is not useful.
-  const schemeName = String(nameCell).replace(/^[A-Z0-9]{2,6}\s*-\s*/, "").trim();
+  const schemeName = pickSchemeName(above, sheetName);
 
   const holdings = [];
   const sectionTotals = {};
@@ -123,21 +137,47 @@ export function parseSheet(rows, { sheetName = "" } = {}) {
     });
   }
 
-  if (!holdings.length) return null;
   return { sheetName, schemeName, asOn, holdings, sectionTotals, grandTotal, heading };
 }
 
-/** "Portfolio as on 31-JUL-2026" -> "2026-07-31" */
+/**
+ * The scheme name out of the cells above the table.
+ *
+ * AMCs pad these rows with internal codes and regulatory blurb: Groww writes
+ * "IB03-Groww Aggressive Hybrid Fund" in one cell, Nippon puts "RLMF001" in
+ * one cell and "Nippon India Growth Mid Cap Fund (Mid Cap Fund- An open ended
+ * equity scheme predominantly investing in mid cap stocks)" in the next. Take
+ * the cell that actually names a fund, then strip the code and the blurb.
+ */
+export function pickSchemeName(cells, fallback = "") {
+  const cands = (cells || [])
+    .map((c) => String(c ?? "").replace(/\s+/g, " ").trim())
+    .filter((c) => c.length > 6 && !/portfolio\s*(statement\s*)?as on/i.test(c));
+  const named = cands.filter((c) => /\b(fund|scheme|plan|etf)\b/i.test(c));
+  const best = (named.length ? named : cands).sort((a, b) => b.length - a.length)[0] || fallback;
+  return String(best)
+    .replace(/^[A-Z]{2,6}\s*\d{0,4}\s*-\s*/, "")   // "IB03-" / "RLMF001-"
+    .replace(/\s*\([^)]*open[- ]ended[^)]*\)\s*$/i, "")  // the SEBI blurb
+    .replace(/\s*\((?:[^()]*(?:\([^()]*\))?)*\)\s*$/, (m) => (m.length > 40 ? "" : m))
+    .trim();
+}
+
+/** "Portfolio as on 31-JUL-2026" and "as on July 31,2026" -> "2026-07-31" */
 export function parseAsOn(text) {
-  const m = String(text || "").match(/(\d{1,2})[-\s/]([A-Za-z]{3,9})[-\s/](\d{4})/);
-  if (!m) {
-    const iso = String(text || "").match(/(\d{4})-(\d{2})-(\d{2})/);
-    return iso ? iso[0] : null;
-  }
+  const t = String(text || "");
   const MON = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
-  const mo = MON[m[2].slice(0, 3).toLowerCase()];
-  if (!mo) return null;
-  return `${m[3]}-${String(mo).padStart(2, "0")}-${String(Number(m[1])).padStart(2, "0")}`;
+  const iso = (y, mo, d) => `${y}-${String(mo).padStart(2, "0")}-${String(Number(d)).padStart(2, "0")}`;
+
+  // 31-JUL-2026 / 31 July 2026 / 5-Jan-2026
+  let m = t.match(/(\d{1,2})[-\s/]([A-Za-z]{3,9})[-\s/,]*(\d{4})/);
+  if (m) { const mo = MON[m[2].slice(0, 3).toLowerCase()]; if (mo) return iso(m[3], mo, m[1]); }
+
+  // July 31,2026 / July 31, 2026 — Nippon's wording
+  m = t.match(/([A-Za-z]{3,9})\s+(\d{1,2})\s*,?\s*(\d{4})/);
+  if (m) { const mo = MON[m[1].slice(0, 3).toLowerCase()]; if (mo) return iso(m[3], mo, m[2]); }
+
+  m = t.match(/(\d{4})-(\d{2})-(\d{2})/);
+  return m ? m[0] : null;
 }
 
 /**
@@ -166,6 +206,8 @@ export function validate(parsed) {
   if (sum > 110) problems.push(`holdings sum to ${sum.toFixed(2)}% — implausibly geared`);
   if (sum < 1) problems.push(`holdings sum to ${sum.toFixed(2)}% — nothing was read`);
 
+  if (!parsed.holdings.length) problems.push("no ISIN-bearing holdings (commodity or fully unlisted scheme)");
+
   const noPct = parsed.holdings.filter((h) => h.pct === null).length;
   if (noPct > parsed.holdings.length * 0.1) problems.push(`${noPct} of ${parsed.holdings.length} holdings carry no weight`);
 
@@ -178,10 +220,10 @@ export function parseWorkbook(sheets, { amc = "" } = {}) {
   for (const [name, rows] of sheets) {
     let p = null;
     try { p = parseSheet(rows, { sheetName: name }); } catch (e) { skipped.push({ sheet: name, why: e.message }); continue; }
-    if (!p) { skipped.push({ sheet: name, why: "no portfolio table" }); continue; }
+    if (!p) { skipped.push({ sheet: name, why: "no portfolio table (not a scheme sheet)" }); continue; }
     const v = validate(p);
     if (!v.ok) { skipped.push({ sheet: name, scheme: p.schemeName, why: v.problems.join("; ") }); continue; }
-    schemes.push({ amc, ...p, equityPct: p.holdings.filter((h) => h.section === "EQUITY").reduce((a, h) => a + (h.pct ?? 0), 0), investedPct: v.investedPct });
+    schemes.push({ amc, ...p, indianEquityCount: p.holdings.filter((h) => h.section === "EQUITY" && isIndianEquityIsin(h.isin)).length, equityPct: p.holdings.filter((h) => h.section === "EQUITY").reduce((a, h) => a + (h.pct ?? 0), 0), investedPct: v.investedPct });
   }
   return { schemes, skipped };
 }
