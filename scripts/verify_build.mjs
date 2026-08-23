@@ -13,6 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { CARDS, CORRIDOR_KEYS, CORRIDORS, SECTION_MAP, FORM_MAP } from "../shared/nri.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -407,6 +408,47 @@ else bad("screener.html looks incomplete");
     else if (checked) ok("sampled scheme weights all sum to a plausible portfolio");
     if (unmapped) warn(`${unmapped} sampled schemes matched under half their stocks to an NSE company`);
   }
+}
+
+
+// ================================ the NRI surface ============================
+// This one fails differently from the rest of the site. Its corpus is BUNDLED
+// rather than fetched, so it cannot empty itself from a bad feed — but it can
+// be dropped from the build entirely, or quietly shrink if someone prunes the
+// shared engine. Both are checked: the corpus on disk, and the strings that
+// prove the route actually made it into a shipped bundle.
+{
+  if (CARDS.length >= 50) ok(`${CARDS.length} NRI answers in the corpus`);
+  else bad(`only ${CARDS.length} NRI answers — the corpus has shrunk`);
+
+  const thin = CORRIDOR_KEYS.filter(
+    (k) => CARDS.filter((c) => c.c !== "all" && c.c.includes(k)).length < 2);
+  if (thin.length) bad(`no corridor-specific NRI answers for: ${thin.map((k) => CORRIDORS[k].label).join(", ")}`);
+  else ok(`every corridor carries its own answers (${CORRIDOR_KEYS.length} corridors)`);
+
+  // The renumbering is the reason the surface exists. If it goes, every answer
+  // on the page starts citing sections that were repealed on 1 April 2026.
+  const secs = new Map(SECTION_MAP.map(([o, n]) => [o, n]));
+  const forms = new Map(FORM_MAP.map(([o, n]) => [o, n]));
+  if (secs.get("195") === "393(2)" && forms.get("10F") === "41" && forms.get("15CA") === "145")
+    ok("the 1961 → 2025 renumbering map is intact");
+  else bad("the NRI renumbering map has lost s.195, Form 10F or Form 15CA — searches for the old names would fail");
+
+  const assetDir = path.join(DIST, "app", "assets");
+  const bundles = fs.existsSync(assetDir)
+    ? fs.readdirSync(assetDir).filter((f) => f.endsWith(".js")) : [];
+  // Sentinels chosen from three different components, so a partially-built
+  // route cannot pass by shipping only its shell.
+  const need = ["Am I an NRI?", "USD 1 million bucket", "Selling property"];
+  const found = new Set();
+  for (const f of bundles) {
+    const body = fs.readFileSync(path.join(assetDir, f), "utf8");
+    for (const n of need) if (body.includes(n)) found.add(n);
+  }
+  const missing = need.filter((n) => !found.has(n));
+  if (!bundles.length) bad("no app bundles to check the NRI surface against");
+  else if (missing.length) bad(`the NRI route is missing from the built bundles (no ${missing.map((m) => JSON.stringify(m)).join(", ")})`);
+  else ok("the NRI route and its calculators are present in the shipped bundles");
 }
 
 // -------------------------------- daily brief --------------------------------

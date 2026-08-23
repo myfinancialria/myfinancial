@@ -95,3 +95,83 @@ declare module "@shared/screens.mjs" {
   export function decodeScreen(code: string): ScreenDef | null;
   export function toCsv(rows: Record<string, any>[], cols: { key: string; label: string }[]): string;
 }
+
+declare module "@shared/nri.mjs" {
+  export const TAX_YEAR: string;
+  export const LAW: string;
+
+  export type CorridorKey = "us" | "canada" | "gulf" | "australia" | "nz";
+  export interface Corridor {
+    key: CorridorKey; label: string; short: string; flag: string;
+    residents: string; oneLine: string; why: string;
+    personalTax: boolean; ftc: boolean; indianFundsSafe: boolean;
+    reporting: "heavy" | "medium" | "none"; ssa: boolean;
+    estateRisk: "high" | "medium" | "low";
+  }
+  export const CORRIDORS: Record<CorridorKey, Corridor>;
+  export const CORRIDOR_KEYS: CorridorKey[];
+
+  export interface IncomeType {
+    key: string; label: string; short: string;
+    domestic: number; surcharge: boolean; exempt?: boolean;
+    treatyRarelyHelps?: boolean; note: string;
+  }
+  export const INCOME_TYPES: Record<string, IncomeType>;
+  export const TREATY: Record<CorridorKey, Record<string, any>>;
+
+  export interface RatePick {
+    exempt: boolean; label: string; note: string;
+    domesticBase?: number; domestic: number; treaty: number | null;
+    effective: number; winner: "treaty" | "domestic" | "domestic-only" | "exempt";
+    saving?: number; rupees?: number; treatyNote?: string; trc?: string; rarely?: boolean;
+  }
+  export function surchargeRate(amount: number, isCapitalGain?: boolean): number;
+  export function domesticEffective(baseRate: number, amount: number, isCapitalGain?: boolean): number;
+  export function ratePick(incomeKey: string, corridor: CorridorKey, amount?: number): RatePick | null;
+
+  export interface ResidencyStep { test: string; result: boolean; detail: string }
+  export interface ResidencyResult {
+    status: "NR" | "RNOR" | "ROR"; label: string;
+    path: ResidencyStep[]; scope: string; tone: "up" | "warn" | "down";
+  }
+  export function residency(input: {
+    daysThisYear?: number; daysPrior4?: number; daysPrior7?: number;
+    nonResident9of10?: boolean; indianIncomeOver15L?: boolean;
+    category?: "employment" | "visiting" | "other";
+    indianCitizen?: boolean; liableToTaxAbroad?: boolean;
+  }): ResidencyResult;
+
+  export interface PropertyResult {
+    longTerm: boolean; gain: number; taxRate: number; taxDue: number;
+    tdsRate: number; tdsWithheld: number; blocked: number; blockedPct: number;
+    idleMonths: number; carryCost: number; indexationDenied: boolean;
+  }
+  export function propertySale(input: {
+    cost?: number; improvements?: number; sale?: number; months?: number; expenses?: number;
+  }): PropertyResult;
+
+  export interface RepatSource { key: string; label: string; capped: boolean | "partial"; forms: string[]; note: string }
+  export const REPAT_SOURCES: Record<string, RepatSource>;
+  export const REPAT_CAP_USD: number;
+  export function repatriationPlan(input: { amountUsd?: number; source?: string; usedThisYearUsd?: number }): {
+    source: RepatSource; capped: boolean; fits: boolean; remaining: number | null;
+    overflow?: number; forms: string[]; verdict: string;
+    split: { when: string; usd: number }[] | null;
+  } | null;
+
+  export const SECTION_MAP: [string, string, string][];
+  export const FORM_MAP: [string, string, string][];
+  export interface MatrixRow { key: string; label: string; get: (c: Corridor) => { v: string; tone: string } }
+  export const MATRIX_ROWS: MatrixRow[];
+  export interface TimelineStep { at: string; title: string; why: string; tone: string }
+  export const RETURN_TIMELINE: TimelineStep[];
+
+  export interface Verdict { v: string; tone: "up" | "down" | "warn" | "accent" }
+  export interface Card {
+    id: string; topic: string; k: "answer" | "rate" | "trap" | "flow" | "map" | "table";
+    c: "all" | CorridorKey[]; q: string; a: string; a2?: string;
+    verdict?: Verdict; steps?: string[]; income?: string; tags: string;
+  }
+  export const CARDS: Card[];
+  export const TOPICS: [string, string][];
+}

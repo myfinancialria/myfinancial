@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useState, type ReactNode } from "react";
 import { siteUrl } from "../lib/data";
 
-// Eight surfaces is more than a single row carries on a laptop, so the nav
+// Nine surfaces is more than a single row carries on a laptop, so the nav
 // wraps rather than hiding anything behind an overflow menu — every section
 // should be one click from every other one.
 const NAV = [
@@ -15,6 +15,7 @@ const NAV = [
   { to: "/advisory", label: "Advisory" },
   { to: "/planning", label: "Planning & Tax" },
   { to: "/estate", label: "Will & Vault" },
+  { to: "/nri", label: "NRI" },
 ];
 
 function ThemeToggle() {
