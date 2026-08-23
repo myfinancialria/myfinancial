@@ -21,6 +21,9 @@ const Advisory = lazy(() => import("./routes/Advisory"));
 // split hardest: someone screening stocks should never download the Monte Carlo.
 const Planning = lazy(() => import("./routes/Planning"));
 const Estate = lazy(() => import("./routes/Estate"));
+// NRI carries its own knowledge corpus and four calculators, so it is split
+// too — nobody screening stocks should download the treaty tables.
+const NRI = lazy(() => import("./routes/NRI"));
 
 const Fallback = () => (
   <div className="space-y-4 pt-10">
@@ -50,6 +53,7 @@ export default function App() {
               <Route path="/advisory" element={<Advisory />} />
               <Route path="/planning" element={<Planning />} />
               <Route path="/estate" element={<Estate />} />
+              <Route path="/nri" element={<NRI />} />
               <Route path="*" element={<Overview />} />
             </Routes>
           </Suspense>
