@@ -13,7 +13,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { CARDS, CORRIDOR_KEYS, CORRIDORS, SECTION_MAP, FORM_MAP } from "../shared/nri.mjs";
+import { CARDS, CORRIDOR_KEYS, CORRIDORS, SECTION_MAP, FORM_MAP,
+  SOURCES, GRADES, NOT_COVERED } from "../shared/nri.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -434,12 +435,26 @@ else bad("screener.html looks incomplete");
     ok("the 1961 → 2025 renumbering map is intact");
   else bad("the NRI renumbering map has lost s.195, Form 10F or Form 15CA — searches for the old names would fail");
 
+  // The direct-answer panel shows a source list and an evidence grade for every
+  // answer it gives. An uncited card would put an unsupported claim on screen
+  // under a heading that says where it came from, which is worse than no answer.
+  const uncited = CARDS.filter((c) => !c.s?.length || !GRADES[c.g]);
+  if (uncited.length) bad(`${uncited.length} NRI answers have no source or no evidence grade: ${uncited.map((c) => c.id).slice(0, 5).join(", ")}`);
+  else ok(`every NRI answer is graded and cited (${Object.keys(SOURCES).length} sources)`);
+
+  const brokenCite = CARDS.flatMap((c) => (c.s ?? []).filter((id) => !SOURCES[id]).map((id) => `${c.id}→${id}`));
+  if (brokenCite.length) bad(`NRI answers cite unknown sources: ${brokenCite.slice(0, 5).join(", ")}`);
+  else ok("every citation resolves to a source with a URL");
+
+  if (NOT_COVERED.length >= 5) ok(`${NOT_COVERED.length} subjects declared out of scope, each with somewhere else to go`);
+  else bad("the NRI out-of-scope list has been emptied — uncovered questions would get the least-bad match instead of a straight answer");
+
   const assetDir = path.join(DIST, "app", "assets");
   const bundles = fs.existsSync(assetDir)
     ? fs.readdirSync(assetDir).filter((f) => f.endsWith(".js")) : [];
   // Sentinels chosen from three different components, so a partially-built
   // route cannot pass by shipping only its shell.
-  const need = ["Am I an NRI?", "USD 1 million bucket", "Selling property"];
+  const need = ["Am I an NRI?", "USD 1 million bucket", "Selling property", "Not in this knowledge base"];
   const found = new Set();
   for (const f of bundles) {
     const body = fs.readFileSync(path.join(assetDir, f), "utf8");

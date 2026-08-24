@@ -865,3 +865,265 @@ export const TOPICS = [
   ["return", "Returning to India"],
   ["compliance", "Compliance"],
 ];
+
+/* ===========================================================================
+   PROVENANCE
+
+   Every answer has to be traceable to something a reader can open. This is the
+   registry those citations point at — the authority itself wherever one exists,
+   and a named secondary summary only where a primary source is not machine
+   reachable (India's official DTAA rate chart, for one, blocks automated
+   retrieval, so the treaty table is carried against PwC's published summary and
+   labelled as such rather than being dressed up as the statute).
+
+   `authority` is what the reader is being asked to trust:
+     primary    the statute, the rule, the regulator's own direction
+     regulator  a government or regulator page that restates its own rules
+     secondary  a professional summary — reliable, but not the source of law
+   =========================================================================== */
+
+export const SOURCES = {
+  ita2025:    { label: "Income-tax Act, 2025 (as amended by the Finance Act, 2026)", authority: "primary",
+                url: "https://www.incometaxindia.gov.in/documents/d/guest/income_tax_act_2025_as_amended_by_fa_act_2026-pdf" },
+  itdNR:      { label: "Income Tax Department — Non-Resident guidance", authority: "regulator",
+                url: "https://www.incometax.gov.in/iec/foportal/help/all-topics/e-filing-services/non-resident" },
+  itdReturn:  { label: "Income Tax Department — return applicable to a non-resident individual", authority: "regulator",
+                url: "https://www.incometax.gov.in/iec/foportal/help/individual/return-applicable-0" },
+  itdForms:   { label: "Income Tax Department — income tax forms", authority: "regulator",
+                url: "https://www.incometax.gov.in/iec/foportal/help/all-topics/e-filing-services/income-tax-forms" },
+  itdNewAct:  { label: "Income Tax Department — objective and scope of the new Act", authority: "regulator",
+                url: "https://www.incometax.gov.in/iec/foportal/help/all-topics/e-filing-services/objective-and-scope-new-act" },
+  dtaaTexts:  { label: "Income Tax Department — DTAA texts, all countries", authority: "primary",
+                url: "https://www.incometaxindia.gov.in/pages/international-taxation/dtaa.aspx" },
+  dtaaChart:  { label: "Income Tax Department — Tax Rates, DTAA v. Income-tax Act", authority: "regulator",
+                url: "https://www.incometaxindia.gov.in/w/%E2%80%8Btax-rates-dtaa-v.-income-tax-act" },
+  pwcWHT:     { label: "PwC Worldwide Tax Summaries — India, withholding taxes", authority: "secondary",
+                url: "https://taxsummaries.pwc.com/india/corporate/withholding-taxes" },
+  rbiMD:      { label: "RBI — Master Directions", authority: "primary",
+                url: "https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx" },
+  rbiRemit:   { label: "RBI — Remittance of Assets (FEMA 13(R)) FAQs", authority: "primary",
+                url: "https://www.rbi.org.in/commonman/english/scripts/FAQs.aspx?Id=17" },
+  rbiNRI:     { label: "RBI — Master Circular, remittance facilities for NRIs", authority: "primary",
+                url: "https://www.rbi.org.in/commonman/english/scripts/Notification.aspx?Id=843" },
+  rbiNRO:     { label: "RBI — Master Circular on NRO accounts", authority: "primary",
+                url: "https://www.rbi.org.in/commonman/english/scripts/Notification.aspx?Id=847" },
+  rbiFema:    { label: "RBI — FEMA notifications", authority: "primary",
+                url: "https://www.rbi.org.in/Scripts/BS_FemaNotifications.aspx" },
+  deaSmall:   { label: "Ministry of Finance (DEA) — irregular small-savings accounts, effective 1 October 2024", authority: "regulator",
+                url: "https://www.businesstoday.in/personal-finance/investment/story/new-ppf-rules-from-oct-1-these-public-provident-accounts-will-not-earn-any-interest-know-why-444717-2024-09-06" },
+  pfrda:      { label: "PFRDA — National Pension System rules for NRIs and OCI holders", authority: "regulator",
+                url: "https://www.pfrda.org.in/" },
+  sebi:       { label: "SEBI — mutual fund and KYC regulations", authority: "regulator", url: "https://www.sebi.gov.in/" },
+  amfi:       { label: "AMFI — mutual fund industry standards and scheme data", authority: "regulator", url: "https://www.amfiindia.com/" },
+  meaPIS:     { label: "Ministry of External Affairs — Portfolio Investment Scheme for NRIs", authority: "regulator",
+                url: "https://www.mea.gov.in/images/pdf/shares-and-securities.pdf" },
+  ifsca:      { label: "IFSCA — GIFT City International Financial Services Centre", authority: "regulator",
+                url: "https://ifsca.gov.in/" },
+  dfsGst:     { label: "Department of Financial Services — GST exemption on individual life and health insurance", authority: "regulator",
+                url: "https://www.financialservices.gov.in/exemption-gst-all-individual-life-insurance-and-health-insurance-policies" },
+  irdai:      { label: "IRDAI — insurance regulations, waiting periods and the moratorium", authority: "regulator", url: "https://irdai.gov.in/" },
+  mhaOci:     { label: "Ministry of Home Affairs — OCI scheme", authority: "primary",
+                url: "https://www.mha.gov.in/en/documents/oci" },
+  uidai:      { label: "UIDAI — Aadhaar enrolment rules for NRIs and OCI holders", authority: "regulator", url: "https://uidai.gov.in/" },
+  eci:        { label: "Election Commission of India — overseas electors", authority: "regulator", url: "https://eci.gov.in/" },
+  epfo:       { label: "EPFO — International Workers and Certificate of Coverage", authority: "regulator",
+                url: "https://www.epfindia.gov.in/site_en/International_workers.php" },
+  irsFbar:    { label: "IRS — Report of Foreign Bank and Financial Accounts (FBAR)", authority: "primary",
+                url: "https://www.irs.gov/businesses/small-businesses-self-employed/report-of-foreign-bank-and-financial-accounts-fbar" },
+  irs8938:    { label: "IRS — comparison of Form 8938 and FBAR requirements", authority: "primary",
+                url: "https://www.irs.gov/businesses/comparison-of-form-8938-and-fbar-requirements" },
+  irs8621:    { label: "IRS — About Form 8621 (PFIC)", authority: "primary",
+                url: "https://www.irs.gov/forms-pubs/about-form-8621" },
+  irs1116:    { label: "IRS — Foreign Tax Credit", authority: "primary",
+                url: "https://www.irs.gov/individuals/international-taxpayers/foreign-tax-credit" },
+  irs8802:    { label: "IRS — Form 8802, US residency certification (Form 6166)", authority: "primary",
+                url: "https://www.irs.gov/individuals/international-taxpayers/form-8802-application-for-united-states-residency-certification" },
+  irsSpt:     { label: "IRS — substantial presence test", authority: "primary",
+                url: "https://www.irs.gov/individuals/international-taxpayers/substantial-presence-test" },
+  irsEstate:  { label: "IRS — estate tax for nonresidents not citizens of the United States", authority: "primary",
+                url: "https://www.irs.gov/businesses/small-businesses-self-employed/some-nonresidents-with-us-assets-must-file-estate-tax-returns" },
+  irsRemit:   { label: "Federal Register — Excise Tax on Remittance Transfers (13 April 2026)", authority: "primary",
+                url: "https://www.federalregister.gov/documents/2026/04/13/2026-07085/excise-tax-on-remittance-transfers" },
+  ssaList:    { label: "US Social Security Administration — totalization agreements (India is not a party)", authority: "primary",
+                url: "https://www.ssa.gov/international/agreements_overview.html" },
+  craT1135:   { label: "CRA — Form T1135, Foreign Income Verification Statement", authority: "primary",
+                url: "https://www.canada.ca/en/revenue-agency/services/forms-publications/forms/t1135.html" },
+  craLeaving: { label: "CRA — leaving Canada (emigrants) and the departure tax", authority: "primary",
+                url: "https://www.canada.ca/en/revenue-agency/services/tax/international-non-residents/individuals-leaving-entering-canada-non-residents/leaving-canada-emigrants.html" },
+  craResid:   { label: "CRA — determining your residency status", authority: "primary",
+                url: "https://www.canada.ca/en/revenue-agency/services/tax/international-non-residents/information-been-moved/determining-your-residency-status.html" },
+  canSsa:     { label: "Government of Canada — Canada-India Social Security Agreement, in force 1 August 2015", authority: "primary",
+                url: "https://www.canada.ca/en/news/archive/2015/07/agreement-social-security-between-canada-republic-india-comes-into-force-august-1-2015.html" },
+  atoResid:   { label: "ATO — your tax residency", authority: "primary",
+                url: "https://www.ato.gov.au/individuals-and-families/coming-to-australia-or-going-overseas/your-tax-residency" },
+  atoTemp:    { label: "ATO — foreign and temporary residents", authority: "primary",
+                url: "https://www.ato.gov.au/individuals-and-families/coming-to-australia-or-going-overseas/your-tax-residency/foreign-and-temporary-residents" },
+  atoCgt:     { label: "ATO — how changing residency affects CGT", authority: "primary",
+                url: "https://www.ato.gov.au/individuals-and-families/investments-and-assets/capital-gains-tax/foreign-residents-and-capital-gains-tax/how-changing-residency-affects-cgt" },
+  irdTrans:   { label: "IRD New Zealand — temporary tax exemption for transitional residents", authority: "primary",
+                url: "https://www.ird.govt.nz/roles/nz-tax-residents/exemption" },
+  irdFif:     { label: "IRD New Zealand — IR461, guide to foreign investment funds", authority: "primary",
+                url: "https://www.ird.govt.nz/-/media/project/ir/home/documents/forms-and-guides/ir400---ir499/ir461/ir461.pdf" },
+  uaeFta:     { label: "UAE Federal Tax Authority — issuance of tax residency certificates", authority: "primary",
+                url: "https://tax.gov.ae/en/services/issuance.of.tax.certificates.aspx" },
+  pwcUae:     { label: "PwC — United Arab Emirates, individual residence (Cabinet Decision 85 of 2022)", authority: "secondary",
+                url: "https://taxsummaries.pwc.com/united-arab-emirates/individual/residence" },
+  omanPit:    { label: "Oman Royal Decree 56/2025 — Personal Income Tax Law, effective 1 January 2028", authority: "primary",
+                url: "https://decree.om/2025/rd20250056/" },
+  eyEosb:     { label: "EY — UAE voluntary alternative end-of-service benefits scheme", authority: "secondary",
+                url: "https://www.ey.com/en_gl/technical/tax-alerts/uae-introduces-voluntary-alternative-end-of-service-benefits-sch" },
+};
+
+/* ---------------------------------------------------------------------------
+   Card → [evidence grade, ...source ids].
+
+   The grade is how strong the evidence behind that answer actually is, carried
+   through to the reader rather than kept in a build note:
+
+     A  confirmed against a government, regulator or tax-authority source
+     B  consistent across several independent reputable sources
+     C  a single source, or sources partly disagreed — confirm before relying
+
+   Held apart from the card literals so the corpus stays readable, and merged in
+   below. A card with no entry here would cite nothing at all, so that is a test
+   failure and a build failure, not a default.
+--------------------------------------------------------------------------- */
+
+const CARD_META = {
+  "res-who":            ["A", "itdNR", "ita2025", "rbiFema"],
+  "res-182":            ["A", "itdNR", "ita2025"],
+  "res-rnor":           ["A", "itdNR", "ita2025"],
+  "res-deemed":         ["B", "itdNR", "ita2025", "uaeFta"],
+  "res-tiebreak":       ["A", "dtaaTexts", "itdNR"],
+
+  "bank-which":         ["A", "rbiMD", "rbiNRO", "rbiRemit"],
+  "bank-fcnr":          ["B", "rbiMD", "itdNR"],
+  "bank-rfc":           ["B", "rbiMD", "rbiFema"],
+  "bank-resident-acct": ["A", "rbiMD", "rbiFema"],
+  "bank-2026rates":     ["C", "rbiMD", "rbiFema"],
+
+  "inv-mf-us":          ["A", "irs8621"],
+  "inv-mf-canada":      ["B", "craT1135"],
+  "inv-mf-how":         ["B", "sebi", "amfi", "rbiMD"],
+  "inv-equity-pis":     ["B", "meaPIS", "rbiMD", "sebi"],
+  "inv-ppf":            ["B", "deaSmall"],
+  "inv-closed":         ["B", "deaSmall", "rbiMD"],
+  "inv-nps":            ["B", "pfrda"],
+  "inv-gift":           ["B", "ifsca"],
+
+  "tax-newact":         ["A", "itdNewAct", "ita2025", "itdForms"],
+  "tax-slabs":          ["B", "ita2025", "itdReturn"],
+  "tax-cg":             ["B", "ita2025", "itdNR"],
+  "tax-indexation":     ["B", "ita2025", "itdNR"],
+  "tax-nro-tds":        ["B", "ita2025", "itdNR", "dtaaChart"],
+  "tax-dividend":       ["A", "pwcWHT", "dtaaTexts", "ita2025"],
+  "tax-rent":           ["B", "ita2025", "itdNR"],
+  "tax-filing":         ["A", "itdReturn", "itdNR"],
+  "tax-115f":           ["A", "itdNR", "ita2025"],
+
+  "prop-buy":           ["B", "rbiFema", "rbiMD", "mhaOci"],
+  "prop-tds":           ["B", "ita2025", "itdNR"],
+  "prop-exempt":        ["B", "ita2025", "itdNR"],
+  "prop-repat":         ["B", "rbiRemit", "rbiNRI"],
+  "ret-us-estate":      ["A", "irsEstate"],
+
+  "rem-1m":             ["A", "rbiRemit", "rbiNRI"],
+  "rem-forms":          ["B", "itdForms", "rbiRemit"],
+  "rem-lrs":            ["A", "rbiRemit", "rbiNRI"],
+  "rem-ustax":          ["A", "irsRemit"],
+
+  "dtaa-claim":         ["A", "dtaaTexts", "itdForms", "irs8802"],
+  "dtaa-worse":         ["A", "pwcWHT", "dtaaTexts", "ita2025"],
+  "dtaa-uaetrc":        ["A", "uaeFta", "pwcUae"],
+  "dtaa-noftc":         ["A", "uaeFta", "omanPit"],
+  "dtaa-ftc-india":     ["B", "itdForms", "ita2025"],
+
+  "ins-gst":            ["A", "dfsGst"],
+  "ins-term":           ["B", "irdai", "rbiMD"],
+  "ins-10d":            ["B", "ita2025", "irdai"],
+  "ins-ulip-us":        ["B", "irs8621", "craT1135"],
+  "ins-health":         ["B", "irdai"],
+
+  "ben-oci":            ["B", "mhaOci", "uidai", "eci"],
+  "ben-ssa-us":         ["A", "ssaList", "epfo"],
+  "ben-ssa":            ["A", "canSsa", "epfo"],
+  "ben-epf":            ["B", "epfo"],
+
+  "ret-window":         ["B", "itdNR", "rbiMD"],
+  "ret-ror":            ["A", "itdNR", "ita2025"],
+  "ret-canada-exit":    ["B", "craLeaving", "craResid"],
+  "ret-aus-pr":         ["A", "atoTemp", "atoResid", "atoCgt"],
+  "ret-nz-48":          ["A", "irdTrans", "irdFif"],
+
+  "comp-fbar":          ["A", "irsFbar", "irs8938"],
+  "comp-t1135":         ["B", "craT1135"],
+  "comp-dates":         ["B", "itdReturn", "rbiRemit"],
+  "comp-pan":           ["C", "itdForms", "itdNR"],
+};
+
+for (const c of CARDS) {
+  const m = CARD_META[c.id];
+  c.g = m?.[0] ?? null;                 // null, not "B" — an ungraded card must fail loudly
+  c.s = m ? m.slice(1) : [];
+}
+
+export const GRADES = {
+  A: "Confirmed against a government, regulator or tax-authority source.",
+  B: "Consistent across several independent reputable sources.",
+  C: "A single source, or sources partly disagreed — confirm before relying on it.",
+};
+
+/* ===========================================================================
+   WHAT THIS DOES NOT KNOW
+
+   The honest half of an answer engine. Without this a query about UK tax or
+   crypto returns the least-bad match and reads as an answer, which is worse
+   than silence. Each entry is a subject deliberately outside the corpus, the
+   reason, and where the reader should actually go.
+   =========================================================================== */
+
+export const NOT_COVERED = [
+  { id: "uk", label: "The United Kingdom corridor",
+    match: "uk united kingdom britain british england london scotland wales hmrc isa premium bond non-dom",
+    why: "This knowledge base covers five corridors — the US, Canada, the Gulf, Australia and New Zealand. The UK is not one of them, and UK residence, domicile and remittance-basis rules are different enough that borrowing an answer from another corridor would be wrong.",
+    where: "HMRC guidance on residence and domicile, and the India-UK DTAA text on the Income Tax Department's treaty page." },
+  { id: "singapore", label: "Singapore, the EU and other corridors",
+    match: "singapore malaysia hong kong japan germany france netherlands ireland europe eu south africa kenya nigeria mauritius",
+    why: "Outside the five corridors this knowledge base was researched for. The Indian half of an answer would still hold, but the host-country half — which is usually the half that decides the outcome — has not been checked.",
+    where: "PwC Worldwide Tax Summaries for the country, plus the relevant India DTAA text." },
+  { id: "crypto", label: "Crypto and virtual digital assets",
+    match: "crypto cryptocurrency bitcoin ethereum vda virtual digital asset nft token web3 binance coinbase",
+    why: "India's 30% VDA regime, its 1% TDS and the cross-border treatment of virtual digital assets are not in this corpus. The rules are moving quickly and a stale answer here would be actively harmful.",
+    where: "The Income-tax Act, 2025 provisions on virtual digital assets, and current CBDT circulars." },
+  { id: "trusts", label: "Trusts and complex structures",
+    match: "trust trustee settlor discretionary offshore structure llp holding company family office foundation",
+    why: "Indian private trusts, and the US and Canadian reporting that attaches to a foreign trust, are a specialist area this corpus does not attempt. Getting it wrong is expensive in both directions.",
+    where: "A cross-border trust specialist in both jurisdictions — this is not a question to settle from a web page." },
+  { id: "business", label: "Business structures and permanent establishment",
+    match: "permanent establishment pe transfer pricing poem place of effective management incorporate company startup consultancy invoice gst registration payroll",
+    why: "This corpus answers personal cross-border money questions. Whether your consulting arrangement creates an Indian permanent establishment, and how it should be priced, turns on facts and contracts a knowledge base cannot see.",
+    where: "A chartered accountant with international tax practice, working from your actual contracts." },
+  { id: "statetax", label: "US state and Canadian provincial tax",
+    match: "california texas jersey state statewide provincial province ontario quebec columbia franchise",
+    why: "Only federal treatment is covered. US state tax is a real and frequently large cost for returnees — California in particular is aggressive about residence — and it is not governed by the India treaty at all.",
+    where: "The state or provincial revenue authority, and a preparer licensed in that state." },
+  { id: "immigration", label: "Immigration and visa questions",
+    match: "visa sponsorship green card lottery citizenship application pr points test naturalisation passport renewal consulate appointment i-140 eb2 express entry",
+    why: "Tax residence and immigration status are different systems that only occasionally line up — the ATO says so explicitly. This corpus answers the tax and money half only.",
+    where: "The immigration authority itself, or a registered migration agent." },
+];
+
+/** The out-of-scope subject a query is really about, or null. */
+export function gapFor(query) {
+  // Two letters, because "uk" and "eu" are the whole question when someone asks
+  // one — a three-character floor silently drops the only word that mattered.
+  const words = String(query).toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 2);
+  if (!words.length) return null;
+  let best = null, bestHits = 0;
+  for (const g of NOT_COVERED) {
+    const terms = new Set(g.match.split(/\s+/));
+    const hits = words.filter((w) => terms.has(w)).length;
+    if (hits > bestHits) { best = g; bestHits = hits; }
+  }
+  return bestHits > 0 ? best : null;
+}
