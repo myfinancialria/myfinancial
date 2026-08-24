@@ -260,3 +260,170 @@ export const SUGGESTED: { q: string; for?: CorridorKey }[] = [
 ];
 
 export const CORPUS_SIZE = docs.length;
+
+/* ---------------------------------------------------------------------------
+   Direct answers.
+
+   The rule this obeys: NOTHING IS GENERATED. An answer is assembled out of
+   sentences that already exist in the corpus, chosen because they contain the
+   words that were asked about, and shown with the card they came from and the
+   authority behind that card. There is no model in this path and no prose is
+   written at runtime, so an answer cannot say something the corpus does not.
+
+   The other half is admitting ignorance. A retrieval engine over sixty answers
+   will always return SOMETHING, and the least-bad match rendered confidently is
+   how a reference tool starts misleading people. Three outcomes are possible
+   here and only one of them is an answer:
+
+     answer   the corpus covers the question and one card clearly owns it
+     partial  something related is here, but it does not squarely answer this
+     none     not in the corpus — and where that is a subject deliberately out
+              of scope, it says which and where to go instead
+--------------------------------------------------------------------------- */
+import { SOURCES, GRADES, gapFor } from "@shared/nri.mjs";
+
+export interface SourceRef { id: string; label: string; url: string; authority: string }
+
+export interface Answer {
+  kind: "answer" | "partial" | "none";
+  query: string;
+  primary?: Doc;
+  /** Verbatim sentences lifted from the primary card. Never paraphrased. */
+  sentences: string[];
+  verdict?: { v: string; tone: string };
+  supporting: Doc[];
+  sources: SourceRef[];
+  grade: string | null;
+  gradeNote?: string;
+  /** How much of what was asked is actually present in the primary card, 0-1. */
+  coverage: number;
+  /** How far clear of the runner-up the primary is. */
+  margin: number;
+  gap?: { id: string; label: string; match: string; why: string; where: string } | null;
+  nearest: Doc[];
+  /** Query words the corpus has nothing indexed against at all. */
+  unmatched: string[];
+}
+
+/** Sentence split that survives "s.393(2)", "₹1.25 lakh" and "1 April 2026". */
+const sentences = (text: string): string[] =>
+  text.split(/(?<=[.?!])\s+(?=[A-Z“"(])/).map((s) => s.trim()).filter(Boolean);
+
+/**
+ * How much of the question this document actually addresses.
+ *
+ * Measured on the RAW words typed, not the alias-expanded ones — expansion is
+ * there to find candidates, and letting it also score them would make every
+ * document look like it covered everything.
+ */
+function coverageOf(docId: string, rawTerms: string[]): { score: number; unmatched: string[] } {
+  if (!rawTerms.length) return { score: 0, unmatched: [] };
+  let hit = 0;
+  const unmatched: string[] = [];
+  for (const t of rawTerms) {
+    if (index.get(t)?.has(docId)) { hit += 1; continue; }
+    // An alias reaching this document counts, but only half: it means the
+    // corpus talks about the same thing in different words.
+    const viaAlias = (ALIASES[t] ?? []).some((a) => index.get(a)?.has(docId));
+    if (viaAlias) { hit += 0.5; continue; }
+    if (!index.has(t)) unmatched.push(t);
+  }
+  return { score: hit / rawTerms.length, unmatched };
+}
+
+const sourcesFor = (docs: Doc[]): SourceRef[] => {
+  const seen = new Map<string, SourceRef>();
+  for (const d of docs) {
+    // A renumbering row is a statement about the Act and the Rules themselves.
+    const ids = d.card?.s ?? (d.map ? ["itdNewAct", "itdForms"] : d.corridor ? ["dtaaTexts"] : []);
+    for (const id of ids) {
+      const s = (SOURCES as any)[id];
+      if (s && !seen.has(id)) seen.set(id, { id, ...s });
+    }
+  }
+  // Primary law first — a reader deciding what to trust should see it first.
+  const rank = { primary: 0, regulator: 1, secondary: 2 } as Record<string, number>;
+  return [...seen.values()].sort((a, b) => rank[a.authority] - rank[b.authority]);
+};
+
+export function answer(query: string, corridor: CorridorKey | "all" = "all"): Answer {
+  const rawTerms = tokenise(query).filter((t) => !STOP.has(t));
+  const hits = search(query, corridor, 12);
+  const base: Answer = {
+    kind: "none", query, sentences: [], supporting: [], sources: [],
+    grade: null, coverage: 0, margin: 0, nearest: [], unmatched: [], gap: gapFor(query),
+  };
+  if (!hits.length || !rawTerms.length) return base;
+
+  const top = hits[0];
+  const { score: coverage, unmatched } = coverageOf(top.doc.id, rawTerms);
+  const margin = hits[1] ? top.score / hits[1].score : 3;
+  const nearest = hits.slice(0, 4).map((h) => h.doc);
+
+  // An out-of-scope subject beats retrieval, and it has to. The corpus indexes
+  // nothing against "bitcoin", but it does index "buy" and "nri" — so without
+  // this, "can I buy bitcoin as an NRI" answers with the rules on agricultural
+  // land, confidently and completely wrongly. If the word that carries the
+  // question is a word this corpus has never heard of, and it belongs to a
+  // subject we know we do not cover, that is the answer.
+  const gap = base.gap;
+  if (gap && unmatched.some((w) => gap.match.includes(w))) {
+    return { ...base, kind: "none", gap, nearest, coverage, margin, unmatched };
+  }
+
+  // Related, but not an answer to THIS question. Better said than dressed up.
+  if (coverage < 0.34) {
+    return { ...base, kind: "none", nearest, coverage, margin, unmatched };
+  }
+
+  const doc = top.doc;
+  let lines: string[] = [];
+  if (doc.map) {
+    const { old, now, what, type } = doc.map;
+    const w = type === "section" ? "Section" : "Form";
+    lines = [`${w} ${old} is now ${w} ${now} — ${what}`,
+      "The Income-tax Act, 1961 was replaced by the Income-tax Act, 2025 on 1 April 2026. The rates did not change; the section and form numbers did."];
+  } else if (doc.corridor) {
+    const c = CORRIDORS[doc.corridor];
+    lines = [c.oneLine, c.why];
+  } else if (doc.card) {
+    const pool = [...sentences(doc.card.a), ...(doc.card.a2 ? sentences(doc.card.a2) : [])];
+    const wanted = new Set(rawTerms.flatMap((t) => [t, ...(ALIASES[t] ?? [])]));
+    const matched = pool.filter((s) => tokenise(s).some((w) => wanted.has(w)));
+    // Fall back to the card's own opening rather than inventing a summary.
+    lines = (matched.length ? matched : pool).slice(0, 3);
+  }
+
+  // Supporting cards must earn their place: they have to address some of what
+  // was asked too, and add a topic the primary did not already cover.
+  const usedTopics = new Set([doc.topic]);
+  const supporting: Doc[] = [];
+  for (const h of hits.slice(1)) {
+    if (supporting.length >= 2) break;
+    if (coverageOf(h.doc.id, rawTerms).score < 0.5) continue;
+    // Must be in the same league as the primary. A long tail of 10%-relevant
+    // cards is how a short citation list turns into an unreadable one.
+    if (h.score < top.score * 0.25) continue;
+    if (usedTopics.has(h.doc.topic)) continue;
+    usedTopics.add(h.doc.topic);
+    supporting.push(h.doc);
+  }
+
+  const confident = coverage >= 0.75 || (coverage >= 0.5 && margin >= 1.2);
+  // A renumbering row is read straight off the Act and the Rules.
+  const grade = doc.card?.g ?? (doc.map ? "A" : null);
+  return {
+    ...base,
+    kind: confident ? "answer" : "partial",
+    primary: doc,
+    sentences: lines,
+    verdict: doc.card?.verdict,
+    supporting,
+    sources: sourcesFor([doc, ...supporting]),
+    grade,
+    gradeNote: grade ? (GRADES as any)[grade] : undefined,
+    coverage, margin, unmatched,
+    nearest: hits.slice(1, 4).map((h) => h.doc),
+    gap: null,
+  };
+}

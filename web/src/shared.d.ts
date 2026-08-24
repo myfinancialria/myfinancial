@@ -171,7 +171,19 @@ declare module "@shared/nri.mjs" {
     id: string; topic: string; k: "answer" | "rate" | "trap" | "flow" | "map" | "table";
     c: "all" | CorridorKey[]; q: string; a: string; a2?: string;
     verdict?: Verdict; steps?: string[]; income?: string; tags: string;
+    /** Evidence grade, merged in from CARD_META. Null means ungraded, which is a build failure. */
+    g: "A" | "B" | "C" | null;
+    /** Source ids into SOURCES, merged in from CARD_META. */
+    s: string[];
   }
+
+  export interface Source { label: string; url: string; authority: "primary" | "regulator" | "secondary" }
+  export const SOURCES: Record<string, Source>;
+  export const GRADES: Record<string, string>;
+
+  export interface Gap { id: string; label: string; match: string; why: string; where: string }
+  export const NOT_COVERED: Gap[];
+  export function gapFor(query: string): Gap | null;
   export const CARDS: Card[];
   export const TOPICS: [string, string][];
 }

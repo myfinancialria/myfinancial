@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   CARDS, TOPICS, CORRIDORS, CORRIDOR_KEYS, INCOME_TYPES, TREATY,
   SECTION_MAP, FORM_MAP, RETURN_TIMELINE, MATRIX_ROWS, REPAT_CAP_USD,
+  SOURCES, GRADES, NOT_COVERED, gapFor,
   residency, ratePick, propertySale, repatriationPlan, surchargeRate,
 } from "../../shared/nri.mjs";
 
@@ -231,5 +232,63 @@ test("the comparison matrix resolves a cell for every corridor", () => {
       const cell = row.get(CORRIDORS[k]);
       assert.ok(cell.v && cell.tone, `${row.key} × ${k} produced no cell`);
     }
+  }
+});
+
+/* ------------------------------ provenance --------------------------------- */
+
+test("every answer cites at least one real source and carries an evidence grade", () => {
+  for (const c of CARDS) {
+    // An ungraded or uncited card must fail loudly rather than defaulting: the
+    // direct-answer panel shows both to the reader, and a silent default there
+    // would be a fabricated assurance.
+    assert.ok(GRADES[c.g], `${c.id} has no evidence grade`);
+    assert.ok(c.s.length >= 1, `${c.id} cites no source`);
+    for (const id of c.s) assert.ok(SOURCES[id], `${c.id} cites unknown source "${id}"`);
+  }
+});
+
+test("every source is openable and declares what it is", () => {
+  for (const [id, s] of Object.entries(SOURCES)) {
+    assert.match(s.url, /^https:\/\//, `${id} has no https URL`);
+    // A citation reads as a citation, not as an acronym: the label has to say
+    // what the reader is being sent to, not just who published it.
+    assert.ok(s.label.length > 8 && /\s/.test(s.label), `${id} needs a label that says what it is`);
+    assert.ok(["primary", "regulator", "secondary"].includes(s.authority), `${id} has no authority level`);
+  }
+});
+
+test("the corridor answers cite that corridor's own tax authority", () => {
+  const expect = { us: /irs|ssa/, canada: /cra|can/, australia: /ato/, nz: /ird/, gulf: /uae|oman|pwcUae/ };
+  for (const [k, re] of Object.entries(expect)) {
+    const cards = CARDS.filter((c) => c.c !== "all" && c.c.includes(k) && c.topic !== "insurance");
+    const cited = cards.some((c) => c.s.some((id) => re.test(id)));
+    assert.ok(cited, `no ${k} answer cites a ${k} authority`);
+  }
+});
+
+/* --------------------------- what it does not know ------------------------- */
+
+test("out-of-scope subjects are declared, with a reason and somewhere to go", () => {
+  assert.ok(NOT_COVERED.length >= 5);
+  for (const g of NOT_COVERED) {
+    assert.ok(g.label && g.match && g.why.length > 60 && g.where.length > 20, `${g.id} is incomplete`);
+  }
+});
+
+test("a question about an uncovered subject is recognised as uncovered", () => {
+  assert.equal(gapFor("uk tax for nri")?.id, "uk");
+  assert.equal(gapFor("can i buy bitcoin as an nri")?.id, "crypto");
+  assert.equal(gapFor("should i set up a family trust")?.id, "trusts");
+  assert.equal(gapFor("h1b visa sponsorship")?.id, "immigration");
+  assert.equal(gapFor("singapore nri account")?.id, "singapore");
+});
+
+test("questions the corpus DOES answer are not mistaken for gaps", () => {
+  // The regression this pins: a bare "tax" in the state-tax term list matched
+  // almost every real question and sent it to the wrong "not covered" notice.
+  for (const q of ["nro interest tds", "selling my flat", "how many days can i stay in india",
+                   "ppf interest", "what is section 195", "nre or nro account"]) {
+    assert.equal(gapFor(q), null, `"${q}" was wrongly treated as out of scope`);
   }
 });

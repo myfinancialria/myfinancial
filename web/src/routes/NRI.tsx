@@ -7,7 +7,8 @@ import {
   ratePick, residency, propertySale, repatriationPlan,
   type CorridorKey,
 } from "@shared/nri.mjs";
-import { search, byTopic, SUGGESTED, CORPUS_SIZE, type Doc, type Hit } from "../lib/nri";
+import { search, answer, byTopic, SUGGESTED, CORPUS_SIZE,
+  type Doc, type Hit, type Answer } from "../lib/nri";
 import { Card, CardHead, Chip, Label, Button, Tile } from "../components/ui";
 import { Reveal, Stagger, StaggerItem } from "../components/motion";
 import { nf } from "../lib/format";
@@ -259,6 +260,134 @@ function ResultCard({ doc, corridor, amount, open, onToggle }: {
           </motion.div>
         )}
       </AnimatePresence>
+    </Card>
+  );
+}
+
+
+/* ============================== direct answer ============================= */
+
+const AUTHORITY: Record<string, { label: string; tone: string }> = {
+  primary:   { label: "the law itself", tone: "up" },
+  regulator: { label: "regulator", tone: "accent" },
+  secondary: { label: "professional summary", tone: "warn" },
+};
+
+/**
+ * The direct answer.
+ *
+ * Assembled out of sentences that already exist in the corpus and shown with
+ * the card they came from and the authority behind it. Nothing on this panel is
+ * written at runtime — which is the only reason it can be trusted to be silent
+ * when the corpus has nothing, instead of producing something plausible.
+ */
+function AnswerPanel({ a, onOpen }: { a: Answer; onOpen: (id: string) => void }) {
+  /* ------------------------------ no answer ----------------------------- */
+  if (a.kind === "none") {
+    return (
+      <Card className="border-warn/40">
+        <div className="p-6">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <VerdictTag v="Not in this knowledge base" tone="warn" />
+            {a.gap && <Chip tone="warn">{a.gap.label}</Chip>}
+          </div>
+          {a.gap ? (
+            <>
+              <p className="mt-3 max-w-[78ch] text-[13px] leading-relaxed text-ink-dim">{a.gap.why}</p>
+              <div className="mt-4 border-t border-line pt-3.5">
+                <Label>Where to look instead</Label>
+                <p className="mt-1.5 max-w-[78ch] text-[12.5px] leading-relaxed text-ink-dim">{a.gap.where}</p>
+              </div>
+            </>
+          ) : (
+            <p className="mt-3 max-w-[78ch] text-[13px] leading-relaxed text-ink-dim">
+              Nothing here answers that. This corpus covers investing, tax, remittance, insurance, treaty relief and
+              returning to India, for five corridors — the US, Canada, the Gulf, Australia and New Zealand.
+              {a.unmatched.length > 0 && (
+                <> No answer mentions {a.unmatched.slice(0, 4).map((w, i) => (
+                  <span key={w}>{i ? ", " : ""}<b className="text-ink">“{w}”</b></span>
+                ))}.</>
+              )}
+            </p>
+          )}
+          {a.nearest.length > 0 && (
+            <div className="mt-4 border-t border-line pt-3.5">
+              <Label>Related, but not an answer to this</Label>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {a.nearest.slice(0, 3).map((d) => (
+                  <Button key={d.id} onClick={() => onOpen(d.id)}>{d.title}</Button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+    );
+  }
+
+  /* ------------------------------- an answer ---------------------------- */
+  const partial = a.kind === "partial";
+  return (
+    <Card className={partial ? "border-warn/40" : "border-accent/40"}>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Label>{partial ? "Closest thing in the knowledge base" : "Answer"}</Label>
+          {a.verdict && <VerdictTag v={a.verdict.v} tone={a.verdict.tone} />}
+        </div>
+        {a.grade && (
+          <span title={a.gradeNote} className={`inline-block cursor-help border px-2 py-0.5 font-mono text-[9.5px]
+            uppercase tracking-[0.12em] ${a.grade === "C" ? BORDER.warn + " " + TONE.warn : BORDER.up + " " + TONE.up}`}>
+            evidence {a.grade}
+          </span>
+        )}
+      </div>
+
+      <div className="px-5 py-4">
+        {partial && (
+          <p className="mb-3 border-l-2 border-warn/60 pl-3 text-[12px] leading-relaxed text-warn">
+            This is the nearest answer in the corpus, but it does not squarely cover what you asked. Read it as
+            context, not as the answer.
+          </p>
+        )}
+        <div className="space-y-2.5">
+          {a.sentences.map((line, i) => (
+            <p key={i} className="max-w-[86ch] text-[13.5px] leading-relaxed text-ink">{line}</p>
+          ))}
+        </div>
+
+        <div className="mt-5 grid gap-5 border-t border-line pt-4 md:grid-cols-2">
+          <div>
+            <Label>Assembled from</Label>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {[a.primary!, ...a.supporting].map((d) => (
+                <Button key={d.id} onClick={() => onOpen(d.id)}>{d.title}</Button>
+              ))}
+            </div>
+            <p className="mt-2.5 text-[11px] leading-relaxed text-ink-faint">
+              Quoted verbatim from those answers. Nothing on this panel is generated, so it cannot tell you something
+              the knowledge base does not say.
+            </p>
+          </div>
+
+          <div>
+            <Label>Sources behind it</Label>
+            <ul className="mt-2 space-y-1.5">
+              {a.sources.map((src) => {
+                const auth = AUTHORITY[src.authority];
+                return (
+                  <li key={src.id} className="flex flex-wrap items-baseline gap-x-2">
+                    <a href={src.url} target="_blank" rel="noopener noreferrer"
+                      className="text-[12px] text-ink-dim underline decoration-line-2 underline-offset-2 transition-colors hover:text-ink">
+                      {src.label}
+                    </a>
+                    <span className={`font-mono text-[9px] uppercase tracking-[0.1em] ${TONE[auth.tone]}`}>{auth.label}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      </div>
     </Card>
   );
 }
@@ -766,6 +895,7 @@ export default function NRI() {
   const [tab, setTab] = useState(params.get("t") ?? "answers");
   const [amount, setAmount] = useState(1000000);
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const [mode, setMode] = useState<"answer" | "all">("answer");
   const box = useRef<HTMLInputElement>(null);
 
   // The URL carries the question, so an answer can be sent to someone. The 404
@@ -792,7 +922,14 @@ export default function NRI() {
     () => (query.trim().length > 1 ? search(query, corridor) : []),
     [query, corridor]);
 
-  const ask = (q: string) => { setQuery(q); setTab("answers"); setOpen(new Set()); box.current?.focus(); };
+  // The direct answer is the default: most people want the answer, not a
+  // reading list. The full result set stays one click away.
+  const ans: Answer | null = useMemo(
+    () => (query.trim().length > 1 ? answer(query, corridor) : null),
+    [query, corridor]);
+
+  const ask = (q: string) => { setQuery(q); setTab("answers"); setMode("answer"); setOpen(new Set()); box.current?.focus(); };
+  const openDoc = (id: string) => { setMode("all"); setOpen(new Set([id])); };
   const toggle = (id: string) => setOpen((s) => {
     const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n;
   });
@@ -884,42 +1021,55 @@ export default function NRI() {
 
             {tab === "answers" && (
               <>
-                {hits.length > 0 ? (
-                  <>
-                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                      <div className="text-[12px] text-ink-faint">
-                        <b className="text-ink-dim">{hits.length}</b> answer{hits.length === 1 ? "" : "s"} for
-                        {" "}<span className="text-ink">“{query.trim()}”</span>
-                        {active && <> · scored for <span className="text-ink">{active.label}</span></>}
+                {ans ? (
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Button active={mode === "answer"} onClick={() => setMode("answer")}>Direct answer</Button>
+                        <Button active={mode === "all"} onClick={() => setMode("all")}>
+                          All results{hits.length ? ` · ${hits.length}` : ""}
+                        </Button>
+                        {active && (
+                          <span className="ml-1 text-[11.5px] text-ink-faint">
+                            for <span className="text-ink-dim">{active.label}</span>
+                          </span>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Label>Rate examples on</Label>
-                        <input type="number" value={amount} step={100000} onChange={(e) => setAmount(Number(e.target.value || 0))}
-                          className="w-32 border border-line-2 bg-paper px-2.5 py-1 text-[12px] text-ink tnum outline-none focus:border-ink" />
-                      </div>
+                      {mode === "all" && (
+                        <div className="flex items-center gap-2">
+                          <Label>Rate examples on</Label>
+                          <input type="number" value={amount} step={100000} onChange={(e) => setAmount(Number(e.target.value || 0))}
+                            className="w-32 border border-line-2 bg-paper px-2.5 py-1 text-[12px] text-ink tnum outline-none focus:border-ink" />
+                        </div>
+                      )}
                     </div>
-                    <Stagger className="space-y-3" gap={0.035}>
-                      {hits.map((h) => (
-                        <StaggerItem key={h.doc.id}>
-                          <ResultCard doc={h.doc} corridor={corridor} amount={amount}
-                            open={open.has(h.doc.id)} onToggle={() => toggle(h.doc.id)} />
-                        </StaggerItem>
-                      ))}
-                    </Stagger>
-                  </>
-                ) : query.trim().length > 1 ? (
-                  <Card className="p-8 text-center">
-                    <div className="text-[14px] font-semibold">Nothing matched “{query.trim()}”.</div>
-                    <p className="mx-auto mt-2 max-w-[52ch] text-[12.5px] leading-relaxed text-ink-dim">
-                      Try the thing rather than the rule — “my flat”, “my bank deducted too much”, “moving back”.
-                      Old section and form numbers work too: 195, 10F, 15CB.
-                    </p>
-                    <div className="mt-5 flex flex-wrap justify-center gap-1.5">
-                      {SUGGESTED.slice(0, 6).map((s) => (
-                        <Button key={s.q} onClick={() => ask(s.q)}>{s.q}</Button>
-                      ))}
-                    </div>
-                  </Card>
+
+                    {mode === "answer" ? (
+                      <AnswerPanel a={ans} onOpen={openDoc} />
+                    ) : hits.length > 0 ? (
+                      <Stagger className="space-y-3" gap={0.035}>
+                        {hits.map((h) => (
+                          <StaggerItem key={h.doc.id}>
+                            <ResultCard doc={h.doc} corridor={corridor} amount={amount}
+                              open={open.has(h.doc.id)} onToggle={() => toggle(h.doc.id)} />
+                          </StaggerItem>
+                        ))}
+                      </Stagger>
+                    ) : (
+                      <Card className="p-8 text-center">
+                        <div className="text-[14px] font-semibold">Nothing matched “{query.trim()}”.</div>
+                        <p className="mx-auto mt-2 max-w-[52ch] text-[12.5px] leading-relaxed text-ink-dim">
+                          Try the thing rather than the rule — “my flat”, “my bank deducted too much”, “moving back”.
+                          Old section and form numbers work too: 195, 10F, 15CB.
+                        </p>
+                        <div className="mt-5 flex flex-wrap justify-center gap-1.5">
+                          {SUGGESTED.slice(0, 6).map((s) => (
+                            <Button key={s.q} onClick={() => ask(s.q)}>{s.q}</Button>
+                          ))}
+                        </div>
+                      </Card>
+                    )}
+                  </div>
                 ) : (
                   <div className="space-y-6">
                     <div>
