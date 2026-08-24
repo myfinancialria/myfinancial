@@ -22,7 +22,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { quotes, corporateActions, news, buildNameIndex, tagHeadline } from "./lib/insights_sources.mjs";
+import { worldQuotes, indiaIndices, fx, corporateActions, news, buildNameIndex, tagHeadline } from "./lib/insights_sources.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -42,26 +42,26 @@ const arg = (name) => (process.argv.find((a) => a.startsWith(`--${name}=`)) || "
 const SESSION = arg("session") || (istHour() < 12 ? "premarket" : "postmarket");
 
 /* -------------------------------- symbols -------------------------------- */
-const INDIA = [
-  { key: "NIFTY 50", sym: "^NSEI" }, { key: "SENSEX", sym: "^BSESN" },
-  { key: "BANK NIFTY", sym: "^NSEBANK" }, { key: "NIFTY IT", sym: "^CNXIT" },
-  { key: "INDIA VIX", sym: "^INDIAVIX" },
-];
-const GLOBAL = [
-  { key: "S&P 500", sym: "^GSPC", region: "US" }, { key: "Nasdaq", sym: "^IXIC", region: "US" },
-  { key: "Dow Jones", sym: "^DJI", region: "US" }, { key: "CBOE VIX", sym: "^VIX", region: "US" },
-  { key: "Nikkei 225", sym: "^N225", region: "Asia" }, { key: "Hang Seng", sym: "^HSI", region: "Asia" },
-  { key: "Shanghai", sym: "000001.SS", region: "Asia" }, { key: "Kospi", sym: "^KS11", region: "Asia" },
-  { key: "FTSE 100", sym: "^FTSE", region: "Europe" }, { key: "DAX", sym: "^GDAXI", region: "Europe" },
+// CNBC ticker syntax: ".XXX" for an index, "@XX.1" for a front-month future.
+const WORLD = [
+  { key: "S&P 500", sym: ".SPX", region: "US" }, { key: "Nasdaq", sym: ".IXIC", region: "US" },
+  { key: "Dow Jones", sym: ".DJI", region: "US" }, { key: "CBOE VIX", sym: ".VIX", region: "US" },
+  { key: "Nikkei 225", sym: ".N225", region: "Asia" }, { key: "Hang Seng", sym: ".HSI", region: "Asia" },
+  { key: "Kospi", sym: ".KS11", region: "Asia" },
+  { key: "FTSE 100", sym: ".FTSE", region: "Europe" }, { key: "DAX", sym: ".GDAXI", region: "Europe" },
 ];
 const MACRO = [
-  { key: "USD / INR", sym: "INR=X", kind: "fx", dp: 3 },
-  { key: "Dollar index", sym: "DX-Y.NYB", kind: "fx" },
-  { key: "Brent crude", sym: "BZ=F", kind: "commodity" },
-  { key: "Gold", sym: "GC=F", kind: "commodity" },
-  { key: "Silver", sym: "SI=F", kind: "commodity" },
-  { key: "US 10-year", sym: "^TNX", kind: "rate", dp: 3 },
+  { key: "WTI crude", sym: "@CL.1", kind: "commodity" }, { key: "Gold", sym: "@GC.1", kind: "commodity" },
+  { key: "Silver", sym: "@SI.1", kind: "commodity" }, { key: "Natural gas", sym: "@NG.1", kind: "commodity" },
+  { key: "US 10-year", sym: "US10Y", kind: "rate", dp: 3 },
+  { key: "Dollar index", sym: ".DXY", kind: "fx", dp: 3 },
 ];
+
+// Which of NSE's 139 indices are the headline ones, and which are sectors.
+const BENCH = /^(NIFTY 50|NIFTY NEXT 50|NIFTY MIDCAP 100|NIFTY SMALLCAP 100|NIFTY 500|INDIA VIX)$/i;
+const SECTOR = /^NIFTY (BANK|IT|AUTO|PHARMA|FMCG|METAL|REALTY|MEDIA|ENERGY|INFRASTRUCTURE|PSU BANK|HEALTHCARE INDEX|CONSUMER DURABLES|OIL & GAS|CHEMICALS|FINANCIAL SERVICES)$/i;
+
+const asQuote = (i) => ({ key: i.index, sym: i.key, price: i.price, pct: i.pct, chg: i.chg, stale: false, at: null, currency: "INR" });
 
 /* ------------------------------ the universe ----------------------------- */
 function loadUniverse() {
@@ -117,22 +117,25 @@ function fromBhavcopy(u) {
   };
 }
 
-/** The same picture at 5pm, from quotes on the NIFTY 50 — explicitly partial. */
-async function fromQuotes(u) {
-  const members = u.rows.filter((r) => r.inNifty50 === true || r.nseTier === "NIFTY 50").slice(0, 50);
-  if (!members.length) return null;
-  const q = await quotes(members.map((m) => ({ key: m.symbol, sym: `${m.symbol}.NS`, name: m.name, sector: m.sector })), { gapMs: 700 });
-  const live = q.filter((x) => x.ok && x.pct !== null && !x.stale);
-  if (live.length < 10) return null;                       // too thin to characterise a session
-
-  const adv = live.filter((x) => x.pct > 0).length;
-  const dec = live.filter((x) => x.pct < 0).length;
-  const rank = (dir) => [...live].sort((a, b) => dir * (b.pct - a.pct)).slice(0, 10)
-    .map((x) => ({ symbol: x.key, name: x.name, price: r2(x.price), pct: x.pct, sector: x.sector }));
+/**
+ * The session at 5pm, before the bhavcopy exists.
+ *
+ * NSE publishes advances and declines with each index, so the NIFTY 500's own
+ * counts describe the day's breadth across 500 companies without a single
+ * extra request — and without pretending to be the settled file.
+ */
+function fromIndices(nse) {
+  const broad = nse.find((i) => /^NIFTY 500$/i.test(i.index)) ?? nse.find((i) => /^NIFTY 50$/i.test(i.index));
+  if (!broad || broad.advances === null) return null;
+  const total = (broad.advances ?? 0) + (broad.declines ?? 0) + (broad.unchanged ?? 0);
+  if (total < 10) return null;
   return {
-    basis: "PROVISIONAL", universe: live.length,
-    breadth: { advances: adv, declines: dec, unchanged: live.length - adv - dec, ratio: dec ? r2(adv / dec) : null },
-    gainers: rank(1), losers: rank(-1), sectors: [], volume: [],
+    basis: "PROVISIONAL", universe: total, breadthFrom: broad.index,
+    breadth: {
+      advances: broad.advances ?? 0, declines: broad.declines ?? 0, unchanged: broad.unchanged ?? 0,
+      ratio: broad.declines ? r2(broad.advances / broad.declines) : null,
+    },
+    gainers: [], losers: [], sectors: [], volume: [],
   };
 }
 
@@ -159,31 +162,40 @@ const inNews = (() => {
 console.log(`[insights] news: ${tagged.length} headlines · ${inNews.length} companies identified`);
 
 if (SESSION === "premarket") {
-  const [world, macro, india] = [await quotes(GLOBAL), await quotes(MACRO), await quotes(INDIA)];
+  const [world, macro, nse, rates] = [await worldQuotes(WORLD), await worldQuotes(MACRO), await indiaIndices(), await fx(["INR"])];
   const ca = await corporateActions({ days: 10 });
-  console.log(`[insights] quotes: ${[...world, ...macro, ...india].filter((q) => q.ok).length}/${world.length + macro.length + india.length}` +
-              ` · corporate actions: ${ca ? ca.length : "unavailable"}`);
+  console.log(`[insights] world ${world.length}/${WORLD.length} · macro ${macro.length}/${MACRO.length}` +
+              ` · NSE indices ${nse.length} · FX ${rates.length} · corporate actions ${ca ? ca.length : "unavailable"}`);
 
   state.premarket = {
     asOf: new Date().toISOString(), forDate: istDate(),
-    global: world.filter((q) => q.ok), macro: macro.filter((q) => q.ok),
-    india: india.filter((q) => q.ok),
+    global: world, macro: [...macro, ...rates],
+    india: nse.filter((i) => BENCH.test(i.index)).map(asQuote),
     previousClose: { date: universe.priceDate },
     corporateActions: ca ?? [],
     news: tagged.slice(0, 24), inNews,
   };
 } else {
+  const nse = await indiaIndices();
   const bhavIsToday = universe.priceDate === istDate();
-  const session = bhavIsToday ? fromBhavcopy(universe) : await fromQuotes(universe);
-  const idx = await quotes(INDIA);
-  console.log(`[insights] session basis: ${session?.basis ?? "unavailable"}` +
+  const session = bhavIsToday ? fromBhavcopy(universe) : fromIndices(nse);
+  console.log(`[insights] NSE indices ${nse.length} · session basis ${session?.basis ?? "unavailable"}` +
               `${bhavIsToday ? "" : ` (bhavcopy still at ${universe.priceDate}; NSE publishes it ~18:30 IST)`}`);
+
+  // Sector moves come from NSE's own sector indices, which exist at 5pm — the
+  // turnover-weighted approximation is only needed when they do not answer.
+  const sectors = nse.filter((i) => SECTOR.test(i.index))
+    .map((i) => ({ sector: i.index.replace(/^NIFTY /, "").replace(/ INDEX$/, ""), pct: i.pct,
+                   count: (i.advances ?? 0) + (i.declines ?? 0) + (i.unchanged ?? 0),
+                   advancePct: (i.advances ?? 0) + (i.declines ?? 0) > 0 ? Math.round((i.advances / ((i.advances ?? 0) + (i.declines ?? 0) + (i.unchanged ?? 0))) * 100) : 0 }))
+    .sort((a, b) => b.pct - a.pct);
 
   state.postmarket = {
     asOf: new Date().toISOString(), forDate: istDate(),
     bhavcopyDate: universe.priceDate,
-    indices: idx.filter((q) => q.ok),
-    ...(session ?? { basis: "UNAVAILABLE", breadth: null, gainers: [], losers: [], sectors: [], volume: [] }),
+    indices: nse.filter((i) => BENCH.test(i.index)).map(asQuote),
+    ...(session ?? { basis: "UNAVAILABLE", breadth: null, gainers: [], losers: [], volume: [] }),
+    sectors: sectors.length ? sectors : (session?.sectors ?? []),
     news: tagged.slice(0, 24), inNews,
   };
 }

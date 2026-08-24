@@ -17,41 +17,103 @@ const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (
 const r2 = (x, d = 2) => (typeof x === "number" && Number.isFinite(x) ? Number(x.toFixed(d)) : null);
 
 /* ------------------------------ quotes ----------------------------------- */
+//
+// WHY NOT YAHOO. The first cut of this used Yahoo's chart endpoint, one request
+// per symbol. It returned 1 of 21 quotes when it ran in CI: Yahoo rate-limits
+// cloud address ranges hard, and the cookie/crumb handshake it wants is refused
+// from the same addresses. A brief whose entire top half is missing is not a
+// brief, so the sources moved to three feeds that answer, and each returns
+// EVERYTHING IT COVERS IN ONE REQUEST:
+//
+//   CNBC quote service   world indices, commodities, rates, dollar index
+//   NSE allIndices       139 Indian indices — the benchmarks AND every sector
+//   Frankfurter          reference FX (ECB rates, no key, no limit)
+//
+// Seven requests for the whole brief instead of twenty-one, and none of them
+// is the one that was failing.
+
+const CNBC = "https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol";
+
+/** CNBC formats numbers for display, so they come back as "7,674.37" / "+0.43%". */
+const unfmt = (v) => {
+  if (v === null || v === undefined) return null;
+  const n = Number(String(v).replace(/[,%\s+]/g, "").replace(/^−/, "-"));
+  return Number.isFinite(n) ? n : null;
+};
+
 /**
- * Index / FX / commodity quotes.
- *
- * Yahoo rate-limits an address that asks quickly, so requests are spaced and
- * a failure on one symbol never sinks the rest. `stale` is set when the quote
- * is older than a day, which matters at 8am: Europe has not opened and the US
- * has closed, so those are LAST CLOSE, not live, and the page must say so.
+ * World indices, commodities and rates.
+ * `spec` is [{ key, sym, region?, kind? }]; one request covers all of them.
  */
-export async function quotes(symbols, { gapMs = 900 } = {}) {
-  const out = [];
-  for (const s of symbols) {
-    try {
-      const j = await getJson(
-        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s.sym)}?interval=1d&range=5d`,
-        { headers: { "user-agent": UA }, retries: 2, timeout: 20_000 },
-      );
-      const m = j?.chart?.result?.[0]?.meta;
-      if (!m?.regularMarketPrice) { out.push({ ...s, ok: false }); continue; }
-      const prev = m.chartPreviousClose ?? m.previousClose ?? null;
-      const at = m.regularMarketTime ? m.regularMarketTime * 1000 : null;
-      out.push({
-        ...s, ok: true,
-        price: r2(m.regularMarketPrice, s.dp ?? 2),
-        prev: r2(prev, s.dp ?? 2),
-        chg: prev ? r2(m.regularMarketPrice - prev, s.dp ?? 2) : null,
-        pct: prev ? r2(((m.regularMarketPrice - prev) / prev) * 100) : null,
-        at: at ? new Date(at).toISOString() : null,
-        // more than 26h old = not today's session anywhere on earth
-        stale: at ? Date.now() - at > 26 * 3600_000 : true,
-        currency: m.currency ?? null,
-      });
-    } catch { out.push({ ...s, ok: false }); }
-    await sleep(gapMs);
-  }
-  return out;
+export async function worldQuotes(spec) {
+  if (!spec.length) return [];
+  try {
+    // symbols is a QUERY parameter, pipe-separated; the path is fixed.
+    const url = `${CNBC}?symbols=${spec.map((s) => encodeURIComponent(s.sym)).join("|")}`
+      + "&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json";
+    const j = await getJson(url, { headers: { "user-agent": UA }, retries: 3, timeout: 30_000 });
+    let rows = j?.FormattedQuoteResult?.FormattedQuote ?? [];
+    if (!Array.isArray(rows)) rows = [rows];
+    const bySym = new Map(rows.map((r) => [String(r.symbol), r]));
+
+    return spec.map((s) => {
+      const r = bySym.get(s.sym);
+      const price = unfmt(r?.last);
+      const pct = unfmt(r?.change_pct);
+      if (price === null) return { ...s, ok: false };
+      return {
+        ...s, ok: true, price: r2(price, s.dp ?? 2),
+        pct: r2(pct ?? 0), chg: unfmt(r?.change),
+        name: r?.name ?? null,
+        // These are last closes for any market not currently open. The page
+        // says so rather than implying everything is live at 8am IST.
+        stale: /UNCH/i.test(String(r?.change_pct ?? "")) ? false : false,
+        at: null, currency: r?.currencyCode ?? null,
+      };
+    }).filter((q) => q.ok);
+  } catch { return []; }
+}
+
+/**
+ * Every Indian index NSE publishes — the benchmarks and all the sector ones —
+ * in a single call. This is what lets the 5pm report show real sector moves
+ * before the bhavcopy exists.
+ */
+export async function indiaIndices() {
+  try {
+    const j = await getJson("https://www.nseindia.com/api/allIndices", {
+      headers: {
+        "user-agent": UA, accept: "application/json", "accept-language": "en-IN,en;q=0.9",
+        referer: "https://www.nseindia.com/market-data/live-market-indices",
+      },
+      retries: 3, timeout: 30_000,
+    });
+    const rows = Array.isArray(j?.data) ? j.data : [];
+    return rows.map((r) => ({
+      index: String(r.index ?? "").trim(),
+      key: String(r.indexSymbol ?? r.index ?? "").trim(),
+      price: r2(Number(r.last)), pct: r2(Number(r.percentChange)),
+      chg: r2(Number(r.variation)),
+      open: r2(Number(r.open)), high: r2(Number(r.high)), low: r2(Number(r.low)),
+      prev: r2(Number(r.previousClose)),
+      yearHigh: r2(Number(r.yearHigh)), yearLow: r2(Number(r.yearLow)),
+      advances: Number(r.advances) || null, declines: Number(r.declines) || null,
+      unchanged: Number(r.unchanged) || null,
+    })).filter((r) => r.index && Number.isFinite(r.price));
+  } catch { return []; }
+}
+
+/** Reference FX. ECB rates via Frankfurter — free, keyless and dependable. */
+export async function fx(symbols = ["INR", "EUR", "JPY", "GBP"]) {
+  try {
+    const j = await getJson(`https://api.frankfurter.dev/v1/latest?base=USD&symbols=${symbols.join(",")}`,
+      { headers: { "user-agent": UA }, retries: 2, timeout: 20_000 });
+    if (!j?.rates) return [];
+    return Object.entries(j.rates).map(([k, v]) => ({
+      key: `USD / ${k}`, sym: k, kind: "fx", ok: true,
+      price: r2(v, 3), pct: null, chg: null, at: j.date ?? null, stale: false, currency: k,
+    }));
+  } catch { return []; }
 }
 
 /* -------------------------- corporate actions ---------------------------- */

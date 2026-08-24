@@ -228,8 +228,8 @@ function PostMarketView({ d }: { d: PostMarket }) {
         <Card className="mt-6 border-warn">
           <div className="px-5 py-3.5 text-[12.5px] leading-relaxed text-ink-dim">
             <b className="text-warn">No session to report.</b> The official bhavcopy is still dated {d.bhavcopyDate},
-            and the live quote feed did not answer, so there is nothing here that could honestly be called today's
-            close. Headlines below are current. This resolves on the next market day — a report built from nothing
+            and NSE's live index feed did not answer, so there is nothing here that could honestly be called
+            today's close. Headlines below are current. This resolves on the next market day — a report built from nothing
             would be worse than an empty one.
           </div>
         </Card>
@@ -239,8 +239,9 @@ function PostMarketView({ d }: { d: PostMarket }) {
         <Card className="mt-6 border-warn">
           <div className="px-5 py-3.5 text-[12.5px] leading-relaxed text-ink-dim">
             <b className="text-warn">Provisional.</b> NSE publishes the official bhavcopy around 18:30 IST, so these
-            are live quotes rather than settled closes, and cover the NIFTY 50 rather than the whole market. The
-            evening refresh rebuilds this from the official file — the numbers can move slightly.
+            are NSE's own live index levels and advance/decline counts rather than settled closes. The evening
+            refresh rebuilds this from the official file and adds the individual movers, delivery data and
+            turnover — the numbers can move slightly between the two.
           </div>
         </Card>
       )}
@@ -258,7 +259,9 @@ function PostMarketView({ d }: { d: PostMarket }) {
         <Reveal className="mt-6">
           <Card>
             <CardHead title="Market breadth"
-              sub={`${d.universe ?? 0} traded names${d.basis === "OFFICIAL" ? " with real turnover" : " in the NIFTY 50"}`}
+              sub={d.basis === "OFFICIAL"
+                ? `${d.universe ?? 0} traded names with real turnover`
+                : `${d.universe ?? 0} companies in the ${d.breadthFrom ?? "index"}, counted by NSE`}
               right={d.breadth.ratio ? <Chip tone={d.breadth.ratio >= 1 ? "up" : "down"}>{nf(d.breadth.ratio, 2)}:1 adv/dec</Chip> : undefined} />
             <div className="px-5 py-5">
               <BreadthBar advances={d.breadth.advances} declines={d.breadth.declines} unchanged={d.breadth.unchanged} />

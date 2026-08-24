@@ -246,6 +246,8 @@ export interface PostMarket {
   /** OFFICIAL = settled bhavcopy. PROVISIONAL = live quotes, pre-bhavcopy. */
   basis: "OFFICIAL" | "PROVISIONAL" | "UNAVAILABLE";
   universe?: number;
+  /** Which NSE index the advance/decline counts came from, when provisional. */
+  breadthFrom?: string;
   indices: Quote[];
   breadth: { advances: number; declines: number; unchanged: number; ratio: number | null } | null;
   gainers: Mover[]; losers: Mover[];
