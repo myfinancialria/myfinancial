@@ -20,10 +20,21 @@ name: Daily rebuild (GitHub Pages)
 
 on:
   schedule:
-    # 21:00 IST, Mon–Fri. IST has no DST, so 15:30 UTC never drifts.
-    # Timed deliberately late: NSE publishes the full bhavcopy around 18:00-18:30
-    # IST and AMFI publishes NAVs later still, so an evening run picks up the
-    # same trading day rather than yesterday's.
+    # IST has no DST, so a fixed UTC offset never drifts.
+    #
+    # 08:00 IST — the pre-market brief. The US has closed, Asia is trading and
+    # Europe has not opened, which is exactly the picture worth publishing
+    # before India opens at 09:15.
+    - cron: "30 2 * * 1-5"
+    #
+    # 17:00 IST — the post-market report, as asked for. NSE does not publish the
+    # official bhavcopy until ~18:30, so this run reports live quotes and the
+    # page labels itself PROVISIONAL.
+    - cron: "30 11 * * 1-5"
+    #
+    # 21:00 IST — the full rebuild. Deliberately late: the bhavcopy is out and
+    # AMFI has published NAVs, so this picks up the same trading day rather than
+    # yesterday's, and re-cuts the evening report on the settled numbers.
     - cron: "30 15 * * 1-5"
   workflow_dispatch: {}
 
@@ -148,6 +159,17 @@ jobs:
           AIMLAPI_KEY: ${{ secrets.AIMLAPI_KEY }}
           AIMLAPI_MODEL: ${{ secrets.AIMLAPI_MODEL }}
         continue-on-error: true    # the brief is a bonus; never fail the deploy for it
+
+      # The 8am brief and the 5pm report. Reads dist/data/stocks.json, so it runs
+      # after the screener; writes var/insights.json, which the cache carries
+      # between runs so the morning brief never blanks last night's report.
+      #
+      # Best effort: a rate-limited quote feed or a publisher's RSS being down
+      # must not stop the rest of the site deploying.
+      - name: Insights — pre-market brief / post-market report
+        run: node scripts/build_insights.mjs
+        continue-on-error: true
+        timeout-minutes: 10
 
       - name: Verify the build before publishing
         run: node scripts/verify_build.mjs

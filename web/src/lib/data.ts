@@ -213,6 +213,51 @@ export interface HoldingsIndex {
   }[];
 }
 
+/* -------------------------------------------------------------------------
+   Pre-market brief and post-market report.
+------------------------------------------------------------------------- */
+
+export interface Quote {
+  key: string; sym: string; region?: string; kind?: string;
+  price: number; prev: number | null; chg: number | null; pct: number | null;
+  at: string | null; stale: boolean; currency: string | null;
+}
+export interface CorpAction {
+  symbol: string; isin: string | null; company: string; purpose: string;
+  kind: "DIVIDEND" | "BONUS" | "SPLIT" | "RIGHTS" | "BUYBACK" | "OTHER";
+  exDate: string; exMs: number; recordDate: string | null; series: string | null;
+}
+export interface Headline {
+  title: string; link: string; source: string; at: string | null;
+  companies: { symbol: string; name: string }[];
+}
+export interface Mover { symbol: string; name: string; price: number | null; pct: number | null; sector?: string | null; turnoverCr?: number | null }
+
+export interface PreMarket {
+  asOf: string; forDate: string;
+  global: Quote[]; macro: Quote[]; india: Quote[];
+  previousClose: { date: string };
+  corporateActions: CorpAction[];
+  news: Headline[];
+  inNews: { symbol: string; name: string; headlines: number; sample: string }[];
+}
+export interface PostMarket {
+  asOf: string; forDate: string; bhavcopyDate: string;
+  /** OFFICIAL = settled bhavcopy. PROVISIONAL = live quotes, pre-bhavcopy. */
+  basis: "OFFICIAL" | "PROVISIONAL" | "UNAVAILABLE";
+  universe?: number;
+  indices: Quote[];
+  breadth: { advances: number; declines: number; unchanged: number; ratio: number | null } | null;
+  gainers: Mover[]; losers: Mover[];
+  sectors: { sector: string; pct: number; count: number; advancePct: number }[];
+  volume: { symbol: string; name: string; pct: number; volumeRatio: number; deliveryPct: number | null }[];
+  news: Headline[];
+  inNews: { symbol: string; name: string; headlines: number; sample: string }[];
+}
+export interface Insights { generated: string; premarket?: PreMarket; postmarket?: PostMarket }
+
+export const loadInsights = () => get<Insights>("insights.json", (r) => r as Insights);
+
 export const loadHoldingsIndex = () => get<HoldingsIndex>("holdings.json", (r) => r as HoldingsIndex);
 
 /** Resolves to null (not a throw) when a scheme has no published disclosure. */

@@ -466,6 +466,41 @@ else bad("screener.html looks incomplete");
   else ok("the NRI route and its calculators are present in the shipped bundles");
 }
 
+// ---------------------------------- insights ---------------------------------
+// Published twice a day, so the freshness check is the whole point: a brief
+// that silently stops updating still LOOKS like a brief.
+{
+  const ins = readJson(path.join(DIST, "data", "insights.json"));
+  if (!ins) warn("no insights published — the Insights tab will be empty");
+  else {
+    const age = (iso) => (iso ? Math.round((Date.now() - Date.parse(iso)) / 3600000) : null);
+    const pre = ins.premarket, post = ins.postmarket;
+    if (!pre && !post) bad("insights.json has neither a brief nor a report in it");
+    if (pre) {
+      const h = age(pre.asOf);
+      const quotes = (pre.global?.length ?? 0) + (pre.macro?.length ?? 0) + (pre.india?.length ?? 0);
+      // 96h covers a long weekend plus a holiday; beyond that the job has stopped.
+      if (h > 96) bad(`pre-market brief is ${h}h old — the 08:00 run has stopped`);
+      else ok(`pre-market brief ${h}h old · ${quotes} quotes · ${pre.corporateActions?.length ?? 0} corporate actions · ${pre.news?.length ?? 0} headlines`);
+      if (quotes === 0) warn("pre-market brief carries no quotes — the quote feed was rate-limited");
+      if (!pre.news?.length) warn("pre-market brief carries no headlines — every RSS feed failed");
+    }
+    if (post) {
+      const h = age(post.asOf);
+      if (h > 96) bad(`post-market report is ${h}h old — the 17:00 run has stopped`);
+      else ok(`post-market report ${h}h old · basis ${post.basis} · ${post.gainers?.length ?? 0} gainers · ${post.sectors?.length ?? 0} sectors`);
+      if (post.basis === "UNAVAILABLE") warn("post-market report could not read the session at all");
+    }
+    // Headlines carry a publisher and a link, never article text. If a link
+    // ever went missing the page would be reproducing someone's headline with
+    // no attribution and no way back to them.
+    const heads = [...(pre?.news ?? []), ...(post?.news ?? [])];
+    const orphan = heads.filter((h) => !h.link || !h.source).length;
+    if (orphan) bad(`${orphan} headlines have no source or no link back to the publisher`);
+    else if (heads.length) ok(`all ${heads.length} headlines carry a publisher and an outbound link`);
+  }
+}
+
 // -------------------------------- daily brief --------------------------------
 // The brief is a bonus page and never blocks a deploy, but it has silently
 // emptied itself once already, so its state is at least reported.

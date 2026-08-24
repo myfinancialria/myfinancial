@@ -8,6 +8,7 @@ import { siteUrl } from "../lib/data";
 // should be one click from every other one.
 const NAV = [
   { to: "/", label: "Overview", end: true },
+  { to: "/insights", label: "Insights" },
   { to: "/stocks", label: "Companies" },
   { to: "/screener", label: "Screener" },
   { to: "/patterns", label: "Patterns" },

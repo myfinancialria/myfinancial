@@ -15,6 +15,7 @@ const Patterns = lazy(() => import("./routes/Patterns"));
 const Funds = lazy(() => import("./routes/Funds"));
 const Company = lazy(() => import("./routes/Company"));
 const Stocks = lazy(() => import("./routes/Stocks"));
+const Insights = lazy(() => import("./routes/Insights"));
 const Fund = lazy(() => import("./routes/Fund"));
 const Advisory = lazy(() => import("./routes/Advisory"));
 // Planning and Estate pull in the shared tax/goals/estate engines, so they are
@@ -49,6 +50,7 @@ export default function App() {
               <Route path="/funds" element={<Funds />} />
               <Route path="/fund/:code" element={<Fund />} />
               <Route path="/stocks" element={<Stocks />} />
+              <Route path="/insights" element={<Insights />} />
               <Route path="/company/:symbol" element={<Company />} />
               <Route path="/advisory" element={<Advisory />} />
               <Route path="/planning" element={<Planning />} />
