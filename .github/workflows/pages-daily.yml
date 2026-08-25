@@ -22,15 +22,19 @@ on:
   schedule:
     # IST has no DST, so a fixed UTC offset never drifts.
     #
-    # 08:00 IST — the pre-market brief. The US has closed, Asia is trading and
-    # Europe has not opened, which is exactly the picture worth publishing
-    # before India opens at 09:15.
-    - cron: "30 2 * * 1-5"
+    # Scheduled workflows queue behind GitHub's load — measured 20 and 34
+    # minutes late on this repo — so each cron is set EARLY enough that the
+    # publish lands by the time it is wanted, rather than half an hour after.
     #
-    # 17:00 IST — the post-market report, as asked for. NSE does not publish the
-    # official bhavcopy until ~18:30, so this run reports live quotes and the
-    # page labels itself PROVISIONAL.
-    - cron: "30 11 * * 1-5"
+    # 07:30 IST, publishing by ~08:00 — the pre-market brief. The US has
+    # closed, Asia is trading and Europe has not opened, which is exactly the
+    # picture worth having before India opens at 09:15.
+    - cron: "0 2 * * 1-5"
+    #
+    # 16:30 IST, publishing by ~17:00 — the post-market report. The market shut
+    # at 15:30 but NSE does not publish the official bhavcopy until ~18:30, so
+    # this run reads NSE's live index feed and labels itself PROVISIONAL.
+    - cron: "0 11 * * 1-5"
     #
     # 21:00 IST — the full rebuild. Deliberately late: the bhavcopy is out and
     # AMFI has published NAVs, so this picks up the same trading day rather than

@@ -235,6 +235,8 @@ export interface Mover { symbol: string; name: string; price: number | null; pct
 
 export interface PreMarket {
   asOf: string; forDate: string;
+  /** False on weekends and NSE trading holidays. */
+  marketOpen: boolean; closedReason: string | null; lastSession: string | null;
   global: Quote[]; macro: Quote[]; india: Quote[];
   previousClose: { date: string };
   corporateActions: CorpAction[];
@@ -243,8 +245,9 @@ export interface PreMarket {
 }
 export interface PostMarket {
   asOf: string; forDate: string; bhavcopyDate: string;
+  marketOpen: boolean; closedReason: string | null; lastSession: string | null;
   /** OFFICIAL = settled bhavcopy. PROVISIONAL = live quotes, pre-bhavcopy. */
-  basis: "OFFICIAL" | "PROVISIONAL" | "UNAVAILABLE";
+  basis: "OFFICIAL" | "PROVISIONAL" | "UNAVAILABLE" | "CLOSED";
   universe?: number;
   /** Which NSE index the advance/decline counts came from, when provisional. */
   breadthFrom?: string;

@@ -22,7 +22,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { worldQuotes, indiaIndices, fx, corporateActions, news, buildNameIndex, tagHeadline } from "./lib/insights_sources.mjs";
+import { worldQuotes, indiaIndices, fx, corporateActions, news, buildNameIndex, tagHeadline,
+  tradingHolidays, marketDay, previousMarketDay } from "./lib/insights_sources.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -149,6 +150,17 @@ if (!universe) { console.log("[insights] no stocks.json — run build_screener.m
 const nameIndex = buildNameIndex(universe.rows);
 const state = readJson(STATE, {});
 
+// The schedules run Mon-Fri, which is not the same as every market day: India
+// closes for about twenty public holidays a year. On one of those the world
+// still moves overnight and the brief is still worth publishing — but the page
+// must say the Indian market is shut rather than report a session that did not
+// happen.
+const holidays = await tradingHolidays(path.join(ROOT, "var", "nse_holidays.json"));
+const today = marketDay(istDate(), holidays);
+const lastSession = previousMarketDay(istDate(), holidays);
+console.log(`[insights] ${istDate()} · ${today.open ? "market day" : `market CLOSED — ${today.reason}`}` +
+            `${today.open ? "" : ` · last session ${lastSession ?? "unknown"}`}`);
+
 const headlines = await news({ limit: 45 });
 const tagged = headlines.map((h) => ({ ...h, ms: undefined, companies: tagHeadline(h.title, nameIndex) }));
 const inNews = (() => {
@@ -169,6 +181,7 @@ if (SESSION === "premarket") {
 
   state.premarket = {
     asOf: new Date().toISOString(), forDate: istDate(),
+    marketOpen: today.open, closedReason: today.reason, lastSession,
     global: world, macro: [...macro, ...rates],
     india: nse.filter((i) => BENCH.test(i.index)).map(asQuote),
     previousClose: { date: universe.priceDate },
@@ -178,7 +191,9 @@ if (SESSION === "premarket") {
 } else {
   const nse = await indiaIndices();
   const bhavIsToday = universe.priceDate === istDate();
-  const session = bhavIsToday ? fromBhavcopy(universe) : fromIndices(nse);
+  // A closed market has no breadth and no movers. Reporting the stale index
+  // levels NSE keeps serving would read as though a session had happened.
+  const session = !today.open ? null : bhavIsToday ? fromBhavcopy(universe) : fromIndices(nse);
   console.log(`[insights] NSE indices ${nse.length} · session basis ${session?.basis ?? "unavailable"}` +
               `${bhavIsToday ? "" : ` (bhavcopy still at ${universe.priceDate}; NSE publishes it ~18:30 IST)`}`);
 
@@ -192,10 +207,11 @@ if (SESSION === "premarket") {
 
   state.postmarket = {
     asOf: new Date().toISOString(), forDate: istDate(),
+    marketOpen: today.open, closedReason: today.reason, lastSession,
     bhavcopyDate: universe.priceDate,
-    indices: nse.filter((i) => BENCH.test(i.index)).map(asQuote),
-    ...(session ?? { basis: "UNAVAILABLE", breadth: null, gainers: [], losers: [], volume: [] }),
-    sectors: sectors.length ? sectors : (session?.sectors ?? []),
+    indices: today.open ? nse.filter((i) => BENCH.test(i.index)).map(asQuote) : [],
+    ...(session ?? { basis: today.open ? "UNAVAILABLE" : "CLOSED", breadth: null, gainers: [], losers: [], volume: [] }),
+    sectors: today.open ? (sectors.length ? sectors : (session?.sectors ?? [])) : [],
     news: tagged.slice(0, 24), inNews,
   };
 }

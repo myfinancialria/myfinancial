@@ -88,3 +88,50 @@ test("a bonus issue is not misread as a dividend", () => {
   // count is the one that matters for a price chart.
   assert.equal(classifyAction("Bonus Issue and Dividend"), "BONUS");
 });
+
+/* ------------------------------ market days ------------------------------- */
+import { marketDay, previousMarketDay } from "../../scripts/lib/insights_sources.mjs";
+
+// A real slice of NSE's 2026 cash-market calendar.
+const HOL = {
+  "2026-01-26": "Republic Day",
+  "2026-03-03": "Holi",
+  "2026-10-20": "Dussehra",
+  "2026-11-09": "Diwali Laxmi Pujan",
+};
+
+test("a weekday that is not a holiday is a market day", () => {
+  assert.deepEqual(marketDay("2026-08-25", HOL), { open: true, reason: null });
+});
+
+test("weekends are closed", () => {
+  assert.equal(marketDay("2026-08-29", HOL).open, false);   // Saturday
+  assert.equal(marketDay("2026-08-30", HOL).open, false);   // Sunday
+  assert.equal(marketDay("2026-08-29", HOL).reason, "Saturday");
+});
+
+test("a gazetted holiday is closed, and says which one", () => {
+  // The whole point: the schedule runs Mon-Fri, and Dussehra is a Tuesday.
+  const d = marketDay("2026-10-20", HOL);
+  assert.equal(d.open, false);
+  assert.equal(d.reason, "Dussehra");
+});
+
+test("with no calendar at all, weekdays still resolve as open", () => {
+  // The feed being unreachable must not close the market for a fortnight.
+  assert.equal(marketDay("2026-10-20", {}).open, true);
+  assert.equal(marketDay("2026-08-30", {}).open, false, "weekends need no feed");
+});
+
+test("the previous market day skips back over weekends and holidays", () => {
+  assert.equal(previousMarketDay("2026-08-25", HOL), "2026-08-24");        // Tue -> Mon
+  assert.equal(previousMarketDay("2026-08-31", HOL), "2026-08-28");        // Mon -> Fri
+  assert.equal(previousMarketDay("2026-10-21", HOL), "2026-10-19");        // skips Dussehra
+});
+
+test("a run of closed days does not loop forever", () => {
+  const everyDayClosed = Object.fromEntries(
+    Array.from({ length: 40 }, (_, i) => [new Date(Date.UTC(2026, 5, i + 1)).toISOString().slice(0, 10), "shut"]),
+  );
+  assert.equal(previousMarketDay("2026-06-20", everyDayClosed), null);
+});

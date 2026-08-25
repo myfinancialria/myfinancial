@@ -35,6 +35,19 @@ const freshness = (iso?: string | null) => {
   return `${Math.round(m / 1440)} d ago`;
 };
 
+/** Weekend or gazetted holiday — say so rather than showing a flat session. */
+function ClosedNotice({ reason, lastSession }: { reason: string | null; lastSession: string | null }) {
+  return (
+    <Card className="mt-6 border-warn">
+      <div className="px-5 py-3.5 text-[12.5px] leading-relaxed text-ink-dim">
+        <b className="text-warn">Indian market closed today{reason ? ` — ${reason}` : ""}.</b>{" "}
+        There is no session to report. World markets below still moved overnight, and the last Indian
+        session was {lastSession ?? "the previous trading day"}.
+      </div>
+    </Card>
+  );
+}
+
 /* ------------------------------- headlines -------------------------------- */
 function NewsList({ items }: { items: Headline[] }) {
   if (!items?.length) return null;
@@ -149,6 +162,7 @@ function PreMarketView({ d }: { d: PreMarket }) {
   const regions = ["US", "Asia", "Europe"] as const;
   return (
     <>
+      {d.marketOpen === false && <ClosedNotice reason={d.closedReason} lastSession={d.lastSession} />}
       <Reveal className="mt-6">
         <Card>
           <CardHead title="Overnight, around the world"
@@ -224,6 +238,8 @@ function PostMarketView({ d }: { d: PostMarket }) {
   const provisional = d.basis === "PROVISIONAL";
   return (
     <>
+      {d.marketOpen === false && <ClosedNotice reason={d.closedReason} lastSession={d.lastSession} />}
+
       {d.basis === "UNAVAILABLE" && (
         <Card className="mt-6 border-warn">
           <div className="px-5 py-3.5 text-[12.5px] leading-relaxed text-ink-dim">

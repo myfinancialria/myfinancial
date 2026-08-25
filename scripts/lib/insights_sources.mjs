@@ -11,6 +11,8 @@
 // commodities block is worth publishing; a build that dies because Yahoo
 // rate-limited one symbol is not.
 // ---------------------------------------------------------------------------
+import fsp from "node:fs";
+import path from "node:path";
 import { getJson, getText, sleep } from "./net.mjs";
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36";
@@ -174,6 +176,74 @@ export function classifyAction(subject) {
   if (/buy ?back/.test(s)) return "BUYBACK";
   if (/dividend/.test(s)) return "DIVIDEND";
   return "OTHER";
+}
+
+/* ------------------------------ market days ------------------------------ */
+/**
+ * NSE's own trading-holiday calendar for the cash market.
+ *
+ * The schedules run Monday to Friday, which is not the same as "every market
+ * day": India closes for roughly twenty public holidays a year. Without this
+ * the site would publish a post-market report on Diwali describing a session
+ * that never happened.
+ *
+ * Cached to disk because the calendar is published once and changes rarely;
+ * if the feed is unreachable the cached copy still answers.
+ */
+export async function tradingHolidays(cacheFile) {
+  const fresh = async () => {
+    const j = await getJson("https://www.nseindia.com/api/holiday-master?type=trading", {
+      headers: {
+        "user-agent": UA, accept: "application/json", "accept-language": "en-IN,en;q=0.9",
+        referer: "https://www.nseindia.com/resources/exchange-communication-holidays",
+      },
+      retries: 3, timeout: 30_000,
+    });
+    // CM is the cash market — the segment this site is about.
+    const rows = j?.CM ?? j?.cm ?? [];
+    const MON = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+    const out = {};
+    for (const r of rows) {
+      const m = String(r.tradingDate ?? "").match(/(\d{1,2})-([A-Za-z]{3})-(\d{4})/);
+      if (!m) continue;
+      const mo = MON[m[2].toLowerCase()];
+      if (mo === undefined) continue;
+      const iso = `${m[3]}-${String(mo + 1).padStart(2, "0")}-${String(+m[1]).padStart(2, "0")}`;
+      out[iso] = String(r.description ?? "").trim() || "Trading holiday";
+    }
+    return out;
+  };
+
+  try {
+    const map = await fresh();
+    if (Object.keys(map).length && cacheFile) {
+      fsp.mkdirSync(path.dirname(cacheFile), { recursive: true });
+      fsp.writeFileSync(cacheFile, JSON.stringify(map));
+    }
+    if (Object.keys(map).length) return map;
+  } catch { /* fall through to the cached copy */ }
+
+  try { return JSON.parse(fsp.readFileSync(cacheFile, "utf8")); } catch { return {}; }
+}
+
+/** Weekend or gazetted holiday → not a market day. */
+export function marketDay(isoDate, holidays = {}) {
+  const d = new Date(`${isoDate}T00:00:00Z`);
+  const dow = d.getUTCDay();
+  if (dow === 0 || dow === 6) return { open: false, reason: dow === 0 ? "Sunday" : "Saturday" };
+  if (holidays[isoDate]) return { open: false, reason: holidays[isoDate] };
+  return { open: true, reason: null };
+}
+
+/** The most recent market day on or before `isoDate`. */
+export function previousMarketDay(isoDate, holidays = {}, maxBack = 10) {
+  let t = Date.parse(`${isoDate}T00:00:00Z`) - 86_400_000;
+  for (let i = 0; i < maxBack; i++) {
+    const iso = new Date(t).toISOString().slice(0, 10);
+    if (marketDay(iso, holidays).open) return iso;
+    t -= 86_400_000;
+  }
+  return null;
 }
 
 /* --------------------------------- news ---------------------------------- */
