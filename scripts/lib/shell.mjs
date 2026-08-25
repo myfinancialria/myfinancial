@@ -106,6 +106,10 @@ footer.site a{color:var(--ink-dim);text-decoration:underline}
 
 const NAV = [
   ["app", "app/", "App"],
+  // Insights lives in the app rather than as a static page — it is rebuilt
+  // three times a market day and reads published JSON, so pre-rendering it
+  // would just bake in whichever of the three runs happened to be last.
+  ["insights", "app/insights", "Insights"],
   ["stocks", "stocks.html", "Companies"],
   ["screener", "screener.html", "Screener"],
   ["funds", "funds.html", "Mutual Funds"],

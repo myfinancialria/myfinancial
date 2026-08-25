@@ -151,7 +151,7 @@ export function buildHome() {
   // first — a visitor should reach the screener without reading a pitch.
   html = html.replace(
     '<a href="#platform">Platform</a>',
-    '<a href="screener.html">Screener</a><a href="stocks.html">Companies</a><a href="funds.html">Mutual Funds</a><a href="#platform">Platform</a>',
+    '<a href="app/insights">Insights</a><a href="screener.html">Screener</a><a href="stocks.html">Companies</a><a href="funds.html">Mutual Funds</a><a href="#platform">Platform</a>',
   );
 
   // the three module cards that need a server get an honest label
