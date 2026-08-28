@@ -20,25 +20,37 @@
 
 /** Canonical sector → the raw labels that should map into it. */
 const MAP = {
-  IT: ["information technology", "it - software", "technology", "software", "it services", "computers - software"],
+  IT: ["information technology", "it - software", "technology", "software", "it services", "computers - software", "health information services"],
   BANK: ["banks", "bank", "private sector bank", "public sector bank"],
-  FIN: ["financial services", "nbfc", "finance", "investment", "insurance", "capital markets", "financial technology (fintech)", "holding company"],
-  AUTO: ["automobile and auto components", "automobile", "auto ancillary", "automobiles", "auto components", "tyres"],
-  PHARMA: ["healthcare", "pharmaceuticals", "healthcare services", "pharmaceuticals & biotechnology", "hospital", "diagnostics"],
-  FMCG: ["fast moving consumer goods", "consumer defensive", "consumer food", "tobacco products", "tobacco", "tea/coffee", "agricultural food & other products", "food beverages & tobacco"],
-  METAL: ["metals & mining", "metal", "steel & iron products", "steel", "minerals", "mining", "basic materials", "non - ferrous metals"],
-  ENERGY: ["oil gas & consumable fuels", "energy", "oil exploration", "oil & gas", "petroleum products", "gas"],
-  POWER: ["power", "utilities", "electric utilities", "renewable energy"],
-  INFRA: ["construction", "infrastructure", "engineering", "construction materials", "cement", "cement & cement products", "ports", "logistics"],
+  FIN: ["financial services", "nbfc", "finance", "investment", "insurance", "capital markets", "financial technology (fintech)", "holding company", "credit services", "financial conglomerates", "mortgage finance", "asset management", "financial data & stock exchanges", "insurance brokers"],
+  AUTO: ["automobile and auto components", "automobile", "auto ancillary", "automobiles", "auto components", "tyres", "auto parts", "auto manufacturers"],
+  PHARMA: ["healthcare", "pharmaceuticals", "healthcare services", "pharmaceuticals & biotechnology", "hospital", "diagnostics", "medical distribution", "medical care facilities", "medical instruments & supplies", "drug manufacturers - general", "drug manufacturers - specialty & generic", "healthcare plans"],
+  FMCG: ["fast moving consumer goods", "consumer defensive", "consumer food", "tobacco products", "tobacco", "tea/coffee", "agricultural food & other products", "food beverages & tobacco", "packaged foods", "confectioners", "farm products", "household & personal products", "beverages - wineries & distilleries", "beverages - non-alcoholic", "beverages - brewers"],
+  METAL: ["metals & mining", "metal", "steel & iron products", "steel", "minerals", "mining", "basic materials", "non - ferrous metals", "coking coal", "other industrial metals & mining", "other precious metals & mining"],
+  ENERGY: ["oil gas & consumable fuels", "energy", "oil exploration", "oil & gas", "petroleum products", "gas", "thermal coal", "oil & gas refining & marketing", "oil & gas e&p", "oil & gas integrated", "oil & gas equipment & services"],
+  POWER: ["power", "utilities", "electric utilities", "renewable energy", "solar", "utilities - independent power producers", "utilities - regulated electric", "utilities - regulated gas", "utilities - regulated water", "utilities - renewable"],
+  INFRA: ["construction", "infrastructure", "engineering", "construction materials", "cement", "cement & cement products", "ports", "logistics", "building materials", "marine shipping", "railroads", "trucking", "airports & air services", "integrated freight & logistics", "engineering & construction", "infrastructure operations"],
   REALTY: ["realty", "real estate", "residential commercial projects"],
-  CHEM: ["chemicals", "agrochemicals", "fertilizers", "fertilisers", "plastic products", "petrochemicals", "chemicals & petrochemicals"],
-  CDUR: ["consumer durables", "household appliances", "consumer electronics", "jewellery", "footwear"],
-  TELECOM: ["telecommunication", "communication services", "telecom", "media entertainment & publication", "media", "entertainment"],
-  CAPGOODS: ["capital goods", "industrials", "industrial manufacturing", "compressors", "electrical equipment", "machinery", "aerospace & defense", "defence"],
-  TEXTILE: ["textiles", "textile", "apparel", "forest materials", "paper"],
-  SERVICES: ["consumer services", "services", "consumer cyclical", "retailing", "hotel", "hotels", "airlines", "educational institutions", "tourism"],
-  DIVERS: ["diversified", "trading", "miscellaneous", "conglomerate", "dvr"],
+  CHEM: ["chemicals", "agrochemicals", "fertilizers", "fertilisers", "plastic products", "petrochemicals", "chemicals & petrochemicals", "agricultural inputs", "specialty chemicals", "packaging & containers"],
+  CDUR: ["consumer durables", "household appliances", "consumer electronics", "jewellery", "footwear", "furnishings, fixtures & appliances", "luxury goods", "footwear & accessories"],
+  TELECOM: ["telecommunication", "communication services", "telecom", "media entertainment & publication", "media", "entertainment", "telecom services", "broadcasting", "publishing", "advertising agencies", "internet content & information", "electronic gaming & multimedia"],
+  CAPGOODS: ["capital goods", "industrials", "industrial manufacturing", "compressors", "electrical equipment", "machinery", "aerospace & defense", "defence", "metal fabrication", "farm & heavy construction machinery", "specialty industrial machinery", "business equipment & supplies", "scientific & technical instruments", "pollution & treatment controls", "waste management", "building products & equipment", "electrical equipment & parts", "industrial distribution", "tools & accessories"],
+  TEXTILE: ["textiles", "textile", "apparel", "forest materials", "paper", "lumber & wood production", "textile manufacturing", "apparel manufacturing", "paper & paper products"],
+  SERVICES: ["consumer services", "services", "consumer cyclical", "retailing", "hotel", "hotels", "airlines", "educational institutions", "tourism", "specialty business services", "staffing & employment services", "security & protection services", "education & training services", "auto & truck dealerships", "apparel retail", "internet retail", "specialty retail", "department stores", "home improvement retail", "discount stores", "grocery stores", "food distribution", "resorts & casinos", "lodging", "restaurants", "leisure", "rental & leasing services", "travel services"],
+  DIVERS: ["diversified", "trading", "miscellaneous", "conglomerate", "dvr", "shell companies"],
 };
+
+// Labels that are real sector names on their own but become meaningless as
+// keywords, because they only ever QUALIFY the noun in front of them. "Credit
+// Services" is not a services company and "Financial Technology" is not an IT
+// company. They stay in the exact-match lookup and are skipped by the scan.
+const GENERIC = new Set(["services", "technology", "investment", "trading", "energy"]);
+
+/** Whole-phrase containment: `l` must sit on word boundaries inside `k`. */
+function containsPhrase(k, l) {
+  const esc = l.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^a-z0-9])${esc}([^a-z0-9]|$)`).test(k);
+}
 
 const LOOKUP = (() => {
   const out = new Map();
@@ -67,10 +79,14 @@ export function canonicalSector(sector, industry) {
     if (!raw) continue;
     const k = String(raw).toLowerCase().trim();
     if (LOOKUP.has(k)) return LOOKUP.get(k);
-    // fall back to a keyword scan for labels not enumerated above
+    // Fall back to a keyword scan for labels not enumerated above. The match
+    // must land on WORD BOUNDARIES, not anywhere in the string: "Credit
+    // Services" contains the letters of "it services" — cred|it services| —
+    // and a plain substring test therefore filed 61 NBFCs, Bajaj Finance and
+    // IRFC among them, under Information Technology.
     for (const [key, labels] of Object.entries(MAP)) {
       for (const l of labels) {
-        if (l.length > 4 && k.includes(l)) return key;
+        if (l.length > 4 && !GENERIC.has(l) && containsPhrase(k, l)) return key;
       }
     }
   }

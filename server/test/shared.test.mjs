@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { compare, computeRegime } from "../../shared/tax.mjs";
 import { simulateGoal, requiredSip, recommendedAlloc } from "../../shared/goals.mjs";
 import { generateDraft, estateChecklist, WILL_STEPS } from "../../shared/estate.mjs";
+import { canonicalSector, SECTOR_NAMES } from "../../shared/sectors.mjs";
 
 test("new-regime tax on a ₹24L salary matches a hand computation", () => {
   // 24,00,000 − 75,000 standard deduction = 23,25,000 taxable
@@ -125,4 +126,52 @@ test("the estate checklist reflects what has been done", () => {
 test("the wizard exposes every step the page renders", () => {
   assert.equal(WILL_STEPS.length, 7);
   for (const s of WILL_STEPS) assert.ok(s.id && s.title);
+});
+
+// ---------------------------------------------------------------------------
+// Sector taxonomy. The feed mixes NSE's own labels with a Yahoo-style
+// taxonomy, so canonicalSector has to collapse both. These pin the cases that
+// were silently wrong across the whole site until the fund look-through in the
+// Portfolio Analyser put a company's name and its sector side by side.
+// ---------------------------------------------------------------------------
+test("a keyword only matches on word boundaries, never mid-word", () => {
+  // "Credit Services" contains the letters of "it services" — cred|it services|.
+  // A substring test therefore filed 61 NBFCs under Information Technology,
+  // Bajaj Finance, Cholamandalam, HUDCO and IRFC among them.
+  assert.equal(canonicalSector("Financial Services", "Credit Services"), "FIN");
+  assert.equal(canonicalSector("Basic Materials", "Building Materials"), "INFRA");
+  assert.notEqual(canonicalSector("Services", "Airports & Air Services"), "DIVERS");
+});
+
+test("the Yahoo-style industry labels the feed actually uses are enumerated", () => {
+  const cases = [
+    ["Consumer Cyclical", "Auto Parts", "AUTO"],
+    ["Automobile and Auto Components", "Auto Manufacturers", "AUTO"],
+    ["Basic Materials", "Agricultural Inputs", "CHEM"],
+    ["Technology", "Solar", "POWER"],
+    ["Consumer Cyclical", "Furnishings, Fixtures & Appliances", "CDUR"],
+    ["Consumer Cyclical", "Luxury Goods", "CDUR"],
+    ["Industrials", "Specialty Business Services", "SERVICES"],
+    ["Industrials", "Staffing & Employment Services", "SERVICES"],
+    ["Consumer Defensive", "Education & Training Services", "SERVICES"],
+    ["Basic Materials", "Lumber & Wood Production", "TEXTILE"],
+    ["Healthcare", "Health Information Services", "IT"],
+    ["Industrials", "Marine Shipping", "INFRA"],
+    ["Financial Services", "Financial Conglomerates", "FIN"],
+    ["Energy", "Thermal Coal", "ENERGY"],
+  ];
+  for (const [sector, industry, want] of cases) {
+    assert.equal(canonicalSector(sector, industry), want,
+      `${sector} / ${industry} should be ${want}, got ${canonicalSector(sector, industry)}`);
+  }
+});
+
+test("the NSE labels that were already right stay right", () => {
+  for (const [sector, industry, want] of [
+    ["Financial Services", "", "FIN"], ["Banks", "", "BANK"], ["IT - Software", "", "IT"],
+    ["Power", "Utilities - Independent Power Producers", "POWER"],
+    ["Oil Gas & Consumable Fuels", "Oil & Gas Refining & Marketing", "ENERGY"],
+    ["Healthcare", "Drug Manufacturers - General", "PHARMA"],
+    ["Technology", "Software - Application", "IT"], ["Realty", "Real Estate - Development", "REALTY"],
+  ]) assert.equal(canonicalSector(sector, industry), want, `${sector} / ${industry}`);
 });
