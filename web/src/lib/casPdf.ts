@@ -46,10 +46,6 @@ async function loadPdfjs() {
   if (pdfjs) return pdfjs;
   installShims();
   const lib = await import("pdfjs-dist");
-  // The worker ships with the package; bundling it via Vite keeps everything
-  // same-origin, which matters more here than in an ordinary PDF viewer.
-  const workerUrl = (await import("pdfjs-dist/build/pdf.worker.mjs?url")).default;
-  lib.GlobalWorkerOptions.workerSrc = workerUrl;
   pdfjs = lib;
   return lib;
 }
@@ -61,11 +57,18 @@ export async function extractPdf(file: File, password: string): Promise<ExtractR
   const lib = await at("loading the PDF reader", () => loadPdfjs());
   const data = await at("reading the file off disk", async () => new Uint8Array(await file.arrayBuffer()));
 
+  // Our own worker entry, so the shims are installed inside the worker scope
+  // too. Bundled by Vite, so it stays same-origin — which matters more here
+  // than in an ordinary PDF viewer.
+  const port = new Worker(new URL("./pdfWorker.ts", import.meta.url), { type: "module" });
+  const worker = new lib.PDFWorker({ port } as any);
+
   let doc;
   try {
-    doc = await lib.getDocument({ data, password, useSystemFonts: true }).promise;
+    doc = await lib.getDocument({ data, password, worker, useSystemFonts: true }).promise;
   } catch (e: any) {
     const name = String(e?.name ?? "");
+    worker.destroy();
     if (name === "PasswordException") throw new PasswordError(!password);
     throw new StageError("opening the PDF", e);
   }
@@ -105,5 +108,7 @@ export async function extractPdf(file: File, password: string): Promise<ExtractR
 
   const pages = doc.numPages;
   await doc.cleanup();
+  await (doc as any).destroy?.();
+  worker.destroy();
   return { lines, cells, pages };
 }

@@ -249,3 +249,5 @@ declare module "@shared/shims.mjs" {
   /** Installs stand-ins for platform APIs pdf.js needs; returns what it added. */
   export function installShims(scope?: any): string[];
 }
+
+declare module "pdfjs-dist/build/pdf.worker.mjs";

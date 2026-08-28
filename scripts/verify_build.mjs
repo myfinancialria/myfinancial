@@ -467,27 +467,31 @@ else bad("screener.html looks incomplete");
 }
 
 // ----------------------------- portfolio analyser ----------------------------
-// The CAS reader parses the PDF in the browser, which means it depends on the
-// pdf.js worker being emitted and reachable. When the worker is missing the
-// tab still renders, accepts a file, and then fails on "Open" — a shape of
-// breakage that looks like the user's fault rather than the build's.
+// The CAS reader parses the PDF in the browser, so the pdf.js worker has to be
+// emitted — and our shims have to be installed INSIDE it, before pdf.js runs.
+// A worker has its own global scope, and pdf.js calls Promise.withResolvers
+// thirteen times in there; without the shim the reader fails on Safari older
+// than 17.4 and nothing else in this build would catch it.
+//
+// Checked by content, not filename: the bundler inlines pdf.js into our entry,
+// so the file is named after our module and the old pdf.worker-*.js is gone.
 {
   const dir = path.join(DIST, "app", "assets");
   const assets = fs.existsSync(dir) ? fs.readdirSync(dir) : [];
-  const worker = assets.filter((f) => /pdf\.worker.*\.m?js$/.test(f));
-  const bundles = assets.filter((f) => f.endsWith(".js") || f.endsWith(".mjs"));
+  const entries = assets.filter((f) => /^pdfWorker-.*\.m?js$/.test(f));
 
-  if (!worker.length) bad("no pdf.js worker in the bundle — the Portfolio Analyser cannot open a statement");
+  if (!entries.length) bad("no pdf.js worker entry emitted — the Portfolio Analyser cannot open a statement");
   else {
-    // The chunk must ask for a worker that was actually emitted.
-    const referenced = new Set();
-    for (const f of bundles) {
-      const src = fs.readFileSync(path.join(dir, f), "utf8");
-      for (const m of src.matchAll(/assets\/(pdf\.worker[A-Za-z0-9._-]*\.m?js)/g)) referenced.add(m[1]);
+    for (const e of entries) {
+      const src = fs.readFileSync(path.join(dir, e), "utf8");
+      const pdfjsAt = src.indexOf("WorkerMessageHandler");
+      const shimAt = src.indexOf("withResolvers");
+      if (pdfjsAt < 0) bad(`${e} is not the pdf.js worker — WorkerMessageHandler is missing`);
+      else if (shimAt < 0) bad(`${e} does not install the shims — Safari below 17.4 will fail to read a statement`);
+      // The shim has to be defined before pdf.js, not merely present.
+      else if (shimAt > pdfjsAt) bad(`${e} installs the shims after pdf.js loads — too late to help`);
+      else ok(`pdf.js worker shimmed before load (${e}, ${Math.round(src.length / 1024)} KB)`);
     }
-    const missing = [...referenced].filter((r) => !assets.includes(r));
-    if (missing.length) bad(`the app asks for pdf.js worker(s) that were not emitted: ${missing.join(", ")}`);
-    else ok(`pdf.js worker present (${worker.length} emitted, ${referenced.size} referenced)`);
   }
 }
 

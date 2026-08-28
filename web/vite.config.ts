@@ -31,6 +31,12 @@ function serveBuiltData() {
 }
 
 export default defineConfig({
+  // The pdf.js worker entry dynamically imports the library, so the worker
+  // build has to code-split — which Vite's default IIFE worker format cannot.
+  // Module workers need Safari 15+, comfortably below the 17.4 floor the
+  // shims exist to reach.
+  worker: { format: "es" },
+
   base: BASE,
   plugins: [react(), tailwind(), serveBuiltData()],
   resolve: {
