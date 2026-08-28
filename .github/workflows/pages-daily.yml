@@ -40,7 +40,14 @@ on:
     # AMFI has published NAVs, so this picks up the same trading day rather than
     # yesterday's, and re-cuts the evening report on the settled numbers.
     - cron: "30 15 * * 1-5"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      session:
+        description: "Which brief to rebuild (auto = decide from the IST clock)"
+        required: false
+        default: auto
+        type: choice
+        options: [auto, premarket, postmarket]
 
 permissions:
   contents: read
@@ -171,7 +178,12 @@ jobs:
       # Best effort: a rate-limited quote feed or a publisher's RSS being down
       # must not stop the rest of the site deploying.
       - name: Insights — pre-market brief / post-market report
-        run: node scripts/build_insights.mjs
+        run: |
+          if [ "${{ inputs.session }}" != "" ] && [ "${{ inputs.session }}" != "auto" ]; then
+            node scripts/build_insights.mjs --session="${{ inputs.session }}"
+          else
+            node scripts/build_insights.mjs
+          fi
         continue-on-error: true
         timeout-minutes: 10
 
