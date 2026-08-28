@@ -285,3 +285,37 @@ test("AbortSignal.any follows whichever signal aborts, and honours one already a
 
   assert.equal(scope.AbortSignal.any([]).aborted, false, "an empty list never aborts");
 });
+
+test("a Safari-style ReadableStream becomes async-iterable", async () => {
+  // Safari has never shipped ReadableStream.prototype[Symbol.asyncIterator],
+  // which is the line pdf.js reads page text with.
+  class SafariStream {
+    constructor(chunks) { this._chunks = chunks.slice(); this.cancelled = false; }
+    getReader() {
+      const s = this;
+      return {
+        async read() { return s._chunks.length ? { done: false, value: s._chunks.shift() } : { done: true }; },
+        releaseLock() { s.unlocked = true; },
+        async cancel(reason) { s.cancelled = true; s.reason = reason; },
+      };
+    }
+  }
+  const scope = { Promise, AbortSignal, AbortController, ReadableStream: SafariStream };
+  assert.ok(installShims(scope).includes("ReadableStream.asyncIterator"));
+
+  const read = [];
+  for await (const chunk of new SafariStream([{ items: [1, 2] }, { items: [3] }])) read.push(...chunk.items);
+  assert.deepEqual(read, [1, 2, 3], "every chunk is delivered, in order");
+
+  // Abandoning the loop must cancel the stream and release the lock, or the
+  // next read of the same document deadlocks.
+  const abandoned = new SafariStream([{ items: [1] }, { items: [2] }]);
+  for await (const _ of abandoned) break;
+  assert.equal(abandoned.cancelled, true, "an abandoned loop cancels");
+  assert.equal(abandoned.unlocked, true, "an abandoned loop releases the lock");
+});
+
+test("a native async-iterable stream is left alone", () => {
+  const scope = { Promise, AbortSignal, AbortController, ReadableStream };
+  assert.ok(!installShims(scope).includes("ReadableStream.asyncIterator"));
+});

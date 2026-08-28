@@ -493,6 +493,18 @@ else bad("screener.html looks incomplete");
       else ok(`pdf.js worker shimmed before load (${e}, ${Math.round(src.length / 1024)} KB)`);
     }
   }
+
+  // getTextContent runs on the PAGE, not in the worker, and it reads the text
+  // with `for await (const chunk of stream)`. Safari has never shipped
+  // ReadableStream async iteration, so without this shim on the page side no
+  // statement can be read on Safari at all — while every Chrome test passes.
+  const route = assets.filter((f) => /^Portfolio-.*\.m?js$/.test(f));
+  if (!route.length) bad("no Portfolio route chunk emitted");
+  else for (const r of route) {
+    const src = fs.readFileSync(path.join(dir, r), "utf8");
+    if (!src.includes("asyncIterator")) bad(`${r} does not install the ReadableStream shim — Safari cannot read any statement`);
+    else ok(`page-side stream shim present (${r})`);
+  }
 }
 
 // ---------------------------------- insights ---------------------------------

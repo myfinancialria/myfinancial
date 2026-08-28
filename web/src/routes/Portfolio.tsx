@@ -97,9 +97,16 @@ export default function Portfolio() {
         `stage: ${e instanceof StageError ? e.stage : "unknown"}`,
         `error: ${String(e?.name ?? "Error")}: ${String(e?.message ?? e).slice(0, 200)}`,
         `browser: ${typeof navigator !== "undefined" ? navigator.userAgent : "unknown"}`,
-        `withResolvers: ${typeof (Promise as any).withResolvers}, abortAny: ${
-          typeof AbortSignal !== "undefined" ? typeof (AbortSignal as any).any : "n/a"}`,
-        String(e?.stack ?? "").split("\n").slice(1, 4).map((l: string) => l.trim()).join(" | "),
+        `withResolvers: ${typeof (Promise as any).withResolvers}` +
+          `, abortAny: ${typeof AbortSignal !== "undefined" ? typeof (AbortSignal as any).any : "n/a"}` +
+          `, streamAsyncIter: ${typeof ReadableStream !== "undefined"
+            ? typeof (ReadableStream.prototype as any)[Symbol.asyncIterator] : "n/a"}`,
+        // Keep the lines that look like FRAMES rather than dropping the first
+        // one: V8 heads its stack with "TypeError: message", Safari and Firefox
+        // start straight at the throw site. Slicing by position threw away the
+        // only frame that mattered and cost a round trip.
+        String(e?.stack ?? "").split("\n").map((l: string) => l.trim()).filter(Boolean)
+          .filter((l: string) => l.startsWith("at ") || l.includes("@")).slice(0, 5).join("\n"),
       ].filter(Boolean).join("\n"));
     }
   }, [fundsByIsin]);
