@@ -187,3 +187,60 @@ declare module "@shared/nri.mjs" {
   export const CARDS: Card[];
   export const TOPICS: [string, string][];
 }
+
+declare module "@shared/cas.mjs" {
+  export interface CasTransaction {
+    date: string; description: string;
+    amount: number | null; units: number | null; nav: number | null; balance: number | null;
+    type: string; dividendRate: number | null;
+  }
+  export interface CasScheme {
+    name: string; isin: string | null; amc: string | null; advisor: string | null; rta: string | null;
+    open: number | null; close: number | null; nav: number | null; navDate: string | null;
+    valuation: number | null; valuationDate: string | null; cost: number | null;
+    transactions: CasTransaction[];
+  }
+  export interface CasFolio { folio: string; pan: string | null; kyc: string | null; amc: string | null; schemes: CasScheme[] }
+  export interface Cas {
+    statement: { source: string; kind: string; from: string | null; to: string | null };
+    investor: { name: string | null; email: string | null };
+    folios: CasFolio[];
+    meta: { source: string; kind: string; supported: boolean };
+  }
+  export function parseCas(lines: string[], cells?: { x: number; text: string }[][]): Cas;
+  export function detect(text: string): { source: string; kind: string; supported: boolean };
+  export function classifyTransaction(description: string, units: number | null): { type: string; dividendRate: number | null };
+  export function cleanSchemeName(raw: string): string;
+  export function parseDate(s: string): string | null;
+  export function findValueColumnStart(rows: { x: number; text: string }[][]): number;
+  export function isExternalFlow(type: string): boolean;
+}
+
+declare module "@shared/cas_analysis.mjs" {
+  import type { Cas } from "@shared/cas.mjs";
+  export interface AnalysedScheme {
+    folio: string; amc: string | null; name: string; isin: string | null;
+    units: number | null; nav: number | null; navDate: string | null;
+    value: number | null; cost: number | null; invested: number | null; withdrawn: number | null;
+    gain: number | null; gainPct: number | null; xirr: number | null;
+    transactions: number; category: string | null; categoryGroup: string | null;
+    schemeCode: string | null; matched: boolean;
+  }
+  export interface Analysis {
+    asOf: string | null;
+    totals: {
+      schemes: number; folios: number; value: number | null; cost: number | null;
+      invested: number | null; withdrawn: number | null; gain: number | null;
+      gainPct: number | null; xirr: number | null; matched: number;
+    };
+    schemes: AnalysedScheme[];
+    allocation: { group: string; value: number; pct: number | null }[];
+    lookThrough: {
+      coveredValue: number | null; coveragePct: number | null; distinct: number;
+      stocks: { symbol: string; name: string; sector: string | null; value: number; funds: number; pctOfPortfolio: number | null }[];
+    };
+  }
+  export function analyse(cas: Cas, ctx?: { funds?: Map<string, any>; holdings?: Map<string, any> }): Analysis;
+  export function xirr(flows: { date: string; amount: number }[], opts?: any): number | null;
+  export function schemeCashflows(scheme: any, asOf: string | null): { date: string; amount: number }[];
+}

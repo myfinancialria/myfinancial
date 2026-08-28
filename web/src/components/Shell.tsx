@@ -9,6 +9,7 @@ import { siteUrl } from "../lib/data";
 const NAV = [
   { to: "/", label: "Overview", end: true },
   { to: "/insights", label: "Insights" },
+  { to: "/portfolio", label: "Portfolio Analyser" },
   { to: "/stocks", label: "Companies" },
   { to: "/screener", label: "Screener" },
   { to: "/patterns", label: "Patterns" },

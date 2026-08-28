@@ -154,6 +154,7 @@ export const STOCK_FIELDS = [
 
 export const FUND_FIELDS = [
   { key: "code", label: "Code", group: "Scheme", type: "text" },
+  { key: "isin", label: "ISIN", group: "Scheme", type: "text", help: "ISO 6166 identifier. A Consolidated Account Statement names schemes by ISIN, so this is what joins an imported portfolio to the scheme data here." },
   { key: "name", label: "Scheme", group: "Scheme", type: "text", col: true },
   { key: "amc", label: "Fund house", group: "Scheme", type: "cat", col: true },
   { key: "categoryGroup", label: "Asset class", group: "Scheme", type: "cat", col: true },

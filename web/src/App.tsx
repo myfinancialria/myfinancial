@@ -16,6 +16,8 @@ const Funds = lazy(() => import("./routes/Funds"));
 const Company = lazy(() => import("./routes/Company"));
 const Stocks = lazy(() => import("./routes/Stocks"));
 const Insights = lazy(() => import("./routes/Insights"));
+// pdf.js is heavy; it must never load for anyone who does not open this tab.
+const Portfolio = lazy(() => import("./routes/Portfolio"));
 const Fund = lazy(() => import("./routes/Fund"));
 const Advisory = lazy(() => import("./routes/Advisory"));
 // Planning and Estate pull in the shared tax/goals/estate engines, so they are
@@ -51,6 +53,7 @@ export default function App() {
               <Route path="/fund/:code" element={<Fund />} />
               <Route path="/stocks" element={<Stocks />} />
               <Route path="/insights" element={<Insights />} />
+              <Route path="/portfolio" element={<Portfolio />} />
               <Route path="/company/:symbol" element={<Company />} />
               <Route path="/advisory" element={<Advisory />} />
               <Route path="/planning" element={<Planning />} />

@@ -466,6 +466,31 @@ else bad("screener.html looks incomplete");
   else ok("the NRI route and its calculators are present in the shipped bundles");
 }
 
+// ----------------------------- portfolio analyser ----------------------------
+// The CAS reader parses the PDF in the browser, which means it depends on the
+// pdf.js worker being emitted and reachable. When the worker is missing the
+// tab still renders, accepts a file, and then fails on "Open" — a shape of
+// breakage that looks like the user's fault rather than the build's.
+{
+  const dir = path.join(DIST, "app", "assets");
+  const assets = fs.existsSync(dir) ? fs.readdirSync(dir) : [];
+  const worker = assets.filter((f) => /pdf\.worker.*\.m?js$/.test(f));
+  const bundles = assets.filter((f) => f.endsWith(".js") || f.endsWith(".mjs"));
+
+  if (!worker.length) bad("no pdf.js worker in the bundle — the Portfolio Analyser cannot open a statement");
+  else {
+    // The chunk must ask for a worker that was actually emitted.
+    const referenced = new Set();
+    for (const f of bundles) {
+      const src = fs.readFileSync(path.join(dir, f), "utf8");
+      for (const m of src.matchAll(/assets\/(pdf\.worker[A-Za-z0-9._-]*\.m?js)/g)) referenced.add(m[1]);
+    }
+    const missing = [...referenced].filter((r) => !assets.includes(r));
+    if (missing.length) bad(`the app asks for pdf.js worker(s) that were not emitted: ${missing.join(", ")}`);
+    else ok(`pdf.js worker present (${worker.length} emitted, ${referenced.size} referenced)`);
+  }
+}
+
 // ---------------------------------- insights ---------------------------------
 // Published twice a day, so the freshness check is the whole point: a brief
 // that silently stops updating still LOOKS like a brief.
