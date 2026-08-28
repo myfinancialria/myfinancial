@@ -23,6 +23,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { worldQuotes, indiaIndices, fx, stockQuotes, corporateActions, news, buildNameIndex, tagHeadline,
+  fiiDii, eventCalendar, pivots,
   tradingHolidays, marketDay, previousMarketDay } from "./lib/insights_sources.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -63,6 +64,12 @@ const MACRO = [
 // Which of NSE's 139 indices are the headline ones, and which are sectors.
 const BENCH = /^(NIFTY 50|NIFTY NEXT 50|NIFTY MIDCAP 100|NIFTY SMALLCAP 100|NIFTY 500|INDIA VIX)$/i;
 const SECTOR = /^NIFTY (BANK|IT|AUTO|PHARMA|FMCG|METAL|REALTY|MEDIA|ENERGY|INFRASTRUCTURE|PSU BANK|HEALTHCARE INDEX|CONSUMER DURABLES|OIL & GAS|CHEMICALS|FINANCIAL SERVICES)$/i;
+
+const LEVELS_FOR = ["NIFTY 50", "NIFTY BANK", "NIFTY NEXT 50"];
+const buildLevels = (nse) => nse
+  .filter((i) => LEVELS_FOR.includes(i.index))
+  .map((i) => ({ index: i.index, price: i.price, high: i.high, low: i.low, prev: i.prev, pivots: pivots(i) }))
+  .filter((l) => l.pivots);
 
 const asQuote = (i) => ({ key: i.index, sym: i.key, price: i.price, pct: i.pct, chg: i.chg, stale: false, at: null, currency: "INR" });
 
@@ -195,8 +202,11 @@ console.log(`[insights] news: ${tagged.length} headlines · ${inNews.length} com
 if (SESSION === "premarket") {
   const [world, macro, nse, rates] = [await worldQuotes(WORLD), await worldQuotes(MACRO), await indiaIndices(), await fx(["INR"])];
   const ca = await corporateActions({ days: 10 });
+  const flows = await fiiDii({ days: 5 });
+  const events = await eventCalendar({ days: 7 });
   console.log(`[insights] world ${world.length}/${WORLD.length} · macro ${macro.length}/${MACRO.length}` +
-              ` · NSE indices ${nse.length} · FX ${rates.length} · corporate actions ${ca ? ca.length : "unavailable"}`);
+              ` · NSE indices ${nse.length} · FX ${rates.length} · corporate actions ${ca ? ca.length : "unavailable"}` +
+              ` · flows ${flows ? flows.length + " sessions" : "unavailable"} · events ${events ? events.length : "unavailable"}`);
 
   // Companies big enough to move the index that are ALSO in this morning's
   // news. A ₹500 cr company with a dramatic headline does not move the Nifty;
@@ -222,11 +232,15 @@ if (SESSION === "premarket") {
     india: nse.filter((i) => BENCH.test(i.index)).map(asQuote),
     previousClose: { date: universe.priceDate },
     corporateActions: ca ?? [],
+    flows: flows ?? [], events: events ?? [], levels: buildLevels(nse),
     news: tagged.slice(0, 24), inNews,
   };
   state.premarket.article = preMarketArticle(state.premarket);
 } else {
   const nse = await indiaIndices();
+  const flows = await fiiDii({ days: 5 });
+  const events = await eventCalendar({ days: 7 });
+  const ca = await corporateActions({ days: 10 });
   const bhavIsToday = universe.priceDate === istDate();
   // A closed market has no breadth and no movers. Reporting the stale index
   // levels NSE keeps serving would read as though a session had happened.
@@ -257,6 +271,7 @@ if (SESSION === "premarket") {
     indices: today.open ? nse.filter((i) => BENCH.test(i.index)).map(asQuote) : [],
     ...(session ?? { basis: today.open ? "UNAVAILABLE" : "CLOSED", breadth: null, gainers: [], losers: [], volume: [] }),
     sectors: today.open ? (sectors.length ? sectors : (session?.sectors ?? [])) : [],
+    flows: flows ?? [], events: events ?? [], corporateActions: ca ?? [], levels: buildLevels(nse),
     news: tagged.slice(0, 24), inNews,
   };
   state.postmarket.article = postMarketArticle(state.postmarket);

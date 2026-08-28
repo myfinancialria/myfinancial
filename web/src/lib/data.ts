@@ -242,6 +242,20 @@ export interface WatchItem {
   marketCapCr: number | null; sector: string | null; heavyweight: boolean; lastPct: number | null;
 }
 
+export interface FlowDay {
+  date: string;
+  fii: { buy: number | null; sell: number | null; net: number | null } | null;
+  dii: { buy: number | null; sell: number | null; net: number | null } | null;
+}
+export interface CalendarEvent {
+  symbol: string; company: string; purpose: string; detail: string;
+  date: string | null; ms: number | null; isResult: boolean;
+}
+export interface IndexLevels {
+  index: string; price: number | null; high: number | null; low: number | null; prev: number | null;
+  pivots: { pivot: number; r1: number; r2: number; r3: number; s1: number; s2: number; s3: number };
+}
+
 export interface PreMarket {
   asOf: string; forDate: string;
   /** False on weekends and NSE trading holidays. */
@@ -249,6 +263,7 @@ export interface PreMarket {
   global: Quote[]; macro: Quote[]; india: Quote[];
   previousClose: { date: string };
   corporateActions: CorpAction[];
+  flows: FlowDay[]; events: CalendarEvent[]; levels: IndexLevels[];
   watchlist: WatchItem[];
   article: ArticleSection[];
   news: Headline[];
@@ -268,6 +283,8 @@ export interface PostMarket {
   sectors: { sector: string; pct: number; count: number; advancePct: number }[];
   /** Where the gainers/losers were ranked from, when not the settled file. */
   moversFrom?: string;
+  flows: FlowDay[]; events: CalendarEvent[]; levels: IndexLevels[];
+  corporateActions: CorpAction[];
   article: ArticleSection[];
   volume: { symbol: string; name: string; pct: number; volumeRatio: number; deliveryPct: number | null }[];
   news: Headline[];

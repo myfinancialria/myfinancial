@@ -208,6 +208,90 @@ export function classifyAction(subject) {
   return "OTHER";
 }
 
+/* --------------------------- who is buying ------------------------------- */
+/**
+ * Daily cash-segment flows for foreign and domestic institutions.
+ *
+ * This is the "who is actually driving the tape" number. Foreign investors
+ * (FII/FPI) and domestic institutions (DII — mutual funds, insurers) often
+ * pull in opposite directions, and which of them is winning explains a lot of
+ * days that otherwise look random.
+ */
+export async function fiiDii({ days = 5 } = {}) {
+  try {
+    const rows = await getJson("https://www.nseindia.com/api/fiidiiTradeReact", {
+      headers: {
+        "user-agent": UA, accept: "application/json", "accept-language": "en-IN,en;q=0.9",
+        referer: "https://www.nseindia.com/reports/fii-dii",
+      },
+      retries: 3, timeout: 30_000,
+    });
+    if (!Array.isArray(rows)) return null;
+    const num = (v) => { const n = Number(String(v ?? "").replace(/,/g, "")); return Number.isFinite(n) ? r2(n, 2) : null; };
+    const byDate = new Map();
+    for (const r of rows) {
+      const d = String(r.date ?? "").trim();
+      if (!d) continue;
+      const e = byDate.get(d) ?? { date: d, fii: null, dii: null };
+      const who = /dii/i.test(r.category) ? "dii" : "fii";
+      e[who] = { buy: num(r.buyValue), sell: num(r.sellValue), net: num(r.netValue) };
+      byDate.set(d, e);
+    }
+    return [...byDate.values()].slice(0, days);
+  } catch { return null; }
+}
+
+/* --------------------------- what is scheduled --------------------------- */
+/** Board meetings and results announcements filed with NSE. */
+export async function eventCalendar({ days = 7 } = {}) {
+  try {
+    const rows = await getJson("https://www.nseindia.com/api/event-calendar", {
+      headers: {
+        "user-agent": UA, accept: "application/json", "accept-language": "en-IN,en;q=0.9",
+        referer: "https://www.nseindia.com/companies-listing/corporate-filings-event-calendar",
+      },
+      retries: 3, timeout: 30_000,
+    });
+    if (!Array.isArray(rows)) return null;
+    const MON = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+    const parse = (v) => {
+      const m = String(v ?? "").match(/(\d{1,2})-([A-Za-z]{3})-(\d{4})/);
+      if (!m) return null;
+      const mo = MON[m[2].toLowerCase()];
+      return mo === undefined ? null : Date.UTC(+m[3], mo, +m[1]);
+    };
+    const midnight = new Date(); midnight.setUTCHours(0, 0, 0, 0);
+    const from = midnight.getTime(), to = from + days * 86_400_000;
+    return rows
+      .map((r) => ({
+        symbol: (r.symbol ?? "").trim(), company: (r.company ?? "").trim(),
+        purpose: (r.purpose ?? "").trim(), detail: (r.bm_desc ?? "").trim(),
+        date: r.date ?? null, ms: parse(r.date),
+        isResult: /financial result/i.test(r.purpose ?? ""),
+      }))
+      .filter((r) => r.ms && r.ms >= from && r.ms <= to && r.symbol)
+      .sort((a, b) => a.ms - b.ms || a.company.localeCompare(b.company));
+  } catch { return null; }
+}
+
+/* ------------------------------ price levels ----------------------------- */
+/**
+ * Floor-trader pivots for an index, from the previous session's range.
+ *
+ * These are arithmetic, not opinion: one formula, published everywhere, used
+ * by enough desks that the levels become mildly self-fulfilling. They are
+ * offered as reference points, not as a view on where anything is going.
+ */
+export function pivots({ high, low, prev }) {
+  if (![high, low, prev].every((v) => typeof v === "number" && Number.isFinite(v))) return null;
+  const p = (high + low + prev) / 3;
+  const range = high - low;
+  return {
+    pivot: r2(p), r1: r2(2 * p - low), r2: r2(p + range), r3: r2(high + 2 * (p - low)),
+    s1: r2(2 * p - high), s2: r2(p - range), s3: r2(low - 2 * (high - p)),
+  };
+}
+
 /* ------------------------------ market days ------------------------------ */
 /**
  * NSE's own trading-holiday calendar for the cash market.

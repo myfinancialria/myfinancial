@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import { useInsights } from "../lib/useData";
 import { Card, CardHead, Chip, Label, ErrorNote, Skeleton } from "../components/ui";
 import { Reveal, Stagger, StaggerItem } from "../components/motion";
-import { QuoteTile, BreadthBar, SectorBars, arrow, dirTone, signed } from "../components/Market";
+import { QuoteTile, BreadthBar, SectorBars, FlowsTable, LevelsTable, EventsList, arrow, dirTone, signed } from "../components/Market";
 import Article, { Watchlist } from "../components/Article";
 import { inr, isNum, nf, plainPct } from "../lib/format";
 import type { Quote, Headline, CorpAction, Mover, PreMarket, PostMarket } from "../lib/data";
@@ -183,6 +183,24 @@ function PreMarketView({ d }: { d: PreMarket }) {
         </Reveal>
       )}
 
+      {d.flows?.length > 0 && (
+        <Reveal className="mt-6">
+          <Card>
+            <CardHead title="Who is driving the tape" sub="Institutional buying and selling in the cash market" />
+            <FlowsTable rows={d.flows} />
+          </Card>
+        </Reveal>
+      )}
+
+      {d.levels?.length > 0 && (
+        <Reveal className="mt-6">
+          <Card>
+            <CardHead title="Reference levels for the session" sub="From yesterday's high, low and close" />
+            <LevelsTable rows={d.levels} />
+          </Card>
+        </Reveal>
+      )}
+
       <Reveal className="mt-6">
         <Card>
           <CardHead title="Overnight, around the world"
@@ -230,6 +248,16 @@ function PreMarketView({ d }: { d: PreMarket }) {
             <Actions rows={d.corporateActions} />
           </Card>
         </Reveal>
+
+        {d.events?.length > 0 && (
+          <Reveal>
+            <Card>
+              <CardHead title="Board meetings and results" sub="Filed with NSE for the coming week"
+                right={<Chip>{d.events.filter((e) => e.isResult).length} results</Chip>} />
+              <EventsList rows={d.events} />
+            </Card>
+          </Reveal>
+        )}
 
         <Reveal>
           <Card>
@@ -312,6 +340,15 @@ function PostMarketView({ d }: { d: PostMarket }) {
         </Reveal>
       )}
 
+      {d.flows?.length > 0 && (
+        <Reveal className="mt-6">
+          <Card>
+            <CardHead title="Who was buying and selling" sub="Institutional flows in the cash market" />
+            <FlowsTable rows={d.flows} />
+          </Card>
+        </Reveal>
+      )}
+
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Movers title="Biggest gainers in the Nifty 500" rows={d.gainers} sub={d.moversFrom ?? "from the official closing file"} />
         <Movers title="Biggest losers in the Nifty 500" rows={d.losers} sub={d.moversFrom ?? "from the official closing file"} />
@@ -367,6 +404,28 @@ function PostMarketView({ d }: { d: PostMarket }) {
           <NewsList items={d.news} />
         </Card>
       </Reveal>
+
+      {(d.corporateActions?.length > 0 || d.events?.length > 0) && (
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          {d.corporateActions?.length > 0 && (
+            <Reveal>
+              <Card>
+                <CardHead title="Going ex in the coming sessions" sub="The price adjusts on the ex-date — that drop is arithmetic" />
+                <Actions rows={d.corporateActions} />
+              </Card>
+            </Reveal>
+          )}
+          {d.events?.length > 0 && (
+            <Reveal>
+              <Card>
+                <CardHead title="Reporting next" sub="Board meetings and results filed with NSE"
+                  right={<Chip>{d.events.filter((e) => e.isResult).length} results</Chip>} />
+                <EventsList rows={d.events} />
+              </Card>
+            </Reveal>
+          )}
+        </div>
+      )}
     </>
   );
 }

@@ -128,6 +128,84 @@ export function transmission({ global = [], macro = [], india = [] } = {}) {
   return out;
 }
 
+/* --------------------------- shared components --------------------------- */
+// Rupee crore, written the way an Indian reader writes it. No "5.0k crore".
+const cr = (v) => (isNum(v) ? `₹${Math.round(Math.abs(v)).toLocaleString("en-IN")} crore` : "—");
+const uniq = (xs) => [...new Set(xs)];
+
+/** "Who is driving the tape" — the two institutional flows, in plain terms. */
+export function flowsSection(flows) {
+  if (!flows?.length) return null;
+  const d = flows[0];
+  const fii = d.fii?.net, dii = d.dii?.net;
+  if (!isNum(fii) && !isNum(dii)) return null;
+
+  const paras = [];
+  const side = (v) => (v > 0 ? "bought" : v < 0 ? "sold" : "were flat");
+  paras.push(
+    `On ${d.date}, foreign investors ${side(fii)} ${cr(fii)} of Indian shares and domestic institutions ${side(dii)} ${cr(dii)}. ` +
+    `Foreign investors are overseas funds; domestic institutions are mostly Indian mutual funds and insurers, which is largely your neighbours' monthly SIP money arriving.`,
+  );
+  if (isNum(fii) && isNum(dii)) {
+    if (fii < 0 && dii > 0) paras.push(`They were on opposite sides — foreigners taking money out while domestic funds put it in. Domestic buying has repeatedly cushioned foreign selling in recent years, which is why heavy outflows no longer knock the market the way they once did.`);
+    else if (fii > 0 && dii > 0) paras.push(`Both were buyers, which is the most supportive combination for the market.`);
+    else if (fii < 0 && dii < 0) paras.push(`Both were sellers. That is the least supportive combination, because there is no domestic bid absorbing the foreign exit.`);
+    else if (fii > 0 && dii < 0) paras.push(`Foreigners were buying while domestic funds took some off the table.`);
+  }
+  const run = flows.filter((x) => isNum(x.fii?.net));
+  if (run.length >= 3) {
+    const neg = run.filter((x) => x.fii.net < 0).length;
+    if (neg === run.length) paras.push(`Foreign investors have now sold on each of the last ${run.length} sessions shown.`);
+    else if (neg === 0) paras.push(`Foreign investors have bought on each of the last ${run.length} sessions shown.`);
+  }
+  return { id: "flows", heading: "Who is driving the tape — FII and DII flows", paras };
+}
+
+/** Reference levels, framed as arithmetic rather than prediction. */
+export function levelsSection(levels) {
+  const rows = (levels ?? []).filter((l) => l.pivots);
+  if (!rows.length) return null;
+  const n = rows[0];
+  return {
+    id: "levels", heading: "Reference levels for the session",
+    paras: [
+      `These come from one published formula applied to yesterday's high, low and close — the same arithmetic every desk runs, which is what makes the numbers mildly self-fulfilling. They are markers, not targets.`,
+      `For the ${n.index}, yesterday's range puts the midpoint at ${n0(n.pivots.pivot)}. The first level above is ${n0(n.pivots.r1)} and the first below is ${n0(n.pivots.s1)}; beyond those sit ${n0(n.pivots.r2)} and ${n0(n.pivots.s2)}.`,
+      `A price pushing through one of these tends to draw attention from traders watching the same numbers. It says nothing about whether the move is justified.`,
+    ],
+  };
+}
+
+/** Everything the exchange has told us is scheduled. */
+export function calendarSection(events, forDate) {
+  const list_ = events ?? [];
+  if (!list_.length) return null;
+  const todayMs = Date.parse(`${forDate}T00:00:00Z`);
+  const today = list_.filter((e) => e.ms === todayMs);
+  const results = list_.filter((e) => e.isResult);
+  const paras = [];
+  if (today.length) {
+    paras.push(`${today.length} ${today.length === 1 ? "company has" : "companies have"} a board meeting today: ${listMore(uniq(today.map((e) => e.symbol)), 8)}. Boards meet to approve results, dividends or fundraising, and the share often moves on what they decide.`);
+  }
+  if (results.length) {
+    paras.push(`${results.length} ${results.length === 1 ? "company reports" : "companies report"} results in the next week: ${listMore(uniq(results.map((e) => e.symbol)), 8)}. Results days are the most reliable source of large single-stock moves.`);
+  }
+  if (!paras.length) return null;
+  return { id: "calendar", heading: "What is scheduled", paras };
+}
+
+/** The sources, named. */
+export function sourcesSection() {
+  return {
+    id: "sources", heading: "Where these numbers come from",
+    paras: [
+      `Indian index levels, market breadth, corporate actions, board meetings and institutional flows: the National Stock Exchange. Company prices and the day's movers: the exchange's official end-of-day file, or live prices before it is published.`,
+      `World indices, commodities and US interest rates: CNBC's public quote service. Reference exchange rates: the European Central Bank, via Frankfurter.`,
+      `Headlines are taken from publishers' own feeds and link back to them — the headline and the publisher only, never the article.`,
+    ],
+  };
+}
+
 /* ============================== pre-market ================================ */
 export function preMarketArticle(d) {
   const secs = [];
@@ -176,7 +254,7 @@ export function preMarketArticle(d) {
   if (chans.length) {
     secs.push({
       id: "transmission",
-      heading: "How this reaches the Indian market",
+      heading: "How global markets traded — and what it means for India",
       lead: "These are the routes by which something that happened abroad turns into a price change here. They describe the connection, not what the market will do with it.",
       paras: chans.map((c) => c.text),
       channels: chans.map((c) => ({ channel: c.channel, level: c.level, move: c.move })),
@@ -191,12 +269,37 @@ export function preMarketArticle(d) {
   if ((d.corporateActions ?? []).length) {
     const today = d.corporateActions.filter((a) => a.exDate && d.forDate && a.exMs === Date.parse(`${d.forDate}T00:00:00Z`));
     if (today.length) {
-      watch.push(`${today.length} ${today.length === 1 ? "company goes" : "companies go"} ex-dividend today: ${listMore(today.map((a) => a.symbol), 6)}. On the ex-date a share opens lower by roughly the dividend, because a buyer from today does not receive it. That drop is arithmetic, not the market's opinion of the company.`);
+      watch.push(`${today.length} ${today.length === 1 ? "company goes" : "companies go"} ex-dividend today: ${listMore(uniq(today.map((a) => a.symbol)), 6)}. On the ex-date a share opens lower by roughly the dividend, because a buyer from today does not receive it. That drop is arithmetic, not the market's opinion of the company.`);
     } else {
       watch.push(`Nothing goes ex-dividend today. When a company does, its share price drops by about the dividend on that morning — that fall is mechanical and not a verdict on the business.`);
     }
   }
-  if (watch.length) secs.push({ id: "watch", heading: "What to watch today", paras: watch });
+  if (watch.length) secs.push({ id: "watch", heading: "What to watch in today's session", paras: watch });
+
+  /* --- the new sections, in the order a reader wants them --- */
+  const flows = flowsSection(d.flows);
+  if (flows) secs.splice(3, 0, flows);
+  const levels = levelsSection(d.levels);
+  if (levels) secs.push(levels);
+  const cal = calendarSection(d.events, d.forDate);
+  if (cal) secs.push(cal);
+
+  /* --- bottom line --- */
+  const bl = [];
+  if (closed) bl.push(`Markets are shut today${d.closedReason ? ` for ${d.closedReason}` : ""}. Nothing above trades until the next session.`);
+  else {
+    const bits = [];
+    if (isNum(usAvg)) bits.push(`Wall Street ${pc(usAvg)}`);
+    if (isNum(asiaAvg)) bits.push(`Asia ${pc(asiaAvg)}`);
+    const br = q("WTI crude") ?? q("Brent crude");
+    if (br) bits.push(`crude ${pc(br.pct)}`);
+    const f = (d.flows ?? [])[0];
+    if (f && isNum(f.fii?.net)) bits.push(`foreign investors ${f.fii.net > 0 ? "buyers" : "sellers"} last session`);
+    if (bits.length) bl.push(`${bits.join(", ")}.`);
+    bl.push(`Nothing here predicts the day. It tells you what the market is walking into, which is the part you can actually know before the bell.`);
+  }
+  secs.push({ id: "bottom", heading: "Bottom line", paras: bl });
+  secs.push(sourcesSection());
 
   return secs;
 }
@@ -237,7 +340,7 @@ export function postMarketArticle(d) {
   if (d.basis === "PROVISIONAL") {
     short.push(`These are live figures taken after the close. The exchange publishes its official file around half past six in the evening, and this page rebuilds on it at nine — small differences between the two are normal.`);
   }
-  if (short.length) secs.push({ id: "short", heading: "The short version", paras: short });
+  if (short.length) secs.push({ id: "short", heading: "How the market behaved today", paras: short });
 
   /* --- sectors --- */
   const sec = d.sectors ?? [];
@@ -250,7 +353,7 @@ export function postMarketArticle(d) {
     paras.push(spread >= 2
       ? `The gap between best and worst was wide — ${spread.toFixed(1)} percentage points — which usually means money moved between sectors rather than in or out of the market as a whole.`
       : `The spread between best and worst was narrow, so the day was less about choosing between sectors and more about the market moving together.`);
-    secs.push({ id: "sectors", heading: "Where the money went", paras });
+    secs.push({ id: "sectors", heading: "Sectors — winners and losers", paras });
   }
 
   /* --- movers --- */
@@ -260,7 +363,7 @@ export function postMarketArticle(d) {
     if (gain.length) paras.push(`The biggest riser among the Nifty 500 was ${gain[0].name} at ${signed(gain[0].pct)}${gain[1] ? `, followed by ${gain[1].name} at ${signed(gain[1].pct)}` : ""}.`);
     if (lose.length) paras.push(`The steepest fall was ${lose[0].name} at ${signed(lose[0].pct)}${lose[1] ? `, then ${lose[1].name} at ${signed(lose[1].pct)}` : ""}.`);
     paras.push(`A single day's move is not by itself a reason to buy or sell. Large moves usually have a cause — results, an order, a downgrade, a corporate action — and the headlines below are where to start looking for it.`);
-    secs.push({ id: "movers", heading: "What stood out", paras });
+    secs.push({ id: "movers", heading: "Stocks that moved the market", paras });
   }
 
   /* --- volume --- */
@@ -270,5 +373,19 @@ export function postMarketArticle(d) {
       paras: [`These shares changed hands at least twice as often as they normally do. Heavy volume means an unusual number of people wanted in or out, which makes the day's price move more meaningful than the same move on a quiet day.`],
     });
   }
+
+  const flows = flowsSection(d.flows);
+  if (flows) secs.push(flows);
+
+  /* --- setup for tomorrow --- */
+  const setup = [];
+  const ex = (d.corporateActions ?? []).filter((a) => a.exMs && a.exMs > Date.parse(`${d.forDate}T00:00:00Z`));
+  if (ex.length) setup.push(`${ex.length} ${ex.length === 1 ? "company goes" : "companies go"} ex-dividend or ex-bonus in the coming sessions, starting with ${listMore(uniq(ex.map((a) => a.symbol)), 5)}. Those shares will open lower by roughly the amount involved, which is arithmetic rather than selling.`);
+  const res = (d.events ?? []).filter((e) => e.isResult);
+  if (res.length) setup.push(`${res.length} ${res.length === 1 ? "company reports" : "companies report"} results shortly: ${listMore(uniq(res.map((e) => e.symbol)), 8)}.`);
+  setup.push(`The next session takes its first cue from how America closes tonight and how Asia opens in the morning. Both are in the pre-market brief here at 8am.`);
+  secs.push({ id: "setup", heading: "Setup for tomorrow", paras: setup });
+  secs.push(sourcesSection());
+
   return secs;
 }

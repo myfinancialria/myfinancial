@@ -124,3 +124,100 @@ export function SectorBars({ rows }: { rows: { sector: string; pct: number; coun
     </div>
   );
 }
+
+/* ---------------------------------------------------------------------------
+   Tables the briefs are read from — laid out the way a market note lays them
+   out, with the direction carried by an arrow and a sign, not only by colour.
+--------------------------------------------------------------------------- */
+
+/** Who bought and who sold, by session. Net figures in ₹ crore. */
+export function FlowsTable({ rows }: { rows: { date: string; fii: { net: number | null } | null; dii: { net: number | null } | null }[] }) {
+  if (!rows?.length) return null;
+  const cell = (v: number | null | undefined) =>
+    !isNum(v) ? <span className="text-ink-faint">—</span> : (
+      <span className={`tnum font-semibold ${dirTone(v)}`}>
+        <span aria-hidden className="mr-1">{arrow(v)}</span>
+        {v < 0 ? "−" : "+"}{Math.round(Math.abs(v)).toLocaleString("en-IN")}
+      </span>
+    );
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-[12.5px]">
+        <thead>
+          <tr>
+            {["Session", "Foreign investors", "Domestic institutions"].map((h, i) => (
+              <th key={h} className={`border-b border-line px-4 py-2.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-faint ${i ? "text-right" : "text-left"}`}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.date} className="border-b border-line last:border-0">
+              <td className="whitespace-nowrap px-4 py-2.5 tnum text-ink-dim">{r.date}</td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right">{cell(r.fii?.net)}</td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-right">{cell(r.dii?.net)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="border-t border-line px-4 py-3 text-[11.5px] leading-relaxed text-ink-faint">
+        Net buying or selling in the cash market, in ₹ crore, as reported by NSE. Domestic institutions are largely
+        Indian mutual funds and insurers — in practice, monthly SIP money arriving.
+      </div>
+    </div>
+  );
+}
+
+/** Reference levels either side of a pivot, worked from yesterday's range. */
+export function LevelsTable({ rows }: { rows: { index: string; price: number | null; pivots: { pivot: number; r1: number; r2: number; s1: number; s2: number } }[] }) {
+  if (!rows?.length) return null;
+  const n = (v: number | null) => (isNum(v) ? Math.round(v).toLocaleString("en-IN") : "—");
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-[12.5px]">
+        <thead>
+          <tr>
+            {["Index", "S2", "S1", "Pivot", "R1", "R2"].map((h, i) => (
+              <th key={h} className={`border-b border-line px-3 py-2.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-faint ${i ? "text-right" : "text-left"}`}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.index} className="border-b border-line last:border-0">
+              <td className="whitespace-nowrap px-3 py-2.5 font-medium">{r.index}</td>
+              <td className="whitespace-nowrap px-3 py-2.5 text-right tnum text-ink-faint">{n(r.pivots.s2)}</td>
+              <td className="whitespace-nowrap px-3 py-2.5 text-right tnum text-ink-dim">{n(r.pivots.s1)}</td>
+              <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold tnum">{n(r.pivots.pivot)}</td>
+              <td className="whitespace-nowrap px-3 py-2.5 text-right tnum text-ink-dim">{n(r.pivots.r1)}</td>
+              <td className="whitespace-nowrap px-3 py-2.5 text-right tnum text-ink-faint">{n(r.pivots.r2)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="border-t border-line px-4 py-3 text-[11.5px] leading-relaxed text-ink-faint">
+        S = below the pivot, R = above it, from a standard formula on yesterday's high, low and close. Widely
+        watched, which is most of why they matter. They are reference marks, not forecasts or targets.
+      </div>
+    </div>
+  );
+}
+
+/** Board meetings and results the exchange has been told about. */
+export function EventsList({ rows, limit = 12 }: { rows: { symbol: string; company: string; purpose: string; date: string | null; isResult: boolean }[]; limit?: number }) {
+  if (!rows?.length) return null;
+  return (
+    <div className="divide-y divide-line">
+      {rows.slice(0, limit).map((e, i) => (
+        <div key={e.symbol + i} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-3 px-5 py-2.5">
+          <span className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.08em] text-ink-faint tnum">{e.date}</span>
+          <div className="min-w-0">
+            <div className="truncate text-[12.5px] font-medium">{e.company || e.symbol}</div>
+            <div className="truncate text-[11.5px] text-ink-dim">{e.purpose}</div>
+          </div>
+          {e.isResult && <span className="whitespace-nowrap border border-accent/50 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-accent">results</span>}
+        </div>
+      ))}
+    </div>
+  );
+}

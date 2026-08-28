@@ -158,3 +158,48 @@ test("the same data always produces the same words", () => {
   };
   assert.deepEqual(preMarketArticle(d), preMarketArticle(d));
 });
+
+/* -------------------- the sections added for the article -------------------- */
+import { flowsSection, levelsSection, calendarSection, sourcesSection } from "../../shared/narrative.mjs";
+
+test("flows are written in rupee crore, not abbreviated", () => {
+  const s = flowsSection([{ date: "27-Aug-2026", fii: { net: -298.26 }, dii: { net: 4977.17 } }]);
+  assert.match(s.paras[0], /₹4,977 crore/, "an Indian reader writes 4,977 — never '5.0k'");
+  assert.match(s.paras[0], /₹298 crore/);
+});
+
+test("opposite institutional flows are explained, not just listed", () => {
+  const s = flowsSection([{ date: "27-Aug-2026", fii: { net: -500 }, dii: { net: 4000 } }]);
+  assert.match(s.paras[1], /opposite sides/i);
+  const both = flowsSection([{ date: "27-Aug-2026", fii: { net: -500 }, dii: { net: -400 } }]);
+  assert.match(both.paras[1], /least supportive/i);
+});
+
+test("a session with no flow data produces no section", () => {
+  assert.equal(flowsSection([]), null);
+  assert.equal(flowsSection([{ date: "27-Aug-2026", fii: null, dii: null }]), null);
+});
+
+test("levels are offered as reference marks, never as targets", () => {
+  const s = levelsSection([{ index: "NIFTY 50", pivots: { pivot: 24118, r1: 24160, r2: 24230, s1: 24049, s2: 24007 } }]);
+  assert.match(s.paras.join(" "), /markers, not targets|says nothing about/i);
+  assert.equal(FORECAST.test(s.paras.join(" ")), false);
+});
+
+test("a company filing twice in a day is named once", () => {
+  const evs = [
+    { symbol: "SETCO", isResult: true, ms: 1, date: "29-Aug-2026" },
+    { symbol: "SETCO", isResult: true, ms: 1, date: "29-Aug-2026" },
+    { symbol: "NAGAFERT", isResult: true, ms: 1, date: "29-Aug-2026" },
+  ];
+  const s = calendarSection(evs, "2026-08-28");
+  const setcos = (s.paras.join(" ").match(/SETCO/g) ?? []).length;
+  assert.equal(setcos, 1, "duplicate filings must not repeat the symbol");
+});
+
+test("the sources section names every feed the page uses", () => {
+  const t = sourcesSection().paras.join(" ");
+  for (const who of [/National Stock Exchange/i, /CNBC/i, /European Central Bank/i])
+    assert.match(t, who);
+  assert.match(t, /never the article/i, "the licence position must be stated");
+});
