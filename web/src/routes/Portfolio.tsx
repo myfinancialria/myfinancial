@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { parseCas, type Cas } from "@shared/cas.mjs";
 import { analyse, type Analysis } from "@shared/cas_analysis.mjs";
-import { extractPdf, PasswordError } from "../lib/casPdf";
+import { extractPdf, PasswordError, StageError } from "../lib/casPdf";
 import { useFunds, useHoldingsIndex } from "../lib/useData";
 import { loadHoldings } from "../lib/data";
 import { Card, CardHead, Chip, Label, Button, Skeleton } from "../components/ui";
@@ -34,6 +34,7 @@ export default function Portfolio() {
   const [password, setPassword] = useState("");
   const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<string | null>(null);
   const [cas, setCas] = useState<Cas | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -49,7 +50,7 @@ export default function Portfolio() {
   }, [funds.data]);
 
   const run = useCallback(async (f: File, pw: string) => {
-    setStage("reading"); setError(null);
+    setStage("reading"); setError(null); setDetail(null);
     try {
       const { lines, cells } = await extractPdf(f, pw);
       const parsed = parseCas(lines, cells);
@@ -85,15 +86,27 @@ export default function Portfolio() {
       setStage("done");
     } catch (e: any) {
       setStage("error");
-      setError(e instanceof PasswordError
-        ? e.message
-        : `Could not read that file — ${String(e?.message ?? e).slice(0, 120)}`);
+      if (e instanceof PasswordError) { setError(e.message); setDetail(null); return; }
+      // Say WHERE it broke in words the reader can act on, and keep the
+      // machine detail in a separate block they can send on. Neither contains
+      // anything from the statement itself.
+      setError(e instanceof StageError
+        ? `It failed while ${e.stage}.`
+        : "It failed while reading the statement.");
+      setDetail([
+        `stage: ${e instanceof StageError ? e.stage : "unknown"}`,
+        `error: ${String(e?.name ?? "Error")}: ${String(e?.message ?? e).slice(0, 200)}`,
+        `browser: ${typeof navigator !== "undefined" ? navigator.userAgent : "unknown"}`,
+        `withResolvers: ${typeof (Promise as any).withResolvers}, abortAny: ${
+          typeof AbortSignal !== "undefined" ? typeof (AbortSignal as any).any : "n/a"}`,
+        String(e?.stack ?? "").split("\n").slice(1, 4).map((l: string) => l.trim()).join(" | "),
+      ].filter(Boolean).join("\n"));
     }
   }, [fundsByIsin]);
 
   const pick = (f: File | null) => {
     if (!f) return;
-    setFile(f); setCas(null); setAnalysis(null); setStage("idle"); setError(null);
+    setFile(f); setCas(null); setAnalysis(null); setStage("idle"); setError(null); setDetail(null);
   };
 
   const reset = () => {
@@ -175,6 +188,20 @@ export default function Portfolio() {
                     className="overflow-hidden">
                     <div className="mt-4 border border-down/50 px-4 py-3 text-[12.5px] leading-relaxed text-ink-dim">
                       <b className="text-down">Could not read it.</b> {error}
+                      {detail && (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer select-none text-[11.5px] uppercase tracking-wider text-ink-faint">
+                            Technical detail — contains nothing from your statement
+                          </summary>
+                          <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-words border border-line-2 bg-paper-2 p-2 text-[11px] leading-relaxed text-ink-dim">
+                            {detail}
+                          </pre>
+                          <button type="button" onClick={() => navigator.clipboard?.writeText(detail)}
+                            className="mt-2 border border-line-2 px-2 py-1 text-[11px] uppercase tracking-wider text-ink-dim transition-colors hover:border-ink hover:text-ink">
+                            Copy
+                          </button>
+                        </details>
+                      )}
                     </div>
                   </motion.div>
                 )}

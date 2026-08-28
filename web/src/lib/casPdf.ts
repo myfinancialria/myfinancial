@@ -12,6 +12,8 @@
    only safe place to open one is the reader's own machine.
 --------------------------------------------------------------------------- */
 
+import { installShims } from "@shared/shims.mjs";
+
 export interface Cell { x: number; text: string }
 export interface ExtractResult { lines: string[]; cells: Cell[][]; pages: number }
 
@@ -23,10 +25,26 @@ export class PasswordError extends Error {
   }
 }
 
+/** The stage a failure happened at, so an error report says something useful. */
+export class StageError extends Error {
+  constructor(public stage: string, public original: unknown) {
+    const raw = original instanceof Error ? original.message : String(original);
+    super(`${stage} — ${raw}`);
+    this.name = "StageError";
+    if (original instanceof Error && original.stack) this.stack = original.stack;
+  }
+}
+
+const at = async <T>(stage: string, fn: () => Promise<T> | T): Promise<T> => {
+  try { return await fn(); }
+  catch (e) { throw e instanceof StageError ? e : new StageError(stage, e); }
+};
+
 let pdfjs: typeof import("pdfjs-dist") | null = null;
 
 async function loadPdfjs() {
   if (pdfjs) return pdfjs;
+  installShims();
   const lib = await import("pdfjs-dist");
   // The worker ships with the package; bundling it via Vite keeps everything
   // same-origin, which matters more here than in an ordinary PDF viewer.
@@ -40,8 +58,8 @@ async function loadPdfjs() {
 const LINE_TOLERANCE = 3;
 
 export async function extractPdf(file: File, password: string): Promise<ExtractResult> {
-  const lib = await loadPdfjs();
-  const data = new Uint8Array(await file.arrayBuffer());
+  const lib = await at("loading the PDF reader", () => loadPdfjs());
+  const data = await at("reading the file off disk", async () => new Uint8Array(await file.arrayBuffer()));
 
   let doc;
   try {
@@ -49,13 +67,14 @@ export async function extractPdf(file: File, password: string): Promise<ExtractR
   } catch (e: any) {
     const name = String(e?.name ?? "");
     if (name === "PasswordException") throw new PasswordError(!password);
-    throw e;
+    throw new StageError("opening the PDF", e);
   }
 
   const lines: string[] = [];
   const cells: Cell[][] = [];
 
   for (let p = 1; p <= doc.numPages; p++) {
+   await at(`extracting text from page ${p} of ${doc.numPages}`, async () => {
     const page = await doc.getPage(p);
     const content = await page.getTextContent();
 
@@ -63,11 +82,14 @@ export async function extractPdf(file: File, password: string): Promise<ExtractR
     // line left to right. This is the same shape casparser builds from
     // PDFium's char origins.
     const rows = new Map<number, Cell[]>();
-    for (const item of content.items as any[]) {
-      const text = String(item.str ?? "");
-      if (!text.trim()) continue;
+    // Array.from, not for-of: a marked-content entry carries no transform, and
+    // whatever getTextContent hands back only has to be array-LIKE.
+    for (const item of Array.from<any>(content.items ?? [])) {
+      const text = String(item?.str ?? "");
+      if (!text.trim() || !item?.transform) continue;
       const x = item.transform[4] as number;
       const y = item.transform[5] as number;
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
       const key = [...rows.keys()].find((k) => Math.abs(k - y) <= LINE_TOLERANCE) ?? y;
       (rows.get(key) ?? rows.set(key, []).get(key)!).push({ x, text });
     }
@@ -78,6 +100,7 @@ export async function extractPdf(file: File, password: string): Promise<ExtractR
       lines.push(row.map((c) => c.text).join(" ").replace(/\s+/g, " ").trim());
     }
     page.cleanup();
+   });
   }
 
   const pages = doc.numPages;

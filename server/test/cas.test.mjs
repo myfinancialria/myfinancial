@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseCas, classifyTransaction, cleanSchemeName, parseDate, detect, findValueColumnStart } from "../../shared/cas.mjs";
+import { installShims } from "../../shared/shims.mjs";
 import { xirr, analyse } from "../../shared/cas_analysis.mjs";
 
 /* ---------------------------------------------------------------------------
@@ -233,4 +234,54 @@ test("the registrar's scheme code is stripped from the name", () => {
   assert.equal(cleanSchemeName("IPRU002-ICICI Prudential Bluechip Fund - Growth"), "ICICI Prudential Bluechip Fund - Growth");
   // A name that merely contains a dash keeps it.
   assert.equal(cleanSchemeName("Nippon India Growth Fund - Growth"), "Nippon India Growth Fund - Growth");
+});
+
+// ---------------------------------------------------------------------------
+// pdf.js 6 requires Promise.withResolvers and AbortSignal.any, both of which
+// landed in Safari 17.4. These pin the stand-ins against the real thing.
+// ---------------------------------------------------------------------------
+/** Stands in for an engine whose Promise predates withResolvers. */
+class FakePromise { constructor(executor) { return new Promise(executor); } }
+/** Stands in for an AbortSignal constructor with no static `any`. */
+function AbortSignalStub() {}
+
+test("the shims install only what is missing, and leave natives alone", () => {
+  const native = { Promise, AbortSignal, AbortController };
+  assert.deepEqual(installShims(native), [], "nothing to do on a modern engine");
+
+  // A stub that does NOT inherit Promise's statics — an old engine's Promise.
+  const scope = { Promise: FakePromise, AbortSignal: AbortSignalStub, AbortController };
+  assert.deepEqual(installShims(scope).sort(), ["AbortSignal.any", "Promise.withResolvers"]);
+});
+
+test("withResolvers resolves and rejects like the native one", async () => {
+  const scope = { Promise: FakePromise };
+  installShims(scope);
+  const ok = scope.Promise.withResolvers();
+  ok.resolve(42);
+  assert.equal(await ok.promise, 42);
+
+  const bad = scope.Promise.withResolvers();
+  bad.reject(new Error("nope"));
+  await assert.rejects(bad.promise, /nope/);
+});
+
+test("AbortSignal.any follows whichever signal aborts, and honours one already aborted", () => {
+  const scope = { Promise, AbortSignal: AbortSignalStub, AbortController };
+  installShims(scope);
+
+  const a = new AbortController(), b = new AbortController();
+  const later = scope.AbortSignal.any([a.signal, b.signal]);
+  assert.equal(later.aborted, false, "nothing has aborted yet");
+  b.abort("because");
+  assert.equal(later.aborted, true);
+  assert.equal(later.reason, "because", "the reason is carried through");
+
+  const done = new AbortController();
+  done.abort("already");
+  const immediate = scope.AbortSignal.any([done.signal]);
+  assert.equal(immediate.aborted, true, "an already-aborted signal wins at once");
+  assert.equal(immediate.reason, "already");
+
+  assert.equal(scope.AbortSignal.any([]).aborted, false, "an empty list never aborts");
 });
