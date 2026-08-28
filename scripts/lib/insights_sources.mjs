@@ -77,6 +77,36 @@ export async function worldQuotes(spec) {
 }
 
 /**
+ * Live prices for a list of NSE symbols, 200 to a request.
+ *
+ * This is what makes NIFTY 500 gainers and losers possible at 5pm, hours
+ * before the bhavcopy exists. CNBC carries Indian singles as "SYMBOL-IN".
+ * The 21:00 run does not use this — by then the settled file is out and
+ * carries turnover and delivery too.
+ */
+export async function stockQuotes(symbols, { batch = 200, gapMs = 800 } = {}) {
+  const out = new Map();
+  for (let i = 0; i < symbols.length; i += batch) {
+    const slice = symbols.slice(i, i + batch);
+    try {
+      const url = `${CNBC}?symbols=${slice.map((x) => encodeURIComponent(`${x}-IN`)).join("|")}`
+        + "&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json";
+      const j = await getJson(url, { headers: { "user-agent": UA }, retries: 2, timeout: 40_000 });
+      let rows = j?.FormattedQuoteResult?.FormattedQuote ?? [];
+      if (!Array.isArray(rows)) rows = [rows];
+      for (const r of rows) {
+        const sym = String(r.symbol ?? "").replace(/-IN$/, "");
+        const price = unfmt(r.last), pct = unfmt(r.change_pct);
+        if (!sym || price === null) continue;
+        out.set(sym, { symbol: sym, price: r2(price), pct: r2(pct ?? 0) });
+      }
+    } catch { /* a missing batch thins the list; it does not sink the report */ }
+    if (i + batch < symbols.length) await sleep(gapMs);
+  }
+  return out;
+}
+
+/**
  * Every Indian index NSE publishes — the benchmarks and all the sector ones —
  * in a single call. This is what lets the 5pm report show real sector moves
  * before the bhavcopy exists.

@@ -5,6 +5,7 @@ import { useInsights } from "../lib/useData";
 import { Card, CardHead, Chip, Label, ErrorNote, Skeleton } from "../components/ui";
 import { Reveal, Stagger, StaggerItem } from "../components/motion";
 import { QuoteTile, BreadthBar, SectorBars, arrow, dirTone, signed } from "../components/Market";
+import Article, { Watchlist } from "../components/Article";
 import { inr, isNum, nf, plainPct } from "../lib/format";
 import type { Quote, Headline, CorpAction, Mover, PreMarket, PostMarket } from "../lib/data";
 
@@ -163,6 +164,25 @@ function PreMarketView({ d }: { d: PreMarket }) {
   return (
     <>
       {d.marketOpen === false && <ClosedNotice reason={d.closedReason} lastSession={d.lastSession} />}
+
+      <Article sections={d.article} />
+
+      {d.watchlist?.length > 0 && (
+        <Reveal className="mt-6">
+          <Card>
+            <CardHead title="Stocks that could move the market today"
+              sub="In this morning's news and large enough to matter to the index"
+              right={<Chip tone="accent">{d.watchlist.length}</Chip>} />
+            <Watchlist items={d.watchlist} />
+            <div className="border-t border-line px-5 py-3.5 text-[11.5px] leading-relaxed text-ink-faint">
+              Ranked by company size, because that is what decides whether a headline moves the index or just the
+              share. Being listed here is not a view on the company — it is where the day's attention is likely
+              to go.
+            </div>
+          </Card>
+        </Reveal>
+      )}
+
       <Reveal className="mt-6">
         <Card>
           <CardHead title="Overnight, around the world"
@@ -251,6 +271,8 @@ function PostMarketView({ d }: { d: PostMarket }) {
         </Card>
       )}
 
+      <Article sections={d.article} />
+
       {provisional && (
         <Card className="mt-6 border-warn">
           <div className="px-5 py-3.5 text-[12.5px] leading-relaxed text-ink-dim">
@@ -291,8 +313,8 @@ function PostMarketView({ d }: { d: PostMarket }) {
       )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <Movers title="Biggest gainers" rows={d.gainers} sub={d.basis === "OFFICIAL" ? "liquid names only — ₹5 cr+ average turnover" : "NIFTY 50"} />
-        <Movers title="Biggest losers" rows={d.losers} sub={d.basis === "OFFICIAL" ? "liquid names only — ₹5 cr+ average turnover" : "NIFTY 50"} />
+        <Movers title="Biggest gainers in the Nifty 500" rows={d.gainers} sub={d.moversFrom ?? "from the official closing file"} />
+        <Movers title="Biggest losers in the Nifty 500" rows={d.losers} sub={d.moversFrom ?? "from the official closing file"} />
       </div>
 
       {d.sectors.length > 0 && (

@@ -22,13 +22,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { worldQuotes, indiaIndices, fx, corporateActions, news, buildNameIndex, tagHeadline,
+import { worldQuotes, indiaIndices, fx, stockQuotes, corporateActions, news, buildNameIndex, tagHeadline,
   tradingHolidays, marketDay, previousMarketDay } from "./lib/insights_sources.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
 const OUT = path.join(ROOT, "dist", "data");
 const STATE = path.join(ROOT, "var", "insights.json");
+
+import { preMarketArticle, postMarketArticle } from "../shared/narrative.mjs";
 
 const readJson = (p, fb = null) => { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return fb; } };
 const r2 = (x, d = 2) => (typeof x === "number" && Number.isFinite(x) ? Number(x.toFixed(d)) : null);
@@ -74,7 +76,7 @@ function loadUniverse() {
     price: r[F.price], change1d: r[F.change1d], ret1y: r[F.ret1y],
     marketCapCr: r[F.marketCapCr], avgTurnoverCr: r[F.avgTurnoverCr],
     volumeRatio: r[F.volumeRatio], deliveryPct: r[F.deliveryPct] ?? r[F.avgDeliveryPct20],
-    nseTier: r[F.nseTier], inNifty50: r[F.inNifty50], isin: r[F.isin],
+    nseTier: r[F.nseTier], inNifty50: r[F.inNifty50], inNifty500: r[F.inNifty500], isin: r[F.isin],
   }));
   return { priceDate: s.priceDate, rows };
 }
@@ -86,8 +88,12 @@ function fromBhavcopy(u) {
   const adv = liquid.filter((r) => r.change1d > 0).length;
   const dec = liquid.filter((r) => r.change1d < 0).length;
   const unch = liquid.length - adv - dec;
-  const top = (dir) => liquid
-    .filter((r) => (r.avgTurnoverCr ?? 0) >= 5)
+  // Gainers and losers are drawn from the NIFTY 500 — a defined, investable
+  // universe. Ranking all 2,065 names surfaces illiquid micro-caps whose 15%
+  // move is two trades, which tells a reader nothing.
+  const n500 = liquid.filter((r) => r.inNifty500 === true);
+  const pool = n500.length >= 50 ? n500 : liquid.filter((r) => (r.avgTurnoverCr ?? 0) >= 5);
+  const top = (dir) => pool
     .sort((a, b) => dir * (b.change1d - a.change1d))
     .slice(0, 10)
     .map((r) => ({ symbol: r.symbol, name: r.name, price: r2(r.price), pct: r2(r.change1d), sector: r.sector, turnoverCr: r2(r.avgTurnoverCr, 0) }));
@@ -125,6 +131,19 @@ function fromBhavcopy(u) {
  * counts describe the day's breadth across 500 companies without a single
  * extra request — and without pretending to be the settled file.
  */
+async function nifty500Movers(universe) {
+  const members = universe.rows.filter((r) => r.inNifty500 === true);
+  if (members.length < 100) return null;
+  const quotes = await stockQuotes(members.map((r) => r.symbol));
+  const byS = new Map(members.map((r) => [r.symbol, r]));
+  const rows = [...quotes.values()]
+    .filter((q) => Number.isFinite(q.pct) && byS.has(q.symbol))
+    .map((q) => ({ symbol: q.symbol, name: byS.get(q.symbol).name, sector: byS.get(q.symbol).sector, price: q.price, pct: q.pct }));
+  if (rows.length < 100) return null;                       // too thin to rank honestly
+  const rank = (dir) => [...rows].sort((a, b) => dir * (b.pct - a.pct)).slice(0, 10);
+  return { covered: rows.length, gainers: rank(1), losers: rank(-1) };
+}
+
 function fromIndices(nse) {
   const broad = nse.find((i) => /^NIFTY 500$/i.test(i.index)) ?? nse.find((i) => /^NIFTY 50$/i.test(i.index));
   if (!broad || broad.advances === null) return null;
@@ -179,21 +198,47 @@ if (SESSION === "premarket") {
   console.log(`[insights] world ${world.length}/${WORLD.length} · macro ${macro.length}/${MACRO.length}` +
               ` · NSE indices ${nse.length} · FX ${rates.length} · corporate actions ${ca ? ca.length : "unavailable"}`);
 
+  // Companies big enough to move the index that are ALSO in this morning's
+  // news. A ₹500 cr company with a dramatic headline does not move the Nifty;
+  // a ₹5 lakh cr one with a dull headline can.
+  const bySymbol = new Map(universe.rows.map((r) => [r.symbol, r]));
+  const watchlist = inNews
+    .map((c) => ({ ...c, row: bySymbol.get(c.symbol) }))
+    .filter((c) => c.row && (c.row.marketCapCr ?? 0) > 0)
+    .sort((a, b) => (b.row.marketCapCr ?? 0) - (a.row.marketCapCr ?? 0))
+    .slice(0, 8)
+    .map((c) => ({
+      symbol: c.symbol, name: c.name, headlines: c.headlines, sample: c.sample,
+      marketCapCr: r2(c.row.marketCapCr, 0), sector: c.row.sector,
+      heavyweight: c.row.inNifty50 === true || (c.row.marketCapCr ?? 0) >= 100000,
+      lastPct: r2(c.row.change1d),
+    }));
+
   state.premarket = {
     asOf: new Date().toISOString(), forDate: istDate(),
     marketOpen: today.open, closedReason: today.reason, lastSession,
+    watchlist,
     global: world, macro: [...macro, ...rates],
     india: nse.filter((i) => BENCH.test(i.index)).map(asQuote),
     previousClose: { date: universe.priceDate },
     corporateActions: ca ?? [],
     news: tagged.slice(0, 24), inNews,
   };
+  state.premarket.article = preMarketArticle(state.premarket);
 } else {
   const nse = await indiaIndices();
   const bhavIsToday = universe.priceDate === istDate();
   // A closed market has no breadth and no movers. Reporting the stale index
   // levels NSE keeps serving would read as though a session had happened.
-  const session = !today.open ? null : bhavIsToday ? fromBhavcopy(universe) : fromIndices(nse);
+  let session = !today.open ? null : bhavIsToday ? fromBhavcopy(universe) : fromIndices(nse);
+  // Before the bhavcopy exists, rank the NIFTY 500 on live prices instead.
+  if (session && session.basis === "PROVISIONAL" && !session.gainers.length) {
+    const live = await nifty500Movers(universe);
+    if (live) {
+      session = { ...session, gainers: live.gainers, losers: live.losers, moversFrom: `NIFTY 500 · ${live.covered} of 500 quoted` };
+      console.log(`[insights] live NIFTY 500 movers: ${live.covered} of 500 quoted`);
+    }
+  }
   console.log(`[insights] NSE indices ${nse.length} · session basis ${session?.basis ?? "unavailable"}` +
               `${bhavIsToday ? "" : ` (bhavcopy still at ${universe.priceDate}; NSE publishes it ~18:30 IST)`}`);
 
@@ -214,6 +259,7 @@ if (SESSION === "premarket") {
     sectors: today.open ? (sectors.length ? sectors : (session?.sectors ?? [])) : [],
     news: tagged.slice(0, 24), inNews,
   };
+  state.postmarket.article = postMarketArticle(state.postmarket);
 }
 
 state.generated = new Date().toISOString();

@@ -233,6 +233,15 @@ export interface Headline {
 }
 export interface Mover { symbol: string; name: string; price: number | null; pct: number | null; sector?: string | null; turnoverCr?: number | null }
 
+export interface ArticleSection {
+  id: string; heading: string; lead?: string; paras: string[];
+  channels?: { channel: string; level: string | null; move: number | null }[];
+}
+export interface WatchItem {
+  symbol: string; name: string; headlines: number; sample: string;
+  marketCapCr: number | null; sector: string | null; heavyweight: boolean; lastPct: number | null;
+}
+
 export interface PreMarket {
   asOf: string; forDate: string;
   /** False on weekends and NSE trading holidays. */
@@ -240,6 +249,8 @@ export interface PreMarket {
   global: Quote[]; macro: Quote[]; india: Quote[];
   previousClose: { date: string };
   corporateActions: CorpAction[];
+  watchlist: WatchItem[];
+  article: ArticleSection[];
   news: Headline[];
   inNews: { symbol: string; name: string; headlines: number; sample: string }[];
 }
@@ -255,6 +266,9 @@ export interface PostMarket {
   breadth: { advances: number; declines: number; unchanged: number; ratio: number | null } | null;
   gainers: Mover[]; losers: Mover[];
   sectors: { sector: string; pct: number; count: number; advancePct: number }[];
+  /** Where the gainers/losers were ranked from, when not the settled file. */
+  moversFrom?: string;
+  article: ArticleSection[];
   volume: { symbol: string; name: string; pct: number; volumeRatio: number; deliveryPct: number | null }[];
   news: Headline[];
   inNews: { symbol: string; name: string; headlines: number; sample: string }[];
