@@ -70,8 +70,14 @@ for (const a of ADAPTERS) {
     failed++;
     continue;
   }
-  const links = [...listing.html.matchAll(/href="([^"]+\.(?:xlsx?|zip))"/gi)]
-    .map((m) => absolute(m[1], listing.url)).filter(Boolean);
+  // Links come from two places. Older AMC sites put them in href attributes;
+  // the Next.js/React ones render nothing useful into the markup but still
+  // ship every file URL inside the embedded SSR JSON blob. Reading both is
+  // what keeps a headless browser off the dependency list.
+  const links = [
+    ...[...listing.html.matchAll(/href="([^"]+\.(?:xlsx?|zip))"/gi)].map((m) => m[1]),
+    ...[...listing.html.matchAll(/"((?:https?:\/\/|\/)[^"\\\s]+?\.(?:xlsx?|zip))"/gi)].map((m) => m[1]),
+  ].map((h) => absolute(h.replace(/\\\//g, "/"), listing.url)).filter(Boolean);
   const found = a.pick([...new Set(links)]);
 
   if (!found.length) {
@@ -80,18 +86,32 @@ for (const a of ADAPTERS) {
     continue;
   }
 
-  // Newest few per kind. History is not re-downloaded every day; --keep raises
-  // it when backfilling.
+  // Newest few PERIODS per kind. History is not re-downloaded every day;
+  // --keep raises it when backfilling.
+  //
+  // A period is (kind, date) and may hold MANY files: most AMCs publish one
+  // workbook covering every scheme, but some (HDFC) publish one file per
+  // scheme — 109 of them for a single month. Grouping by period rather than by
+  // file is what lets both shapes share this loop.
   const byKind = new Map();
   for (const f of found) {
-    const list = byKind.get(f.kind) ?? [];
-    if (list.length < KEEP) { list.push(f); byKind.set(f.kind, list); }
+    const periods = byKind.get(f.kind) ?? new Map();
+    if (!periods.has(f.date) && periods.size >= KEEP) continue;   // older period
+    const list = periods.get(f.date) ?? [];
+    list.push(f);
+    periods.set(f.date, list);
+    byKind.set(f.kind, periods);
   }
 
-  for (const [kind, list] of byKind) {
-    for (const f of list) {
+  for (const [kind, periods] of byKind) {
+    for (const [date, list] of periods) {
+      for (const f of list) {
       const ext = (f.name.match(/\.(xlsx?|zip)$/i) || [, "xls"])[1].toLowerCase();
-      const rel = path.join(slug(a.amc), `${kind.toLowerCase()}-${f.date}.${ext}`);
+      // One file for the period keeps the flat name it has always had, so no
+      // cached disclosure is orphaned; many files get a directory.
+      const rel = list.length === 1
+        ? path.join(slug(a.amc), `${kind.toLowerCase()}-${date}.${ext}`)
+        : path.join(slug(a.amc), `${kind.toLowerCase()}-${date}`, `${slug(f.name.replace(/\.(xlsx?|zip)$/i, ""))}.${ext}`);
       const dest = path.join(OUT, rel);
       if (fs.existsSync(dest) && !ARGS.has("--force")) { skipped++; continue; }
 
@@ -105,7 +125,9 @@ for (const a of ADAPTERS) {
       fs.writeFileSync(dest, dl.buf);
       manifest.files[rel] = { amc: a.amc, kind, date: f.date, source: f.url, bytes: dl.buf.length, fetched: new Date().toISOString() };
       downloaded++;
-      console.log(`  ✓ ${a.amc.padEnd(15)} ${kind.toLowerCase().padEnd(12)} ${f.date}  ${(dl.buf.length / 1024).toFixed(0)} KB`);
+      if (list.length === 1) console.log(`  ✓ ${a.amc.padEnd(15)} ${kind.toLowerCase().padEnd(12)} ${date}  ${(dl.buf.length / 1024).toFixed(0)} KB`);
+      }
+      if (list.length > 1) console.log(`  ✓ ${a.amc.padEnd(15)} ${kind.toLowerCase().padEnd(12)} ${date}  ${list.length} scheme files`);
     }
   }
 }

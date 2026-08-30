@@ -22,6 +22,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import XLSX from "xlsx";
 import { parseWorkbook, isIndianEquityIsin } from "./lib/portfolio.mjs";
+import { unzip } from "./lib/unzip.mjs";
 import { overlapPct, commonHoldings } from "../shared/overlap.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -51,6 +52,18 @@ export function normaliseSchemeName(s) {
     .replace(/\b(plan|option|growth|idcw|dividend|payout|reinvestment|re-investment)\b/g, " ")
     .replace(/\b(an?|the|of|for|scheme)\b/g, " ")
     .replace(/[^a-z0-9 ]+/g, " ")
+    // A disclosure abbreviates where a fund name spells out, and glues digits
+    // to words: "Groww Nifty Smallcap 250Mom Qlty100 Indx" is the same fund as
+    // "... 250 Momentum Quality 100 Index Fund". Split the joins, then expand.
+    .replace(/(\d)([a-z])/g, "$1 $2")
+    .replace(/([a-z])(\d)/g, "$1 $2")
+    .replace(/\bqlty\b/g, "quality")
+    .replace(/\bmom\b/g, "momentum")
+    .replace(/\bindx\b/g, "index")
+    .replace(/\boppo?r?\b/g, "opportunities")
+    // "Mid Cap" and "Midcap" are the same size bucket spelled two ways, and
+    // both spellings appear across AMCs and even within one AMC's own files.
+    .replace(/\b(mid|small|large|flexi|multi|micro)\s+cap\b/g, "$1cap")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -101,13 +114,20 @@ export function matchScheme(disclosedName, candidates) {
   const type = productType(disclosedName);
   const eligible = candidates.filter((c) => productType(c.name) === type);
 
-  const exact = eligible.filter((c) => normaliseSchemeName(c.name) === key);
+  // A fund and its SEGREGATED PORTFOLIO (the side-pocket carved out of a
+  // defaulted holding) carry the same name and two scheme codes. The side
+  // pocket is inactive, has no AAUM and a token NAV — the site flags it stale.
+  // Both match a disclosure exactly, so without this the portfolio can land on
+  // the side pocket and the real fund shows nothing.
+  const live = (c) => (c.stale ? 1 : 0);
+  const exact = eligible.filter((c) => normaliseSchemeName(c.name) === key)
+    .sort((a, b) => live(a) - live(b));
   if (exact.length) return { scheme: exact[0], score: 1, plans: exact.length };
 
   let best = null, bestScore = 0;
   for (const c of eligible) {
     const s = similarity(disclosedName, c.name);
-    if (s > bestScore) { bestScore = s; best = c; }
+    if (s > bestScore || (s === bestScore && best && live(c) < live(best))) { bestScore = s; best = c; }
   }
   // 0.8 keeps "Nippon India Growth Fund" from being handed to "Nippon India
   // Growth Mid Cap Fund". Below that, report it rather than guess.
@@ -136,24 +156,40 @@ if (!entries.length) {
 // So: the newest MONTHLY is the base, and a newer fortnightly is layered on
 // top for the schemes it does cover. Best coverage and best freshness, per
 // scheme rather than per file.
-const sources = new Map();          // amc -> [{ base }, ...overlays]
+//
+// The base is every MONTHLY filing at an AMC's newest monthly date — plural,
+// because an AMC that publishes one file per scheme has a hundred filings
+// sharing that date and keeping only one would discard the other ninety-nine.
+const sources = new Map();          // amc -> { baseDate, base: [], overlays: [] }
 for (const [rel, m] of entries) {
-  const cur = sources.get(m.amc) ?? { base: null, overlays: [] };
+  const cur = sources.get(m.amc) ?? { baseDate: null, base: [], overlays: [] };
   if (m.kind === "MONTHLY") {
-    if (!cur.base || m.date > cur.base.date) cur.base = { ...m, rel };
+    if (!cur.baseDate || m.date > cur.baseDate) { cur.baseDate = m.date; cur.base = []; }
+    if (m.date === cur.baseDate) cur.base.push({ ...m, rel });
   } else {
     cur.overlays.push({ ...m, rel });
   }
   sources.set(m.amc, cur);
 }
+// A disclosure that is MONTHS old is not a current portfolio. PPFAS's listing
+// page, for one, serves only its 2017-18 archive in the server-rendered HTML
+// and loads recent files by script — so an adapter pointed at it downloads real
+// filings that are eight years stale. Publishing those as an AMC's holdings is
+// exactly the silent-wrongness this pipeline is built to refuse, so a filing
+// too old to be current is dropped here rather than trusted.
+const STALE_DAYS = 120;
+const staleBefore = new Date(Date.now() - STALE_DAYS * 864e5).toISOString().slice(0, 10);
+
 const newest = new Map();
 for (const [amc, s] of sources) {
-  const chosen = [];
-  if (s.base) chosen.push(s.base);
+  const chosen = [...s.base];
   // only overlays NEWER than the monthly are worth reading
   for (const o of s.overlays.sort((a, b) => a.date.localeCompare(b.date)))
-    if (!s.base || o.date > s.base.date) chosen.push(o);
-  if (chosen.length) newest.set(amc, chosen);
+    if (!s.baseDate || o.date > s.baseDate) chosen.push(o);
+  const fresh = chosen.filter((m) => m.date >= staleBefore);
+  if (fresh.length < chosen.length)
+    console.log(`  ! ${amc.padEnd(15)} ignored ${chosen.length - fresh.length} filing(s) older than ${STALE_DAYS} days — listing page is serving an archive, not the current disclosure`);
+  if (fresh.length) newest.set(amc, fresh);
 }
 
 const funds = readJson(path.join(OUT, "funds.json"));
@@ -161,7 +197,7 @@ const stocks = readJson(path.join(OUT, "stocks.json"));
 if (!funds || !stocks) { console.log("[holdings] run build_screener.mjs first"); process.exit(1); }
 
 const fF = Object.fromEntries(funds.fields.map((k, i) => [k, i]));
-const fundRows = funds.rows.map((r) => ({ code: String(r[fF.code]), name: r[fF.name], amc: r[fF.amc], category: r[fF.category], categoryGroup: r[fF.categoryGroup] }));
+const fundRows = funds.rows.map((r) => ({ code: String(r[fF.code]), name: r[fF.name], amc: r[fF.amc], category: r[fF.category], categoryGroup: r[fF.categoryGroup], stale: !!r[fF.stale] }));
 
 const sF = Object.fromEntries(stocks.fields.map((k, i) => [k, i]));
 const byIsin = new Map();
@@ -182,8 +218,16 @@ for (const [amc, filings] of newest) {
  for (const m of filings) {
   const file = path.join(VAR, m.rel);
   if (!fs.existsSync(file)) continue;
-  const wb = XLSX.readFile(file);
-  const sheets = wb.SheetNames.map((n) => [n, XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, blankrows: false, defval: null })]);
+  // A filing is one workbook, or a ZIP of them — DSP publishes the month as a
+  // ZIP holding an equity book and a debt book, 84 schemes between them. Both
+  // shapes reduce to a flat list of sheets before anything else looks at them.
+  const books = /\.zip$/i.test(file)
+    ? unzip(fs.readFileSync(file))
+        .filter((e) => /\.xlsx?$/i.test(e.name) && !/^__MACOSX/.test(e.name))
+        .map((e) => XLSX.read(e.buf, { type: "buffer" }))
+    : [XLSX.readFile(file)];
+  const sheets = books.flatMap((wb) =>
+    wb.SheetNames.map((n) => [n, XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, blankrows: false, defval: null })]));
   const { schemes, skipped } = parseWorkbook(sheets, { amc });
 
   let matched = 0, refreshed = 0;
@@ -265,7 +309,10 @@ const index = {
   generated: new Date().toISOString(),
   // `newest` holds an array of filings per AMC (monthly base + any newer
   // fortnightly), so it has to be flattened rather than mapped.
-  amcs: [...newest.values()].flat().map((m) => ({ amc: m.amc, kind: m.kind, asOn: m.date }))
+  // One entry per (amc, kind, date), not per FILE — an AMC that files a
+  // hundred per-scheme workbooks is still one disclosure.
+  amcs: [...new Map([...newest.values()].flat()
+    .map((m) => [`${m.amc}|${m.kind}|${m.date}`, { amc: m.amc, kind: m.kind, asOn: m.date }])).values()]
     .sort((a, b) => a.amc.localeCompare(b.amc) || a.asOn.localeCompare(b.asOn)),
   asOn: [...newest.values()].flat().map((m) => m.date).sort().pop() ?? null,
   count: built.length,

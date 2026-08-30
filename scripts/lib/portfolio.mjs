@@ -91,8 +91,22 @@ export function parseSheet(rows, { sheetName = "" } = {}) {
   const iInd = find(/rating|industry/i);
   const iQty = find(/^quantity/i);
   const iMv = find(/market\s*\/?\s*(fair\s*)?value|fair value/i);
-  const iPct = find(/%\s*to\s*(net\s*asset|nav)/i);
+  // Helios writes "% to AUM" for the same column everyone else calls "% to NAV"
+  // or "% To Net Assets" — a third spelling of one SEBI-mandated field.
+  const iPct = find(/%\s*to\s*(net\s*asset|nav|aum)/i);
   if (iIsin < 0 || iName < 0 || iPct < 0) return null;
+
+  // Where a row's LABEL lives. Most AMCs put section headings and total rows in
+  // the instrument-name column. HDFC keeps that column for instruments only and
+  // writes its headings and totals in the ISIN column instead — so a label can
+  // be in either, and the ISIN column only counts as one when it does not hold
+  // an actual ISIN. Without this its Grand Total is invisible, `scale` never
+  // resolves and every weight in the file is discarded as unreadable.
+  const labelOf = (r) => {
+    const n = String(r[iName] ?? "").trim();
+    if (n) return n;
+    return isIsin(r[iIsin]) ? "" : String(r[iIsin] ?? "").trim();
+  };
 
   // The header rows above the table carry the scheme name and the as-on date.
   const above = rows.slice(0, headerIdx).flat().filter((c) => typeof c === "string");
@@ -109,7 +123,7 @@ export function parseSheet(rows, { sheetName = "" } = {}) {
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const r = rows[i];
     if (!Array.isArray(r)) continue;
-    if (/^grand\s*total$/i.test(String(r[iName] ?? "").trim())) { grandTotal = num(r[iPct]); break; }
+    if (/^grand\s*total\b/i.test(labelOf(r))) { grandTotal = num(r[iPct]); break; }
   }
   const scale = grandTotal !== null && Math.abs(grandTotal - 1) < 0.02 ? 100
     : grandTotal !== null && Math.abs(grandTotal - 100) < 2 ? 1
@@ -123,10 +137,10 @@ export function parseSheet(rows, { sheetName = "" } = {}) {
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const r = rows[i];
     if (!Array.isArray(r)) continue;
-    const label = String(r[iName] ?? "").trim();
+    const label = labelOf(r);
     const pct = num(r[iPct]);
 
-    if (/^grand\s*total$/i.test(label)) break;                        // nothing below matters
+    if (/^grand\s*total\b/i.test(label)) break;                        // nothing below matters
 
     if (TOTAL_RE.test(label)) {
       if (pct !== null) sectionTotals[section] = (sectionTotals[section] ?? 0) + pct;
@@ -143,7 +157,7 @@ export function parseSheet(rows, { sheetName = "" } = {}) {
     }
     holdings.push({
       isin: String(r[iIsin]).trim(),
-      name: label,
+      name: String(r[iName] ?? "").trim() || label,
       industry: iInd >= 0 ? (String(r[iInd] ?? "").trim() || null) : null,
       quantity: iQty >= 0 ? num(r[iQty]) : null,
       marketValueLakh: iMv >= 0 ? num(r[iMv]) : null,
@@ -172,17 +186,41 @@ export function pickSchemeName(cells, fallback = "") {
     .replace(/\s*\([^)]{40,}\)\s*/g, " ")                    // any long parenthetical
     .replace(/\s+/g, " ").trim();
 
+  // An explicit label beats any heuristic: Helios writes "SCHEME NAME :" in one
+  // cell and the scheme in the next. Without this the shortest ...Fund cell
+  // wins, which is the AMC's own name ("Helios Mutual Fund") on every sheet —
+  // identical for every scheme, so nothing matches the fund universe.
+  const raw = (cells || []).map((c) => String(c ?? "").replace(/\s+/g, " ").trim());
+  const at = raw.findIndex((c) => /^scheme\s*name\s*:?\s*$/i.test(c));
+  if (at >= 0) {
+    const next = raw.slice(at + 1).find((c) => c.length > 5);
+    if (next) return clean(next);
+  }
+  // Same label, same cell: "SCHEME NAME : Helios Flexi Cap Fund".
+  const inline = raw.map((c) => c.match(/^scheme\s*name\s*:\s*(.+)$/i)?.[1]).find(Boolean);
+  if (inline) return clean(inline);
+
   // Disclosure sheets are padded with riskometer copy and suitability notes.
   const prose = /investors?\s|suitable|seeking|risk-?o-?meter|principal will be|consult their|^\W/i;
 
   const cands = (cells || [])
     .map(clean)
     .filter((c) => c.length > 5 && c.length < 110 && !prose.test(c)
-      && !/portfolio\s*(statement\s*)?as on/i.test(c));
+      && !/portfolio\s*(statement\s*)?as on/i.test(c)
+      // Helios puts "SCHEME NAME :" in one cell and the name in the next. The
+      // label is shorter and contains "scheme", so without this it wins.
+      && !/:\s*$/.test(c));
 
-  const named = cands.filter((c) => /\b(fund|scheme|etf|plan)\b/i.test(c));
+  // HDFC's header row carries stray one-word classifier cells ("Income",
+  // "Hybrid") beside the real name. Once the SEBI blurb is stripped, "HDFC ELSS
+  // Tax saver" holds none of fund/scheme/plan/etf, so it loses the shortest-name
+  // tiebreak to "Income" and the whole file is filed under a category word.
+  // No scheme is named in a single word, so that is the discriminator.
+  const multi = cands.filter((c) => c.split(" ").length > 1);
+  const pool = multi.length ? multi : cands;
+  const named = pool.filter((c) => /\b(fund|scheme|etf|plan)\b/i.test(c));
   // Real names are short; anything long that survived is still descriptive.
-  const best = (named.length ? named : cands).sort((a, b) => a.length - b.length)[0];
+  const best = (named.length ? named : pool).sort((a, b) => a.length - b.length)[0];
   return best || clean(fallback) || String(fallback || "").trim();
 }
 
