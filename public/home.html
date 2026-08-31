@@ -275,6 +275,11 @@ footer { border-top: 1px solid var(--line); padding: 54px clamp(20px, 4vw, 56px)
 .qa-still .shot { transform: none !important; }
 .qa-still .gring circle.arc { stroke-dasharray: var(--arc) 999 !important; }
 .qa-still .final h2 em::after { transform: scaleX(1) !important; }
+.app-embed { position: relative; border: 1px solid var(--line-2); background: var(--paper-2); overflow: hidden; }
+.app-embed iframe { display: block; width: 100%; height: min(880px, 86vh); border: 0; background: #0b0b0c; }
+.app-open { margin-left: auto; font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); text-decoration: none; white-space: nowrap; }
+.app-open:hover { color: var(--ink); }
+@media (max-width: 720px) { .app-embed iframe { height: 78vh; } .shot-url { display: none; } }
 </style>
 </head>
 <body>
@@ -282,7 +287,7 @@ footer { border-top: 1px solid var(--line); padding: 54px clamp(20px, 4vw, 56px)
 <nav>
   <a class="wordmark" href="/"><b>my</b>financial</a>
   <div class="nav-links">
-    <a href="#platform">Platform</a><a href="#modules">Modules</a><a href="#personas">Personas</a><a href="#security">Security</a><a href="/learn">Insights</a>
+    <a href="#platform-live">Platform</a><a href="#modules">Modules</a><a href="#personas">Personas</a><a href="/learn">Insights</a>
   </div>
   <div style="display:flex; gap:12px; align-items:center">
     <button id="themeToggle" title="Toggle light / dark" style="width:42px;height:42px;border:1px solid var(--line-2);background:transparent;color:var(--ink);font-size:16px;cursor:pointer">☀︎</button>
@@ -335,7 +340,6 @@ footer { border-top: 1px solid var(--line); padding: 54px clamp(20px, 4vw, 56px)
   <p class="hero-sub">One monochrome cockpit for your entire financial life — <b>goal-based planning</b> with real Monte Carlo mathematics, <b>dual-regime Indian tax</b> computation, zero-commission <b>direct mutual funds</b>, institutional-grade <b>equity screeners</b>, an options desk for HNIs and a Will &amp; vault for what matters after.</p>
   <div class="hero-cta">
     <a class="btn" href="/app">Launch Platform <span class="arr">→</span></a>
-    <a class="btn ghost" href="#platform">Explore the product</a>
   </div>
   <div class="hero-meta">
     <span>NSE · BSE · AMFI universes</span>
@@ -351,19 +355,21 @@ footer { border-top: 1px solid var(--line); padding: 54px clamp(20px, 4vw, 56px)
   </div>
 </div>
 
-<!-- =============================== STATS ================================ -->
-<section id="platform">
+<!-- ============================= LIVE PLATFORM =========================== -->
+<section id="platform-live">
   <div class="shell">
     <div class="sec-head">
-      <div class="reveal"><div class="sec-label">The platform in numbers</div>
-        <h2>Engineered depth, <em>measured</em> in output.</h2></div>
-      <p class="sec-side reveal" style="--d:.15s">Every figure below is computed by the running engines — nothing is a mock-up. The same code paths power the live dashboards, screeners and the AI assistant.</p>
+      <div class="reveal"><div class="sec-label">The platform, live</div>
+        <h2>Not a tour. The <em>running</em> product.</h2></div>
+      <p class="sec-side reveal" style="--d:.15s">This is the deployed application on today's exchange data — screeners, fund research and the daily briefs. Use it here, or open it full screen.</p>
     </div>
-    <div class="stats reveal">
-      <div class="stat"><div class="num"><i data-count="6">0</i></div><div class="lbl">Product modules</div><div class="sub">planning → estate</div></div>
-      <div class="stat"><div class="num"><i data-count="60">0</i>+</div><div class="lbl">NSE instruments</div><div class="sub">14 sectors, 11 indices</div></div>
-      <div class="stat"><div class="num"><i data-count="2000">0</i></div><div class="lbl">Monte Carlo paths</div><div class="sub">per goal, correlated 3-asset</div></div>
-      <div class="stat"><div class="num"><i data-count="256">0</i>-bit</div><div class="lbl">Vault encryption</div><div class="sub">AES-GCM, per-user keys</div></div>
+    <div class="app-embed reveal">
+      <div class="shot-bar">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="shot-url">myfinancial · live platform</span>
+        <a class="app-open" href="app/" target="_blank" rel="noopener">Open full screen →</a>
+      </div>
+      <iframe src="app/" title="myfinancial — live platform"></iframe>
     </div>
   </div>
 </section>
@@ -531,34 +537,6 @@ footer { border-top: 1px solid var(--line); padding: 54px clamp(20px, 4vw, 56px)
           <span class="t-cite">Capital gains post 23-Jul-2024</span>
           <span class="t-cite">Client ledger · computed live</span>
         </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============================== SECURITY ============================== -->
-<section id="security">
-  <div class="shell">
-    <div class="sec-head">
-      <div class="reveal"><div class="sec-label">Trust architecture</div>
-        <h2>Private by construction.</h2></div>
-    </div>
-    <div class="sec-band reveal">
-      <div class="sec-cell">
-        <svg width="34" height="34" viewBox="0 0 34 34" fill="none"><rect x="5" y="14" width="24" height="16" stroke-width="1.8"/><path d="M10 14 V 10 a 7 7 0 0 1 14 0 v 4" stroke-width="1.8"/></svg>
-        <h4>AES-256-GCM vault</h4><p>Authenticated encryption with per-user scrypt-derived keys. Tampered ciphertext refuses to decrypt. KMS envelope path documented for production.</p>
-      </div>
-      <div class="sec-cell">
-        <svg width="34" height="34" viewBox="0 0 34 34" fill="none"><path d="M17 4 L 29 9 V 17 C 29 25 24 29 17 31 C 10 29 5 25 5 17 V 9 Z" stroke-width="1.8" stroke-linejoin="bevel"/><path d="M12 17 l 4 4 l 7 -8" stroke-width="1.8"/></svg>
-        <h4>DPDP-aligned</h4><p>Consent-scoped processing, right to erasure, breach-notification duty and no third-party data sales — India's DPDP Act, 2023 as the baseline.</p>
-      </div>
-      <div class="sec-cell">
-        <svg width="34" height="34" viewBox="0 0 34 34" fill="none"><circle cx="17" cy="17" r="13" stroke-width="1.8"/><path d="M4 17 H 30 M 17 4 C 21 9 21 25 17 30 C 13 25 13 9 17 4" stroke-width="1.8"/></svg>
-        <h4>TLS 1.3 transport</h4><p>Modern ciphers at the edge, strict security headers, HMAC-integrity sessions, and no-store caching on every API response.</p>
-      </div>
-      <div class="sec-cell">
-        <svg width="34" height="34" viewBox="0 0 34 34" fill="none"><path d="M6 28 V 6 H 28" stroke-width="1.8"/><path d="M11 22 L 17 15 L 21 18 L 28 9" stroke-width="1.8"/></svg>
-        <h4>SEBI-clear boundaries</h4><p>Model outputs are information, not advice — the distinction is printed on every signal, ranking and AI answer, per the IA Regulations, 2013.</p>
       </div>
     </div>
   </div>

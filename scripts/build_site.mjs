@@ -135,7 +135,9 @@ const ROUTE_MAP = [
   [/href="\/app#\/planning"/g, 'href="planning.html"'],
   [/href="\/app#\/advisory"/g, 'href="advisory.html"'],
   [/href="\/app#\/estate"/g, 'href="estate.html"'],
-  [/href="\/app"/g, 'href="stocks.html"'],
+  // The React app IS published at dist/app now and is embedded on the
+  // homepage, so /app is a real destination rather than something to divert.
+  [/href="\/app"/g, 'href="app/"'],
   [/href="\/learn"/g, `href="${REPO}#insights" rel="noopener"`],
   [/href="https:\/\/myfinancialria\.github\.io\/myfinancial\/"/g, 'href="brief.html"'],
 ];
@@ -150,8 +152,8 @@ export function buildHome() {
   // behind /app. On the public site the data pages ARE the product, so put them
   // first — a visitor should reach the screener without reading a pitch.
   html = html.replace(
-    '<a href="#platform">Platform</a>',
-    '<a href="app/insights">Insights</a><a href="screener.html">Screener</a><a href="stocks.html">Companies</a><a href="funds.html">Mutual Funds</a><a href="#platform">Platform</a>',
+    '<a href="#platform-live">Platform</a>',
+    '<a href="app/insights">Insights</a><a href="screener.html">Screener</a><a href="stocks.html">Companies</a><a href="funds.html">Mutual Funds</a><a href="#platform-live">Platform</a>',
   );
 
   // the three module cards that need a server get an honest label
@@ -160,12 +162,6 @@ export function buildHome() {
   html = html.replace("</style>", `.mod-tag{position:absolute;top:clamp(26px,3vw,42px);right:clamp(26px,3vw,42px);font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);border:1px solid var(--line-2);padding:3px 8px;max-width:9em;line-height:1.35;text-align:right}
 .pub-links{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
 </style>`);
-
-  // give the hero a second call to action pointing at the live public data
-  html = html.replace(/<a class="btn" href="stocks\.html">Launch Platform <span class="arr">→<\/span><\/a>/g,
-    '<a class="btn" href="stocks.html">Explore 211 Companies <span class="arr">→</span></a>');
-  html = html.replace(/<a class="btn" style="font-size: 15px; padding: 16px 34px" href="stocks\.html">Launch the Platform <span class="arr">→<\/span><\/a>/,
-    '<a class="btn" style="font-size:15px;padding:16px 34px" href="stocks.html">Explore the Research <span class="arr">→</span></a>');
 
   // nav: swap the app launcher for the public sections
 
