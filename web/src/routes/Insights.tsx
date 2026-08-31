@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { motion } from "motion/react";
 import { useInsights } from "../lib/useData";
@@ -158,110 +158,254 @@ function Quotes({ list, cols = 4 }: { list: Quote[]; cols?: number }) {
   );
 }
 
+/* ----------------------------- section plumbing ---------------------------- */
+/**
+ * These reports are long by necessity — a morning brief that leaves out the
+ * flows or the levels is not a brief, it is a headline. Length is only a
+ * problem when the reader cannot see the shape of it, so every block gets a
+ * stable anchor and the page carries a contents rail that tracks the scroll.
+ */
+type SecDef = { id: string; label: string };
+
+function Sec({ id, children }: { id: string; children: React.ReactNode }) {
+  return <section id={id} className="scroll-mt-[76px]">{children}</section>;
+}
+
+function SectionNav({ items }: { items: SecDef[] }) {
+  const [active, setActive] = useState<string>(items[0]?.id ?? "");
+
+  useEffect(() => {
+    if (!items.length) return;
+    // rootMargin pulls the trip-line to just under the sticky rail, so the
+    // highlighted entry is the section actually under the reader's eye rather
+    // than whichever one happens to touch the top of the viewport.
+    const io = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setActive(visible[0].target.id);
+      },
+      { rootMargin: "-76px 0px -62% 0px", threshold: 0 },
+    );
+    for (const it of items) {
+      const el = document.getElementById(it.id);
+      if (el) io.observe(el);
+    }
+    return () => io.disconnect();
+  }, [items]);
+
+  if (items.length < 3) return null;
+
+  return (
+    <nav aria-label="Sections of this report"
+      className="sticky top-0 z-20 -mx-4 mb-2 border-b border-line bg-paper/90 px-4 backdrop-blur-md sm:-mx-6 sm:px-6">
+      <div className="flex gap-1 overflow-x-auto py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]{display:none}">
+        {items.map((it, i) => (
+          <a key={it.id} href={`#${it.id}`}
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById(it.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+              setActive(it.id);
+            }}
+            aria-current={active === it.id ? "true" : undefined}
+            className={`whitespace-nowrap border px-2.5 py-1.5 text-[11.5px] transition-colors
+              ${active === it.id
+                ? "border-ink bg-ink text-paper font-semibold"
+                : "border-line-2 text-ink-dim hover:border-ink hover:text-ink"}`}>
+            <span className="mr-1.5 font-mono text-[9px] opacity-60">{String(i + 1).padStart(2, "0")}</span>
+            {it.label}
+          </a>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+/** A plain-language note under a block — what the numbers above actually mean. */
+function Means({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="border-t border-line px-5 py-3.5 text-[11.5px] leading-relaxed text-ink-faint">
+      <span className="mr-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-ink-dim">What this means</span>
+      {children}
+    </div>
+  );
+}
+
 /* ------------------------------- pre-market ------------------------------- */
 function PreMarketView({ d }: { d: PreMarket }) {
   const regions = ["US", "Asia", "Europe"] as const;
+
+  // Declared in the order a reader needs them: the summary, then the world
+  // that set the tone overnight, then India's own starting point, then who is
+  // trading it, then the levels and the day's diary.
+  const nav = useMemo<SecDef[]>(() => ([
+    { id: "pre-summary", label: "Summary", when: d.article?.length > 0 },
+    { id: "pre-global", label: "Global markets", when: d.global.length > 0 },
+    { id: "pre-macro", label: "Currency & commodities", when: d.macro.length > 0 },
+    { id: "pre-india", label: "India at last close", when: d.india.length > 0 },
+    { id: "pre-flows", label: "FII / DII flows", when: (d.flows?.length ?? 0) > 0 },
+    { id: "pre-levels", label: "Key levels", when: (d.levels?.length ?? 0) > 0 },
+    { id: "pre-watchlist", label: "Stocks to watch", when: (d.watchlist?.length ?? 0) > 0 },
+    { id: "pre-events", label: "Results & board meetings", when: (d.events?.length ?? 0) > 0 },
+    { id: "pre-actions", label: "Corporate actions", when: (d.corporateActions?.length ?? 0) > 0 },
+    { id: "pre-news", label: "News", when: d.news.length > 0 },
+  ] as Array<SecDef & { when: boolean }>).filter((s) => s.when).map(({ id, label }) => ({ id, label })), [d]);
+
   return (
     <>
       {d.marketOpen === false && <ClosedNotice reason={d.closedReason} lastSession={d.lastSession} />}
 
-      <Article sections={d.article} />
+      <SectionNav items={nav} />
 
-      {d.watchlist?.length > 0 && (
+      <Sec id="pre-summary"><Article sections={d.article} /></Sec>
+
+      <Sec id="pre-global">
         <Reveal className="mt-6">
           <Card>
-            <CardHead title="Stocks that could move the market today"
-              sub="In this morning's news and large enough to matter to the index"
-              right={<Chip tone="accent">{d.watchlist.length}</Chip>} />
-            <Watchlist items={d.watchlist} />
-            <div className="border-t border-line px-5 py-3.5 text-[11.5px] leading-relaxed text-ink-faint">
-              Ranked by company size, because that is what decides whether a headline moves the index or just the
-              share. Being listed here is not a view on the company — it is where the day's attention is likely
-              to go.
+            <CardHead title="How global markets traded"
+              sub="At 8am IST the US has closed and Europe has not opened, so those are last closes; Asia is trading now."
+              right={<Chip>{d.global.length} markets</Chip>} />
+            <div className="px-5 py-4">
+              {regions.map((r) => {
+                const list = d.global.filter((q) => q.region === r);
+                if (!list.length) return null;
+                return (
+                  <div key={r} className="mb-4 last:mb-0">
+                    <Label className="mb-2">{r}</Label>
+                    <Quotes list={list} />
+                  </div>
+                );
+              })}
             </div>
+            <Means>
+              India rarely opens in isolation. A heavy fall on Wall Street overnight usually shows up as a gap
+              down at 09:15, and a strong Asian morning often pulls the open the other way. Treat these as the
+              mood India inherits, not as a forecast.
+            </Means>
           </Card>
         </Reveal>
-      )}
-
-      {d.flows?.length > 0 && (
-        <Reveal className="mt-6">
-          <Card>
-            <CardHead title="Who is driving the tape" sub="Institutional buying and selling in the cash market" />
-            <FlowsTable rows={d.flows} />
-          </Card>
-        </Reveal>
-      )}
-
-      {d.levels?.length > 0 && (
-        <Reveal className="mt-6">
-          <Card>
-            <CardHead title="Reference levels for the session" sub="From yesterday's high, low and close" />
-            <LevelsTable rows={d.levels} />
-          </Card>
-        </Reveal>
-      )}
-
-      <Reveal className="mt-6">
-        <Card>
-          <CardHead title="Overnight, around the world"
-            sub="At 8am IST the US has closed and Europe has not opened, so those are last closes; Asia is trading."
-            right={<Chip>{d.global.length} markets</Chip>} />
-          <div className="px-5 py-4">
-            {regions.map((r) => {
-              const list = d.global.filter((q) => q.region === r);
-              if (!list.length) return null;
-              return (
-                <div key={r} className="mb-4 last:mb-0">
-                  <Label className="mb-2">{r}</Label>
-                  <Quotes list={list} />
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      </Reveal>
+      </Sec>
 
       {d.macro.length > 0 && (
-        <Reveal className="mt-6">
-          <Card>
-            <CardHead title="Currency, commodities and rates" sub="The inputs that set the tone before India opens" />
-            <div className="px-5 py-4"><Quotes list={d.macro} /></div>
-          </Card>
-        </Reveal>
+        <Sec id="pre-macro">
+          <Reveal className="mt-6">
+            <Card>
+              <CardHead title="Currency, commodities and yields" sub="The inputs that set the tone before India opens" />
+              <div className="px-5 py-4"><Quotes list={d.macro} /></div>
+              <Means>
+                Crude matters most to India — it is the largest import, so a sharp rise pressures the rupee,
+                inflation and oil-marketing margins. A rising US 10-year yield tends to make foreign investors
+                less willing to hold emerging-market equity.
+              </Means>
+            </Card>
+          </Reveal>
+        </Sec>
       )}
 
       {d.india.length > 0 && (
-        <Reveal className="mt-6">
-          <Card>
-            <CardHead title="India, at the last close" sub={`Previous session ${d.previousClose.date}`} />
-            <div className="px-5 py-4"><Quotes list={d.india} cols={3} /></div>
-          </Card>
-        </Reveal>
-      )}
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <Reveal>
-          <Card>
-            <CardHead title="Going ex-dividend and ex-bonus"
-              sub="Filed with NSE — the price adjusts on the ex-date, so this is not a fall"
-              right={<Chip tone="accent">{d.corporateActions.length}</Chip>} />
-            <Actions rows={d.corporateActions} />
-          </Card>
-        </Reveal>
-
-        {d.events?.length > 0 && (
-          <Reveal>
+        <Sec id="pre-india">
+          <Reveal className="mt-6">
             <Card>
-              <CardHead title="Board meetings and results" sub="Filed with NSE for the coming week"
-                right={<Chip>{d.events.filter((e) => e.isResult).length} results</Chip>} />
-              <EventsList rows={d.events} />
+              <CardHead title="India, at the last close" sub={`Previous session ${d.previousClose.date}`} />
+              <div className="px-5 py-4"><Quotes list={d.india} cols={3} /></div>
+              <Means>
+                This is the base today's move is measured from. India VIX is the market's own estimate of how
+                much it expects to swing — a low reading means calm is being priced, which is also when a
+                surprise hurts most.
+              </Means>
             </Card>
           </Reveal>
-        )}
+        </Sec>
+      )}
 
-        <Reveal>
+      {d.flows?.length > 0 && (
+        <Sec id="pre-flows">
+          <Reveal className="mt-6">
+            <Card>
+              <CardHead title="FII / DII flows — who is driving the tape"
+                sub="Institutional buying and selling in the cash market" />
+              <FlowsTable rows={d.flows} />
+              <Means>
+                Foreign investors (FII) and domestic institutions (DII) are the two largest forces in the cash
+                market and often trade against each other. Sustained foreign selling absorbed by domestic buying
+                is a very different market from both sides selling together.
+              </Means>
+            </Card>
+          </Reveal>
+        </Sec>
+      )}
+
+      {d.levels?.length > 0 && (
+        <Sec id="pre-levels">
+          <Reveal className="mt-6">
+            <Card>
+              <CardHead title="Key levels to watch" sub="Pivots derived from yesterday's high, low and close" />
+              <LevelsTable rows={d.levels} />
+              <Means>
+                These are arithmetic, not opinion: the pivot is yesterday's average price, and S/R levels are
+                fixed distances from it. Traders watch them because enough other people watch them — they are
+                reference points, not predictions.
+              </Means>
+            </Card>
+          </Reveal>
+        </Sec>
+      )}
+
+      {d.watchlist?.length > 0 && (
+        <Sec id="pre-watchlist">
+          <Reveal className="mt-6">
+            <Card>
+              <CardHead title="Stocks that could move the market today"
+                sub="In this morning's news and large enough to matter to the index"
+                right={<Chip tone="accent">{d.watchlist.length}</Chip>} />
+              <Watchlist items={d.watchlist} />
+              <Means>
+                Ranked by company size, because that is what decides whether a headline moves the index or just
+                the share. Being listed here is not a view on the company — it is where the day's attention is
+                likely to go.
+              </Means>
+            </Card>
+          </Reveal>
+        </Sec>
+      )}
+
+      {d.events?.length > 0 && (
+        <Sec id="pre-events">
+          <Reveal className="mt-6">
+            <Card>
+              <CardHead title="Companies reporting results" sub="Board meetings and results filed with NSE for the coming week"
+                right={<Chip>{d.events.filter((e) => e.isResult).length} results</Chip>} />
+              <EventsList rows={d.events} />
+              <Means>
+                Results days carry the widest single-stock moves of any scheduled event. A company reporting
+                today can swing its whole sector if it is large enough.
+              </Means>
+            </Card>
+          </Reveal>
+        </Sec>
+      )}
+
+      {d.corporateActions?.length > 0 && (
+        <Sec id="pre-actions">
+          <Reveal className="mt-6">
+            <Card>
+              <CardHead title="Corporate actions — going ex-dividend and ex-bonus"
+                sub="Filed with NSE"
+                right={<Chip tone="accent">{d.corporateActions.length}</Chip>} />
+              <Actions rows={d.corporateActions} />
+              <Means>
+                On the ex-date the price drops by roughly the dividend or splits by the bonus ratio. That fall is
+                arithmetic, not a loss — if you held the day before, the value is coming to you separately.
+              </Means>
+            </Card>
+          </Reveal>
+        </Sec>
+      )}
+
+      <Sec id="pre-news">
+        <Reveal className="mt-6">
           <Card>
-            <CardHead title="In the news this morning" right={<Chip>{d.news.length} headlines</Chip>} />
+            <CardHead title="Stock and sector news that matters" right={<Chip>{d.news.length} headlines</Chip>} />
             {d.inNews.length > 0 && (
               <div className="flex flex-wrap gap-1.5 border-b border-line px-5 py-3.5">
                 {d.inNews.map((c) => (
@@ -276,7 +420,7 @@ function PreMarketView({ d }: { d: PreMarket }) {
             <NewsList items={d.news} />
           </Card>
         </Reveal>
-      </div>
+      </Sec>
     </>
   );
 }
@@ -284,6 +428,20 @@ function PreMarketView({ d }: { d: PreMarket }) {
 /* ------------------------------ post-market ------------------------------- */
 function PostMarketView({ d }: { d: PostMarket }) {
   const provisional = d.basis === "PROVISIONAL";
+
+  const nav = useMemo<SecDef[]>(() => ([
+    { id: "post-summary", label: "Summary", when: d.article?.length > 0 },
+    { id: "post-indices", label: "How the market behaved", when: d.indices.length > 0 },
+    { id: "post-breadth", label: "Market breadth", when: !!d.breadth },
+    { id: "post-sectors", label: "Sectors", when: d.sectors.length > 0 },
+    { id: "post-movers", label: "Stocks that moved", when: (d.gainers?.length ?? 0) > 0 || (d.losers?.length ?? 0) > 0 },
+    { id: "post-volume", label: "Unusual volume", when: d.volume.length > 0 },
+    { id: "post-flows", label: "FII / DII flows", when: (d.flows?.length ?? 0) > 0 },
+    { id: "post-news", label: "News that moved stocks", when: d.news.length > 0 },
+    { id: "post-levels", label: "Levels for tomorrow", when: (d.levels?.length ?? 0) > 0 },
+    { id: "post-diary", label: "Coming up", when: (d.corporateActions?.length ?? 0) > 0 || (d.events?.length ?? 0) > 0 },
+  ] as Array<SecDef & { when: boolean }>).filter((s) => s.when).map(({ id, label }) => ({ id, label })), [d]);
+
   return (
     <>
       {d.marketOpen === false && <ClosedNotice reason={d.closedReason} lastSession={d.lastSession} />}
@@ -299,8 +457,6 @@ function PostMarketView({ d }: { d: PostMarket }) {
         </Card>
       )}
 
-      <Article sections={d.article} />
-
       {provisional && (
         <Card className="mt-6 border-warn">
           <div className="px-5 py-3.5 text-[12.5px] leading-relaxed text-ink-dim">
@@ -312,119 +468,173 @@ function PostMarketView({ d }: { d: PostMarket }) {
         </Card>
       )}
 
+      <SectionNav items={nav} />
+
+      <Sec id="post-summary"><Article sections={d.article} /></Sec>
+
       {d.indices.length > 0 && (
-        <Reveal className="mt-6">
-          <Card>
-            <CardHead title="Where the indices finished" right={<Chip tone={provisional ? "warn" : "up"}>{provisional ? "provisional" : "official close"}</Chip>} />
-            <div className="px-5 py-4"><Quotes list={d.indices} cols={3} /></div>
-          </Card>
-        </Reveal>
+        <Sec id="post-indices">
+          <Reveal className="mt-6">
+            <Card>
+              <CardHead title="How the market behaved today"
+                right={<Chip tone={provisional ? "warn" : "up"}>{provisional ? "provisional" : "official close"}</Chip>} />
+              <div className="px-5 py-4"><Quotes list={d.indices} cols={3} /></div>
+              <Means>
+                The large-cap indices and the broader mid- and small-cap indices often disagree. When the Nifty
+                rises but the smallcap index falls, the money is narrowing into the biggest names.
+              </Means>
+            </Card>
+          </Reveal>
+        </Sec>
       )}
 
       {d.breadth && (
-        <Reveal className="mt-6">
-          <Card>
-            <CardHead title="Market breadth"
-              sub={d.basis === "OFFICIAL"
-                ? `${d.universe ?? 0} traded names with real turnover`
-                : `${d.universe ?? 0} companies in the ${d.breadthFrom ?? "index"}, counted by NSE`}
-              right={d.breadth.ratio ? <Chip tone={d.breadth.ratio >= 1 ? "up" : "down"}>{nf(d.breadth.ratio, 2)}:1 adv/dec</Chip> : undefined} />
-            <div className="px-5 py-5">
-              <BreadthBar advances={d.breadth.advances} declines={d.breadth.declines} unchanged={d.breadth.unchanged} />
-              <p className="mt-4 text-[11.5px] leading-relaxed text-ink-faint">
+        <Sec id="post-breadth">
+          <Reveal className="mt-6">
+            <Card>
+              <CardHead title="Market breadth"
+                sub={d.basis === "OFFICIAL"
+                  ? `${d.universe ?? 0} traded names with real turnover`
+                  : `${d.universe ?? 0} companies in the ${d.breadthFrom ?? "index"}, counted by NSE`}
+                right={d.breadth.ratio ? <Chip tone={d.breadth.ratio >= 1 ? "up" : "down"}>{nf(d.breadth.ratio, 2)}:1 adv/dec</Chip> : undefined} />
+              <div className="px-5 py-5">
+                <BreadthBar advances={d.breadth.advances} declines={d.breadth.declines} unchanged={d.breadth.unchanged} />
+              </div>
+              <Means>
                 Breadth says how broad a move was. An index can rise while most shares fall — when advances and
                 declines are close, the headline number is being carried by a handful of large companies.
-              </p>
-            </div>
-          </Card>
-        </Reveal>
+              </Means>
+            </Card>
+          </Reveal>
+        </Sec>
       )}
-
-      {d.flows?.length > 0 && (
-        <Reveal className="mt-6">
-          <Card>
-            <CardHead title="Who was buying and selling" sub="Institutional flows in the cash market" />
-            <FlowsTable rows={d.flows} />
-          </Card>
-        </Reveal>
-      )}
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <Movers title="Biggest gainers in the Nifty 500" rows={d.gainers} sub={d.moversFrom ?? "from the official closing file"} />
-        <Movers title="Biggest losers in the Nifty 500" rows={d.losers} sub={d.moversFrom ?? "from the official closing file"} />
-      </div>
 
       {d.sectors.length > 0 && (
-        <Reveal className="mt-6">
-          <Card>
-            <CardHead title="How the sectors moved" sub="Turnover-weighted, so one thin stock cannot swing a sector" />
-            <div className="px-5 py-5"><SectorBars rows={d.sectors} /></div>
-          </Card>
-        </Reveal>
+        <Sec id="post-sectors">
+          <Reveal className="mt-6">
+            <Card>
+              <CardHead title="Sectors — winners and losers" sub="Turnover-weighted, so one thin stock cannot swing a sector" />
+              <div className="px-5 py-5"><SectorBars rows={d.sectors} /></div>
+              <Means>
+                Sector moves usually explain the day better than the index does. A rally led by banks and one led
+                by IT are different markets with different causes.
+              </Means>
+            </Card>
+          </Reveal>
+        </Sec>
+      )}
+
+      {((d.gainers?.length ?? 0) > 0 || (d.losers?.length ?? 0) > 0) && (
+        <Sec id="post-movers">
+          <div className="mt-6 grid gap-6 lg:grid-cols-2">
+            <Movers title="Top gainers (Nifty 500)" rows={d.gainers} sub={d.moversFrom ?? "from the official closing file"} />
+            <Movers title="Top losers (Nifty 500)" rows={d.losers} sub={d.moversFrom ?? "from the official closing file"} />
+          </div>
+        </Sec>
       )}
 
       {d.volume.length > 0 && (
-        <Reveal className="mt-6">
-          <Card>
-            <CardHead title="Unusual volume" sub="Traded at least twice their normal volume today" />
-            <div className="divide-y divide-line">
-              {d.volume.map((v) => (
-                <Link key={v.symbol} to={`/company/${encodeURIComponent(v.symbol)}`}
-                  className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-3 px-5 py-2.5 transition-colors hover:bg-ink/[0.03]">
-                  <div className="min-w-0">
-                    <div className="truncate text-[12.5px] font-medium">{v.name}</div>
-                    <div className="font-mono text-[9.5px] text-ink-faint">{v.symbol}</div>
-                  </div>
-                  <span className="text-[12px] tnum text-ink-dim">
-                    {nf(v.volumeRatio, 1)}× volume{isNum(v.deliveryPct) ? ` · ${plainPct(v.deliveryPct, 0)} delivery` : ""}
-                  </span>
-                  <span className={`w-[76px] text-right text-[12.5px] font-semibold tnum ${dirTone(v.pct)}`}>
-                    <span aria-hidden className="mr-1">{arrow(v.pct)}</span>{signed(v.pct)}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </Card>
-        </Reveal>
+        <Sec id="post-volume">
+          <Reveal className="mt-6">
+            <Card>
+              <CardHead title="Unusual volume" sub="Traded at least twice their normal volume today" />
+              <div className="divide-y divide-line">
+                {d.volume.map((v) => (
+                  <Link key={v.symbol} to={`/company/${encodeURIComponent(v.symbol)}`}
+                    className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-3 px-5 py-2.5 transition-colors hover:bg-ink/[0.03]">
+                    <div className="min-w-0">
+                      <div className="truncate text-[12.5px] font-medium">{v.name}</div>
+                      <div className="font-mono text-[9.5px] text-ink-faint">{v.symbol}</div>
+                    </div>
+                    <span className="text-[12px] tnum text-ink-dim">
+                      {nf(v.volumeRatio, 1)}× volume{isNum(v.deliveryPct) ? ` · ${plainPct(v.deliveryPct, 0)} delivery` : ""}
+                    </span>
+                    <span className={`w-[76px] text-right text-[12.5px] font-semibold tnum ${dirTone(v.pct)}`}>
+                      <span aria-hidden className="mr-1">{arrow(v.pct)}</span>{signed(v.pct)}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+              <Means>
+                Volume well above a stock's own normal is where news usually is. High delivery alongside it means
+                buyers took the shares rather than trading them intraday.
+              </Means>
+            </Card>
+          </Reveal>
+        </Sec>
       )}
 
-      <Reveal className="mt-6">
-        <Card>
-          <CardHead title="What moved the tape" right={<Chip>{d.news.length} headlines</Chip>} />
-          {d.inNews.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 border-b border-line px-5 py-3.5">
-              {d.inNews.map((c) => (
-                <Link key={c.symbol} to={`/company/${encodeURIComponent(c.symbol)}`}
-                  className="border border-line-2 px-2 py-1 text-[11px] text-ink-dim transition-colors hover:border-ink hover:text-ink">
-                  {c.symbol}{c.headlines > 1 && <span className="ml-1.5 font-mono text-[9px] text-ink-faint">{c.headlines}</span>}
-                </Link>
-              ))}
-            </div>
-          )}
-          <NewsList items={d.news} />
-        </Card>
-      </Reveal>
+      {d.flows?.length > 0 && (
+        <Sec id="post-flows">
+          <Reveal className="mt-6">
+            <Card>
+              <CardHead title="FII / DII flows" sub="Institutional buying and selling in the cash market" />
+              <FlowsTable rows={d.flows} />
+              <Means>
+                Read this against the day's move. An index that closed flat while foreigners sold heavily and
+                domestic funds bought is a market being held up, not a quiet one.
+              </Means>
+            </Card>
+          </Reveal>
+        </Sec>
+      )}
 
-      {(d.corporateActions?.length > 0 || d.events?.length > 0) && (
-        <div className="mt-6 grid gap-6 lg:grid-cols-2">
-          {d.corporateActions?.length > 0 && (
-            <Reveal>
-              <Card>
-                <CardHead title="Going ex in the coming sessions" sub="The price adjusts on the ex-date — that drop is arithmetic" />
-                <Actions rows={d.corporateActions} />
-              </Card>
-            </Reveal>
-          )}
-          {d.events?.length > 0 && (
-            <Reveal>
-              <Card>
-                <CardHead title="Reporting next" sub="Board meetings and results filed with NSE"
-                  right={<Chip>{d.events.filter((e) => e.isResult).length} results</Chip>} />
-                <EventsList rows={d.events} />
-              </Card>
-            </Reveal>
-          )}
-        </div>
+      <Sec id="post-news">
+        <Reveal className="mt-6">
+          <Card>
+            <CardHead title="News that moved stocks" right={<Chip>{d.news.length} headlines</Chip>} />
+            {d.inNews.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 border-b border-line px-5 py-3.5">
+                {d.inNews.map((c) => (
+                  <Link key={c.symbol} to={`/company/${encodeURIComponent(c.symbol)}`}
+                    className="border border-line-2 px-2 py-1 text-[11px] text-ink-dim transition-colors hover:border-ink hover:text-ink">
+                    {c.symbol}{c.headlines > 1 && <span className="ml-1.5 font-mono text-[9px] text-ink-faint">{c.headlines}</span>}
+                  </Link>
+                ))}
+              </div>
+            )}
+            <NewsList items={d.news} />
+          </Card>
+        </Reveal>
+      </Sec>
+
+      {d.levels?.length > 0 && (
+        <Sec id="post-levels">
+          <Reveal className="mt-6">
+            <Card>
+              <CardHead title="Levels for tomorrow" sub="Pivots computed from today's high, low and close" />
+              <LevelsTable rows={d.levels} />
+              <Means>
+                Tomorrow's reference points, derived from today's range. They are the same arithmetic the morning
+                brief will open with.
+              </Means>
+            </Card>
+          </Reveal>
+        </Sec>
+      )}
+
+      {((d.corporateActions?.length ?? 0) > 0 || (d.events?.length ?? 0) > 0) && (
+        <Sec id="post-diary">
+          <div className="mt-6 grid gap-6 lg:grid-cols-2">
+            {d.corporateActions?.length > 0 && (
+              <Reveal>
+                <Card>
+                  <CardHead title="Going ex in the coming sessions" sub="The price adjusts on the ex-date — that drop is arithmetic" />
+                  <Actions rows={d.corporateActions} />
+                </Card>
+              </Reveal>
+            )}
+            {d.events?.length > 0 && (
+              <Reveal>
+                <Card>
+                  <CardHead title="Reporting next" sub="Board meetings and results filed with NSE"
+                    right={<Chip>{d.events.filter((e) => e.isResult).length} results</Chip>} />
+                  <EventsList rows={d.events} />
+                </Card>
+              </Reveal>
+            )}
+          </div>
+        </Sec>
       )}
     </>
   );
