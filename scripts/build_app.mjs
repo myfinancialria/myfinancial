@@ -281,7 +281,7 @@ ${hasCandles ? `<div class="card"><div class="card-h"><div><h2>Price</h2>
     <span><i class="sw" style="background:var(--down)"></i>down</span>
     <span><i class="sw dash" style="background:var(--ink-dim)"></i>50-DMA</span>
     <span><i class="sw" style="background:var(--ink-faint)"></i>200-DMA</span>
-    <span class="dim">hover any candle for its open, high, low, close and volume</span>
+    <span class="dim">hover for OHLC · scroll to zoom · drag to pan · double-click resets</span>
   </div>
 ${rangeBar(m.low52w, m.high52w, m.price, "today")}</div>
 ${stageNote ? `<div class="note"><b>Stage ${m.stage} — ${esc(m.stageName)}.</b> ${esc(stageNote)} The 50- and 200-day averages are computed on daily closes and sampled at each week's close, so they mean the same thing on both views.</div>` : ""}</div>` : ""}
@@ -304,7 +304,7 @@ ${chartData ? `<script type="application/json" id="scData">${chartData.replace(/
   return shell({
     title: `${detail.name} (${detail.symbol}) — share price, ratios & technicals | myfinancial`,
     description: desc, body, active: "stocks", base: "../",
-    bodyEnd: hasCandles ? `<script type="module" src="../js/stockchart.js${BUILD_STAMP ? `?v=${BUILD_STAMP}` : ""}"></script>` : "",
+    bodyEnd: hasCandles ? `<script src="../js/lightweight-charts.js${BUILD_STAMP ? `?v=${BUILD_STAMP}` : ""}"></script><script type="module" src="../js/stockchart.js${BUILD_STAMP ? `?v=${BUILD_STAMP}` : ""}"></script>` : "",
   });
 }
 
@@ -478,6 +478,13 @@ const version = (src) => src
 BUILD_STAMP = BUILD;
 fs.mkdirSync(path.join(OUT, "js"), { recursive: true });
 for (const f of jsSources) fs.writeFileSync(path.join(OUT, "js", f.name), version(f.body));
+
+// TradingView's Lightweight Charts, served locally from the pinned npm
+// dependency — no CDN request, works under the strictest CSP, and the company
+// charts get real TradingView behaviour (crosshair, zoom, pan, axis labels).
+const lwc = path.join(ROOT, "node_modules", "lightweight-charts", "dist", "lightweight-charts.standalone.production.js");
+if (fs.existsSync(lwc)) fs.copyFileSync(lwc, path.join(OUT, "js", "lightweight-charts.js"));
+else console.warn("[app] lightweight-charts missing from node_modules — company charts will not render");
 
 fs.writeFileSync(path.join(OUT, "planning.html"), planningPage({ build: BUILD }));
 fs.writeFileSync(path.join(OUT, "advisory.html"), advisoryPage({ priceDate: stocks.priceDate, stockCount: stockRows.length, build: BUILD }));

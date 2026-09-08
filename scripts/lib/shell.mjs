@@ -76,6 +76,9 @@ tbody tr:hover{background:color-mix(in srgb,var(--ink) 4%,transparent)}
 .tfbtn{background:none;border:none;color:var(--ink-dim);padding:7px 15px;cursor:pointer;font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-family:inherit}
 .tfbtn.on{background:var(--inv-bg);color:var(--inv-fg);font-weight:650}
 .chartwrap{position:relative}
+#scChart{height:clamp(380px,55vh,540px)}
+.tvlegend{position:absolute;top:8px;left:10px;z-index:6;pointer-events:none;font-family:var(--mono);font-size:11px;letter-spacing:.03em;color:var(--ink-dim);line-height:1.8;background:color-mix(in srgb,var(--paper) 74%,transparent);padding:3px 9px;max-width:calc(100% - 90px);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.tvlegend b{color:var(--ink);font-weight:650}
 .chartwrap .tip{position:absolute;top:10px;z-index:5;pointer-events:none;background:var(--paper);border:1px solid var(--line-2);
   padding:9px 12px;font-size:12px;line-height:1.5;box-shadow:0 6px 22px rgba(0,0,0,.28);min-width:172px}
 .tip-d{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--ink-faint);margin-bottom:5px}

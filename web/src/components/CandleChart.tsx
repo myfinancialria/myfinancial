@@ -1,160 +1,172 @@
-import { useMemo, useRef, useState } from "react";
-import { motion } from "motion/react";
-import { inr, nf, qty } from "../lib/format";
+import { useEffect, useRef } from "react";
+import {
+  createChart, CrosshairMode, LineStyle,
+  type IChartApi, type ISeriesApi, type Time,
+} from "lightweight-charts";
 
 export type Bar = [string, number, number, number, number, number];
 
 /* ---------------------------------------------------------------------------
-   Candles, volume, two moving averages and a hover readout.
-
-   A reserved right-hand gutter carries the price labels so nothing is ever
-   drawn on top of the candles — the one rule that keeps a dense chart legible.
+   The company price chart, rendered with TradingView's own Lightweight Charts:
+   candles + volume histogram, both moving averages, a crosshair with price and
+   time axis labels, an OHLC legend that follows the cursor, and native
+   scroll-to-zoom / drag-to-pan. Colours track the app's --color-* tokens, so
+   the chart flips with the light/dark toggle without a reload.
 --------------------------------------------------------------------------- */
 
-const W = 1000, GUTTER = 92, PLOT = W - GUTTER;
-const PH = 300, GAP = 16, VH = 62, H = PH + GAP + VH;
+const cssVar = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const palette = () => ({
+  up: cssVar("--color-up") || "#2ecc82",
+  down: cssVar("--color-down") || "#f2555a",
+  ink: cssVar("--color-ink") || "#f2f2f4",
+  dim: cssVar("--color-ink-dim") || "#9a9aa4",
+  faint: cssVar("--color-ink-faint") || "#5c5c66",
+  line: cssVar("--color-line") || "#1e1e24",
+  line2: cssVar("--color-line-2") || "#2b2b33",
+});
+
+const toTime = (s: string): Time => {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s as Time;
+  const d = new Date(s);
+  return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() } as unknown as Time;
+};
+const keyOf = (t: unknown): string => (typeof t === "string"
+  ? t.split("-").map(Number).join("-")
+  : `${(t as any).year}-${(t as any).month}-${(t as any).day}`);
+
+const nf = (x: number, d = 2) => x.toLocaleString("en-IN", { maximumFractionDigits: d });
+const volFmt = (x: number) => (x >= 1e7 ? (x / 1e7).toFixed(2) + " cr" : x >= 1e5 ? (x / 1e5).toFixed(2) + " L" : x.toLocaleString("en-IN"));
 
 export default function CandleChart({ bars, sma50, sma200, weekly = false }: {
   bars: Bar[]; sma50: (number | null)[]; sma200: (number | null)[]; weekly?: boolean;
 }) {
-  const [hover, setHover] = useState<number | null>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
-  const n = bars.length;
+  const mountRef = useRef<HTMLDivElement>(null);
+  const legendRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<{
+    candles: ISeriesApi<"Candlestick">; vol: ISeriesApi<"Histogram">;
+    m50: ISeriesApi<"Line">; m200: ISeriesApi<"Line">;
+  } | null>(null);
+  const dataRef = useRef<{ bars: Bar[]; sma50: (number | null)[]; sma200: (number | null)[]; byKey: Map<string, number> }>(
+    { bars: [], sma50: [], sma200: [], byKey: new Map() });
 
-  const geo = useMemo(() => {
-    if (!n) return null;
-    const maVals = [...sma50, ...sma200].filter((x): x is number => typeof x === "number");
-    const hi = Math.max(...bars.map((b) => b[2]), ...maVals);
-    const lo = Math.min(...bars.map((b) => b[3]), ...maVals);
-    const pad = (hi - lo) * 0.06 || 1;
-    const yMax = hi + pad, yMin = Math.max(0, lo - pad);
-    const X = (i: number) => (i / Math.max(1, n - 1)) * PLOT;
-    const Y = (v: number) => PH - ((v - yMin) / (yMax - yMin)) * PH;
-    const cw = Math.max(1.2, (PLOT / n) * 0.62);
-    const vMax = Math.max(...bars.map((b) => b[5] || 0)) || 1;
-    const line = (arr: (number | null)[]) => {
-      let d = "", on = false;
-      for (let i = 0; i < n; i++) {
-        const v = arr[i];
-        if (v === null || v === undefined) { on = false; continue; }
-        d += `${on ? "L" : "M"}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`; on = true;
-      }
-      return d;
+  // create the chart once per mount
+  useEffect(() => {
+    const el = mountRef.current;
+    if (!el) return;
+    const pal = palette();
+    const chart = createChart(el, {
+      autoSize: true,
+      layout: {
+        background: { color: "transparent" }, textColor: pal.dim,
+        fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace', fontSize: 11,
+      },
+      grid: { vertLines: { color: pal.line }, horzLines: { color: pal.line } },
+      rightPriceScale: { borderColor: pal.line2, scaleMargins: { top: 0.06, bottom: 0.2 } },
+      timeScale: { borderColor: pal.line2, rightOffset: 3, barSpacing: 7, minBarSpacing: 1.5 },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: { color: pal.faint, width: 1, style: 3, labelBackgroundColor: pal.ink },
+        horzLine: { color: pal.faint, width: 1, style: 3, labelBackgroundColor: pal.ink },
+      },
+      localization: { priceFormatter: (p: number) => "₹" + nf(p, p >= 1000 ? 0 : 2) },
+    });
+    const candles = chart.addCandlestickSeries({
+      upColor: pal.up, downColor: pal.down, wickUpColor: pal.up, wickDownColor: pal.down,
+      borderVisible: false, priceLineColor: pal.dim, priceLineStyle: 3,
+    });
+    const vol = chart.addHistogramSeries({
+      priceScaleId: "vol", priceFormat: { type: "volume" },
+      lastValueVisible: false, priceLineVisible: false,
+    });
+    chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.84, bottom: 0 }, visible: false });
+    const m50 = chart.addLineSeries({ color: pal.dim, lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+    const m200 = chart.addLineSeries({ color: pal.faint, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+    chartRef.current = chart;
+    seriesRef.current = { candles, vol, m50, m200 };
+
+    const paintLegend = (i: number) => {
+      const d = dataRef.current, lg = legendRef.current;
+      const b = d.bars[i];
+      if (!lg) return;
+      if (!b) { lg.innerHTML = ""; return; }
+      const [dt, o, h, l, c, v] = b;
+      const prev = i > 0 ? d.bars[i - 1][4] : o;
+      const chg = prev ? ((c - prev) / prev) * 100 : 0;
+      lg.innerHTML = `<b>${dt}</b>&ensp;O <b>${nf(o)}</b> H <b>${nf(h)}</b> L <b>${nf(l)}</b> C <b>${nf(c)}</b> `
+        + `<span style="color:var(${chg >= 0 ? "--color-up" : "--color-down"})">${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%</span>`
+        + `&ensp;Vol <b>${volFmt(v || 0)}</b>`
+        + (typeof d.sma50[i] === "number" ? `&ensp;50D ${nf(d.sma50[i] as number)}` : "")
+        + (typeof d.sma200[i] === "number" ? `&ensp;200D ${nf(d.sma200[i] as number)}` : "");
     };
-    const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => ({ y: t * PH, v: yMax - t * (yMax - yMin) }));
-    return { X, Y, cw, vMax, p50: line(sma50), p200: line(sma200), ticks, last: bars[n - 1][4] };
-  }, [bars, sma50, sma200, n]);
+    (chart as any).__paintLegend = paintLegend;
 
-  if (!geo || !n) return null;
+    chart.subscribeCrosshairMove((param) => {
+      const d = dataRef.current;
+      if (!param.time) { paintLegend(d.bars.length - 1); return; }
+      const i = d.byKey.get(keyOf(param.time));
+      if (i !== undefined) paintLegend(i);
+    });
+    const onDbl = () => chart.timeScale().fitContent();
+    el.addEventListener("dblclick", onDbl);
 
-  const onMove = (clientX: number) => {
-    const rect = svgRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const vx = ((clientX - rect.left) / rect.width) * W;
-    if (vx < 0) return setHover(null);
-    setHover(Math.max(0, Math.min(n - 1, Math.round((Math.min(vx, PLOT) / PLOT) * (n - 1)))));
-  };
+    const mo = new MutationObserver(() => {
+      const p = palette();
+      chart.applyOptions({
+        layout: { textColor: p.dim },
+        grid: { vertLines: { color: p.line }, horzLines: { color: p.line } },
+        rightPriceScale: { borderColor: p.line2 }, timeScale: { borderColor: p.line2 },
+        crosshair: {
+          vertLine: { color: p.faint, labelBackgroundColor: p.ink },
+          horzLine: { color: p.faint, labelBackgroundColor: p.ink },
+        },
+      });
+      candles.applyOptions({ upColor: p.up, downColor: p.down, wickUpColor: p.up, wickDownColor: p.down });
+      m50.applyOptions({ color: p.dim });
+      m200.applyOptions({ color: p.faint });
+      const d = dataRef.current;
+      vol.setData(d.bars.map((b) => ({ time: toTime(b[0]), value: b[5] || 0, color: (b[4] >= b[1] ? p.up : p.down) + "59" })));
+    });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
-  const b = hover !== null ? bars[hover] : null;
-  const prev = hover !== null && hover > 0 ? bars[hover - 1][4] : b?.[1] ?? 0;
-  const chg = b && prev ? ((b[4] - prev) / prev) * 100 : 0;
+    return () => { mo.disconnect(); el.removeEventListener("dblclick", onDbl); chart.remove(); chartRef.current = null; seriesRef.current = null; };
+  }, []);
+
+  // (re)load the data whenever the series change
+  useEffect(() => {
+    const chart = chartRef.current, s = seriesRef.current;
+    if (!chart || !s) return;
+    const pal = palette();
+    const byKey = new Map<string, number>();
+    const cd: any[] = [], vd: any[] = [], l50: any[] = [], l200: any[] = [];
+    bars.forEach((b, i) => {
+      const [dt, o, h, l, c, v] = b;
+      const t = toTime(dt);
+      cd.push({ time: t, open: o, high: h, low: l, close: c });
+      vd.push({ time: t, value: v || 0, color: (c >= o ? pal.up : pal.down) + "59" });
+      if (typeof sma50[i] === "number") l50.push({ time: t, value: sma50[i] });
+      if (typeof sma200[i] === "number") l200.push({ time: t, value: sma200[i] });
+      byKey.set(keyOf(t), i);
+    });
+    dataRef.current = { bars, sma50, sma200, byKey };
+    s.candles.setData(cd); s.vol.setData(vd); s.m50.setData(l50); s.m200.setData(l200);
+    if (!weekly && bars.length > 280) chart.timeScale().setVisibleLogicalRange({ from: bars.length - 260, to: bars.length + 4 });
+    else chart.timeScale().fitContent();
+    (chart as any).__paintLegend?.(bars.length - 1);
+  }, [bars, sma50, sma200, weekly]);
+
+  if (!bars.length) return null;
 
   return (
-    <div className="relative"
-      onMouseMove={(e) => onMove(e.clientX)}
-      onMouseLeave={() => setHover(null)}
-      onTouchMove={(e) => e.touches[0] && onMove(e.touches[0].clientX)}
-      onTouchEnd={() => setHover(null)}
-    >
-      <svg ref={svgRef} viewBox={`0 0 ${W} ${H + 16}`} preserveAspectRatio="none"
-        style={{ width: "100%", height: H + 16, display: "block" }} role="img"
-        aria-label={`${weekly ? "Weekly" : "Daily"} candles with volume and moving averages`}>
-
-        {geo.ticks.map((t, i) => (
-          <g key={i}>
-            <line x1={0} y1={t.y} x2={PLOT} y2={t.y} className="stroke-line" strokeWidth={1} />
-            <text x={PLOT + 8} y={t.y + 3.5} className="fill-ink-faint" fontSize={10.5} fontFamily="ui-monospace,Menlo,monospace">
-              {Math.round(t.v).toLocaleString("en-IN")}
-            </text>
-          </g>
-        ))}
-
-        {bars.map((bar, i) => {
-          const up = bar[4] >= bar[1];
-          const x = geo.X(i), yO = geo.Y(bar[1]), yC = geo.Y(bar[4]);
-          const cls = up ? "fill-up stroke-up" : "fill-down stroke-down";
-          return (
-            <motion.g key={bar[0]}
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              transition={{ duration: 0.3, delay: Math.min(i, 60) * 0.004 }}
-              opacity={hover === null || hover === i ? 1 : 0.72}>
-              <line x1={x} y1={geo.Y(bar[2])} x2={x} y2={geo.Y(bar[3])} className={cls} strokeWidth={0.85} />
-              <rect x={x - geo.cw / 2} y={Math.min(yO, yC)} width={geo.cw}
-                height={Math.max(0.9, Math.abs(yC - yO))} className={cls} />
-            </motion.g>
-          );
-        })}
-
-        {geo.p200 && <motion.path d={geo.p200} fill="none" className="stroke-ink-faint" strokeWidth={1.6}
-          initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }} />}
-        {geo.p50 && <motion.path d={geo.p50} fill="none" className="stroke-ink-dim" strokeWidth={1.4} strokeDasharray="4 3"
-          initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.1, delay: 0.1, ease: [0.16, 1, 0.3, 1] }} />}
-
-        {/* last close, tagged in the gutter */}
-        <line x1={0} y1={geo.Y(geo.last)} x2={PLOT} y2={geo.Y(geo.last)} className="stroke-ink" strokeWidth={1} strokeDasharray="3 3" opacity={0.45} />
-        <rect x={PLOT} y={geo.Y(geo.last) - 8} width={GUTTER} height={16} className="fill-ink" />
-        <text x={PLOT + 7} y={geo.Y(geo.last) + 3.5} className="fill-paper" fontSize={10.5} fontWeight={700} fontFamily="ui-monospace,Menlo,monospace">
-          {Math.round(geo.last).toLocaleString("en-IN")}
-        </text>
-
-        <g transform={`translate(0 ${PH + GAP})`}>
-          {bars.map((bar, i) => {
-            const bh = ((bar[5] || 0) / geo.vMax) * VH;
-            return <rect key={bar[0]} x={geo.X(i) - geo.cw / 2} y={VH - bh} width={geo.cw} height={bh}
-              className={bar[4] >= bar[1] ? "fill-up" : "fill-down"} opacity={0.42} />;
-          })}
-          <text x={3} y={10} className="fill-ink-faint" fontSize={9.5} fontFamily="ui-monospace,Menlo,monospace">VOLUME</text>
-        </g>
-
-        {hover !== null && (
-          <line x1={geo.X(hover)} y1={0} x2={geo.X(hover)} y2={PH + GAP + VH}
-            className="stroke-ink" strokeWidth={0.8} strokeDasharray="3 3" opacity={0.55} />
-        )}
-
-        <text x={0} y={H + 13} className="fill-ink-faint" fontSize={10} fontFamily="ui-monospace,Menlo,monospace">{bars[0][0]}</text>
-        <text x={PLOT} y={H + 13} textAnchor="end" className="fill-ink-faint" fontSize={10} fontFamily="ui-monospace,Menlo,monospace">{bars[n - 1][0]}</text>
-      </svg>
-
-      {b && (
-        <motion.div
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.12 }}
-          className="pointer-events-none absolute top-3 z-10 min-w-[186px] border border-line-2 bg-paper px-3 py-2.5 shadow-2xl"
-          style={ (geo.X(hover!) / W) > 0.55
-            ? { right: `${(1 - geo.X(hover!) / W) * 100 + 2}%` }
-            : { left: `${(geo.X(hover!) / W) * 100 + 2}%` } }
-        >
-          <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
-            {b[0]}{weekly ? " · week ending" : ""}
-          </div>
-          <div className="mt-1.5 grid grid-cols-[auto_1fr_auto_1fr] items-baseline gap-x-2 gap-y-0.5">
-            {([["O", b[1]], ["H", b[2]], ["L", b[3]], ["C", b[4]]] as const).map(([k, v]) => (
-              <>
-                <span key={k} className="font-mono text-[9.5px] text-ink-faint">{k}</span>
-                <b className="text-[12px] tnum">{inr(v)}</b>
-              </>
-            ))}
-          </div>
-          <div className="mt-1.5 text-[11.5px] tnum">
-            <span className={chg > 0 ? "text-up" : chg < 0 ? "text-down" : ""}>
-              {chg > 0 ? "+" : ""}{nf(chg, 2)}%
-            </span>
-            <span className="text-ink-dim"> · Vol {qty(b[5])}</span>
-          </div>
-          <div className="mt-0.5 text-[11px] text-ink-faint tnum">
-            50-DMA {inr(sma50[hover!])} · 200-DMA {inr(sma200[hover!])}
-          </div>
-        </motion.div>
-      )}
+    <div className="relative">
+      <div ref={legendRef}
+        className="pointer-events-none absolute left-2.5 top-2 z-[6] max-w-[calc(100%-90px)] overflow-hidden text-ellipsis whitespace-nowrap bg-paper/75 px-2 py-0.5 font-mono text-[11px] leading-relaxed text-ink-dim [&_b]:font-semibold [&_b]:text-ink" />
+      <div ref={mountRef} style={{ height: "clamp(340px, 50vh, 520px)" }} />
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-faint">
+        <span>candles · volume below</span>
+        <span>dashed 50-{weekly ? "D" : "day"} · solid 200-day average</span>
+        <span>hover for OHLC · scroll to zoom · drag to pan · double-click resets</span>
+      </div>
     </div>
   );
 }
