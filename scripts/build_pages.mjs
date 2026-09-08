@@ -4,7 +4,7 @@
 //
 // REAL data, no keys:
 //   • AMFI NAVAll        → every Direct-Growth scheme's official NAV (~2,400+)
-//   • mfapi.in           → 1/3/5-yr CAGR + volatility for the category leaders
+//   • mfapi.in           → 1/3/5-yr CAGR + volatility for a sample per category
 //   • Yahoo Finance      → NIFTY 50 / Bank / IT / SENSEX index closes
 //
 // Run by .github/workflows/pages-daily.yml every market weekday at 17:00 IST,
@@ -59,7 +59,7 @@ if (universe.count < 500) {
   throw new Error(`only ${universe.count} Direct-Growth schemes parsed from AMFI — the format has probably changed again`);
 }
 
-// enrich the leaders of the buckets people actually browse (bounded & polite)
+// enrich a bounded, polite sample of widely-held schemes per bucket
 const SHOW_BUCKETS = [
   ["equity_largecap", "Large Cap"], ["equity_flexi", "Flexi / Multi Cap"], ["equity_midcap", "Mid Cap"],
   ["equity_smallcap", "Small Cap"], ["equity_index", "Index Funds"], ["elss", "ELSS (Tax Saver)"],
@@ -89,13 +89,14 @@ for (const [name, sym] of YAHOO) {
 }
 
 // ---- AI daily commentary (AIMLAPI_KEY from GitHub Actions Secrets) ----------
-async function aiCommentary(idx, secs) {
+async function aiCommentary(idx) {
   const key = process.env.AIMLAPI_KEY;
   if (!key) { console.log("[pages] AIMLAPI_KEY not set — skipping AI commentary"); return null; }
+  // index closes and universe stats only — no scheme-level figures, so the note
+  // can never read as a fund recommendation on a registered adviser's website
   const facts = [
     `Date: ${istStamp()}. ${marketDay ? "Market day." : "Weekend/holiday; latest available data."}`,
     ...idx.map((i) => `${i.name}: ${i.price.toFixed(2)} (${i.chgPct > 0 ? "+" : ""}${i.chgPct.toFixed(2)}%)`),
-    ...secs.slice(0, 4).map((s) => `${s.label} leader: ${s.rows[0]?.name} (3Y CAGR ${s.rows[0]?.r3}%)`),
     `AMFI NAV date ${universe.navDate}; ${universe.count} Direct-Growth schemes tracked.`,
   ].join("\n");
   try {
@@ -120,15 +121,17 @@ async function aiCommentary(idx, secs) {
   } catch (e) { console.log("[pages] AIMLAPI unreachable —", String(e.message).slice(0, 60)); return null; }
 }
 
-// top-5 per bucket by 3Y CAGR among enriched
+// an alphabetical sample per bucket among the enriched schemes — a snapshot,
+// not a ranking: no return-based sorting and no star ratings, because this is
+// published on a SEBI-registered Investment Adviser's website
 const sections = SHOW_BUCKETS.map(([bucket, label]) => ({
   label,
   rows: universe.funds.filter((f) => f.bucket === bucket && f.r3 !== null)
-    .sort((a, b) => (b.r3 ?? -99) - (a.r3 ?? -99)).slice(0, 5)
-    .map((f) => ({ name: f.name.replace(/ *-? *Direct.*$/i, ""), amc: f.amc, nav: f.nav, r1: f.r1, r3: f.r3, r5: f.r5, stars: f.stars })),
+    .sort((a, b) => a.name.localeCompare(b.name)).slice(0, 6)
+    .map((f) => ({ name: f.name.replace(/ *-? *Direct.*$/i, ""), amc: f.amc, nav: f.nav, r1: f.r1, r3: f.r3, r5: f.r5 })),
 })).filter((s) => s.rows.length);
 
-const commentary = await aiCommentary(indices, sections);
+const commentary = await aiCommentary(indices);
 
 // compact full-universe payload for client-side search (name, amc, category, nav)
 const allFunds = universe.funds.map((f) => [f.name.replace(/ *-? *Direct.*$/i, ""), f.amc, f.category, f.nav]);
@@ -145,7 +148,7 @@ const html = `<!doctype html>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>myfinancial · Daily Market Brief — real NAVs & index closes, refreshed every market day</title>
-<meta name="description" content="Real AMFI NAVs for all ${universe.count} Direct-Growth mutual funds, category leaders by 3-year CAGR, and Indian index closes — auto-refreshed every market day at 5 PM IST."/>
+<meta name="description" content="Real AMFI NAVs for all ${universe.count} Direct-Growth mutual funds, alphabetical category snapshots, and Indian index closes — auto-refreshed every market day at 5 PM IST."/>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='black'/><text x='50' y='72' font-size='62' text-anchor='middle' fill='white' font-family='Georgia'>m</text></svg>"/>
 <script>document.documentElement.dataset.theme = localStorage.getItem("myfin.theme") || "dark";</script>
 <style>
@@ -187,7 +190,6 @@ th.r,td.r{text-align:right}
 td{padding:8px 14px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
 tr:last-child td{border-bottom:none}
 td .amc{font-size:10.5px;color:var(--faint)}
-.stars{color:var(--gold);font-size:11px;letter-spacing:1px}
 .search{width:100%;background:var(--card);border:1px solid var(--line2);color:var(--ink);padding:12px 15px;font-size:14px;margin-bottom:12px}
 .search:focus{outline:none;border-color:var(--ink)}
 #allWrap{border:1px solid var(--line);background:var(--card);max-height:480px;overflow:auto}
@@ -201,10 +203,11 @@ td .amc{font-size:10.5px;color:var(--faint)}
   <a class="wordmark" href="index.html"><b>my</b>financial</a>
   <a class="navlk" href="stocks.html">Companies</a>
   <a class="navlk" href="funds.html">Mutual Funds</a>
+  <a class="navlk" href="disclosures.html">Disclosures</a>
   <span class="badge"><span class="pulse"></span> auto-refreshed market days · 5 PM IST</span>
   <div style="display:flex;gap:10px;align-items:center">
     <button class="tbtn" onclick="const n=document.documentElement.dataset.theme==='light'?'dark':'light';document.documentElement.dataset.theme=n;localStorage.setItem('myfin.theme',n);this.textContent=n==='light'?'☾':'☀︎'">☀︎</button>
-    <a class="btn" href="https://github.com/myfinancialria/myfinancial">Run the full platform ↗</a>
+    <a class="btn" href="index.html">myfinancial home</a>
   </div>
 </nav>
 <main>
@@ -222,15 +225,15 @@ td .amc{font-size:10.5px;color:var(--faint)}
     <div style="color:var(--faint);font-size:10px;margin-top:6px">AI-generated interpretation of the day's data — informational only, not advice.</div>
   </div>` : ""}
 
-  <h2>Category leaders — by real 3-year CAGR</h2>
-  <div class="sub">Official AMFI NAVs · return histories from mfapi.in · Direct plans, Growth option only</div>
+  <h2>Category snapshots — A to Z</h2>
+  <div class="sub">An alphabetical sample of widely-held schemes per category · official AMFI NAVs · return histories from mfapi.in · Direct plans, Growth option only · past performance does not indicate future results — factual data, not a recommendation</div>
   <div class="grid">
     ${sections.map((s) => `<div class="card">
       <h3>${esc(s.label)}</h3>
       <table>
         <thead><tr><th>Scheme</th><th class="r">NAV ₹</th><th class="r">1Y</th><th class="r">3Y</th><th class="r">5Y</th></tr></thead>
         <tbody>${s.rows.map((f) => `<tr>
-          <td>${esc(f.name)}${f.stars ? ` <span class="stars">${"★".repeat(f.stars)}</span>` : ""}<div class="amc">${esc(f.amc)}</div></td>
+          <td>${esc(f.name)}<div class="amc">${esc(f.amc)}</div></td>
           <td class="r">${num(f.nav)}</td>
           <td class="r ${cls(f.r1)}">${pct(f.r1, 1)}</td>
           <td class="r ${cls(f.r3)}">${pct(f.r3, 1)}</td>
@@ -246,7 +249,10 @@ td .amc{font-size:10.5px;color:var(--faint)}
   <div id="allWrap"><table><thead><tr><th>Scheme</th><th>AMC</th><th>Category</th><th class="r">NAV ₹</th></tr></thead><tbody id="allBody"></tbody></table></div>
 
   <div class="note">
-    <b>How this page works:</b> a GitHub Action rebuilds it every market weekday at 17:00 IST (11:30 UTC) from official, free sources — AMFI NAVAll (fund NAVs), mfapi.in (return histories) and Yahoo Finance (index closes). AMFI typically publishes same-day NAVs late evening, so the NAV date shown may be the previous trading day at the 5 PM run. Educational information, not investment advice under SEBI (Investment Advisers) Regulations, 2013 — mutual funds are subject to market risks. Source code: <a href="https://github.com/myfinancialria/myfinancial" style="color:var(--ink)">github.com/myfinancialria/myfinancial</a>. Related: <a href="https://myfinancialria.github.io/myfinancial-advisor/" style="color:var(--ink)">robo-advisor app</a>.
+    <b>How this page works:</b> a GitHub Action rebuilds it every market weekday at 17:00 IST (11:30 UTC) from official, free sources — AMFI NAVAll (fund NAVs), mfapi.in (return histories) and Yahoo Finance (index closes). AMFI typically publishes same-day NAVs late evening, so the NAV date shown may be the previous trading day at the 5 PM run. Data on this page is factual information — not investment advice or a recommendation; past performance does not indicate future results.<br/><br/>
+    <!-- Site-wide SEBI footer — keep identical on every page. BASL Member ID: replace [___] once allotted. -->
+    NITHIN P · SEBI Registered Investment Adviser · Registration No. INA000023162 · Validity: Sep 07, 2026 – Perpetual · BASL Member ID: [___] · Registered Address: Krishna H, Thathamangalam, Palakkad, Kerala – 678102 · Principal Officer: Nithin P · <a href="mailto:nithinp90@gmail.com" style="color:var(--ink)">nithinp90@gmail.com</a> · +91 95449 27559 — Registration granted by SEBI and certification from NISM in no way guarantee performance of the intermediary or provide any assurance of returns to investors. Investment in securities market are subject to market risks. Read all the related documents carefully before investing.<br/><br/>
+    <a href="disclosures.html" style="color:var(--ink)">Disclosures</a> · <a href="disclosures.html#charter" style="color:var(--ink)">Investor Charter</a> · <a href="disclosures.html#complaints" style="color:var(--ink)">Complaints Data</a> · <a href="https://scores.sebi.gov.in" style="color:var(--ink)">SCORES</a> · <a href="https://smartodr.in" style="color:var(--ink)">ODR</a>
   </div>
 </main>
 <script>

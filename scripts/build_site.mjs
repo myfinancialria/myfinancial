@@ -100,73 +100,37 @@ const shell = (title, desc, body, active = "", base = "") => `<!doctype html><ht
 <script>document.documentElement.dataset.theme=localStorage.getItem("myfin.theme")||"dark"</script>
 <style>${CSS}</style></head><body>
 <nav class="site">
-<a class="wordmark" href="${base}index.html">my<b>financial</b></a>
+<a class="wordmark" href="${base}index.html"><b>my</b>financial</a>
 <a class="lk${active === "stocks" ? " on" : ""}" href="${base}stocks.html">Companies</a>
 <a class="lk${active === "screeners" ? " on" : ""}" href="${base}screeners.html">Screeners</a>
 <a class="lk${active === "funds" ? " on" : ""}" href="${base}funds.html">Mutual Funds</a>
 <a class="lk${active === "brief" ? " on" : ""}" href="${base}brief.html">Daily Brief</a>
+<a class="lk" href="${base}disclosures.html">Disclosures</a>
 <div class="spacer"></div>
 <button class="tt" title="Toggle light / dark" onclick="var r=document.documentElement,n=r.dataset.theme==='dark'?'light':'dark';r.dataset.theme=n;localStorage.setItem('myfin.theme',n)">\u263C</button>
 </nav><div class="wrap">${body}</div>
+<!-- Site-wide SEBI footer \u2014 keep identical on every page. BASL Member ID: replace [___] once allotted. -->
 <footer class="site"><div class="wrap">
-Educational research only \u2014 not investment advice under SEBI (Investment Advisers) Regulations, 2013. Investments are subject to market risks; read all scheme-related documents carefully.<br>
-Company fundamentals are real filed data via the Upstox Company Fundamentals API. Mutual fund NAVs are official AMFI data; returns are computed from published NAV history. Past performance does not indicate future results.<br>
-<a href="${base}index.html">Home</a> \u00b7 <a href="https://github.com/myfinancialria/myfinancial" rel="noopener">GitHub</a>
+NITHIN P \u00b7 SEBI Registered Investment Adviser \u00b7 Registration No. INA000023162 \u00b7 Validity: Sep 07, 2026 \u2013 Perpetual \u00b7 BASL Member ID: [___] \u00b7 Registered Address: Krishna H, Thathamangalam, Palakkad, Kerala \u2013 678102 \u00b7 Principal Officer: Nithin P \u00b7 <a href="mailto:nithinp90@gmail.com">nithinp90@gmail.com</a> \u00b7 <a href="tel:+919544927559">+91 95449 27559</a> \u2014 Registration granted by SEBI and certification from NISM in no way guarantee performance of the intermediary or provide any assurance of returns to investors. Investment in securities market are subject to market risks. Read all the related documents carefully before investing.<br>
+Company fundamentals are real filed data via the Upstox Company Fundamentals API. Mutual fund NAVs are official AMFI data; returns are computed from published NAV history. Past performance does not indicate future results. Data on this website is factual information \u2014 not investment advice or a recommendation.<br>
+<a href="${base}disclosures.html">Disclosures</a> \u00b7 <a href="${base}disclosures.html#charter">Investor Charter</a> \u00b7 <a href="${base}disclosures.html#complaints">Complaints Data</a> \u00b7 <a href="https://scores.sebi.gov.in" rel="noopener">SCORES</a> \u00b7 <a href="https://smartodr.in" rel="noopener">ODR</a> \u00b7 <a href="${base}index.html">Home</a>
 </div></footer></body></html>`;
 
 // ------------------------------ the homepage --------------------------------
-// The public landing page IS the designed homepage — same monochrome art,
-// motion and copy. Only the destinations change: on GitHub Pages there is no
-// server, so app routes are rewired to the static pages that hold real data,
-// and the modules that genuinely need the running platform say so instead of
-// pretending to work.
-const REPO = "https://github.com/myfinancialria/myfinancial";
-const ROUTE_MAP = [
-  [/href="\/app#\/funds"/g, 'href="funds.html"'],
-  // the app's screener routes now have a real static counterpart
-  [/href="\/app#\/equities\/screeners\/[a-z]+"/g, 'href="screener.html"'],
-  [/href="\/app#\/equities\/screeners"/g, 'href="screener.html"'],
-  [/href="\/app#\/equities"/g, 'href="stocks.html"'],
-  [/href="\/app#\/dashboard"/g, 'href="brief.html"'],
-  // These three used to point at the repo because they needed a running server.
-  // They are real static pages now — the tax, goals and Will engines run in the
-  // browser, and the advisory screens run over the published market data.
-  [/href="\/app#\/planning\/fema"/g, 'href="planning.html"'],
-  [/href="\/app#\/planning"/g, 'href="planning.html"'],
-  [/href="\/app#\/advisory"/g, 'href="advisory.html"'],
-  [/href="\/app#\/estate"/g, 'href="estate.html"'],
-  // The React app IS published at dist/app now and is embedded on the
-  // homepage, so /app is a real destination rather than something to divert.
-  [/href="\/app"/g, 'href="app/"'],
-  [/href="\/learn"/g, `href="${REPO}#insights" rel="noopener"`],
-  [/href="https:\/\/myfinancialria\.github\.io\/myfinancial\/"/g, 'href="brief.html"'],
-];
-
+// The public landing page and the SEBI disclosures page are authored as
+// complete, self-contained files in public/ and published verbatim:
+//   public/home.html        → dist/index.html
+//   public/disclosures.html → dist/disclosures.html
+// All compliance content — registration details, Investor Charter, monthly
+// complaints tables, the site-wide SEBI footer — lives in those two files.
+// (The old ROUTE_MAP rewiring is gone with the old pitch homepage: the SEBI
+// landing links only to real destinations, so nothing needs diverting.)
 export function buildHome() {
-  const src = path.join(ROOT, "public", "home.html");
-  if (!fs.existsSync(src)) return false;
-  let html = fs.readFileSync(src, "utf8");
-  for (const [re, to] of ROUTE_MAP) html = html.replace(re, to);
-
-  // The landing page's nav is written for the running app, where everything sits
-  // behind /app. On the public site the data pages ARE the product, so put them
-  // first — a visitor should reach the screener without reading a pitch.
-  html = html.replace(
-    '<a href="#platform-live">Platform</a>',
-    '<a href="app/insights">Insights</a><a href="screener.html">Screener</a><a href="stocks.html">Companies</a><a href="funds.html">Mutual Funds</a><a href="#platform-live">Platform</a>',
-  );
-
-  // the three module cards that need a server get an honest label
-  html = html.replace(/(<a class="mod reveal" href="[^"]*github[^"]*"[^>]*>)([\s\S]*?)(<span class="go">)Open module →(<\/span>)/g,
-    '$1$2<span class="mod-tag">Runs in the full platform</span>$3Get the code →$4');
-  html = html.replace("</style>", `.mod-tag{position:absolute;top:clamp(26px,3vw,42px);right:clamp(26px,3vw,42px);font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);border:1px solid var(--line-2);padding:3px 8px;max-width:9em;line-height:1.35;text-align:right}
-.pub-links{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
-</style>`);
-
-  // nav: swap the app launcher for the public sections
-
-
-  fs.writeFileSync(path.join(OUT, "index.html"), html);
+  const home = path.join(ROOT, "public", "home.html");
+  if (!fs.existsSync(home)) return false;
+  fs.copyFileSync(home, path.join(OUT, "index.html"));
+  const disclosures = path.join(ROOT, "public", "disclosures.html");
+  if (fs.existsSync(disclosures)) fs.copyFileSync(disclosures, path.join(OUT, "disclosures.html"));
   return true;
 }
 
@@ -287,7 +251,7 @@ function analyse(c, bars) {
 
   if (better("roce")) S.push(`Earns a ROCE of ${pct(r.roce)} against a sector benchmark of ${pct(b.roce)} — capital works harder here than at the average peer.`);
   else if (better("roce") === false) W.push(`ROCE of ${pct(r.roce)} trails the sector's ${pct(b.roce)}, so each rupee of capital earns less than at rivals.`);
-  if (better("roe")) S.push(`Return on equity of ${pct(r.roe)} beats the sector's ${pct(b.roe)}.`);
+  if (better("roe")) S.push(`Return on equity of ${pct(r.roe)} is above the sector's ${pct(b.roe)}.`);
   else if (better("roe") === false) W.push(`Return on equity of ${pct(r.roe)} is below the sector's ${pct(b.roe)}.`);
   if (r.patMarginPct != null && r.patMarginPct > 12) S.push(`Keeps ${pct(r.patMarginPct)} of every rupee of sales as final profit — a comfortable margin cushion.`);
   if (r.patMarginPct != null && r.patMarginPct < 5) W.push(`A thin net margin of ${pct(r.patMarginPct)} leaves little room if costs rise.`);
@@ -313,7 +277,7 @@ function analyse(c, bars) {
   }
   if (hd?.latest && hd?.prev) {
     const p0 = hd.latest.promoters, p1 = hd.prev.promoters;
-    if (p0 != null && p1 != null && p0 > p1 + 0.05) S.push(`Promoters raised their stake to ${pct(p0)} last quarter — the owners are buying.`);
+    if (p0 != null && p1 != null && p0 > p1 + 0.05) S.push(`Promoters raised their stake to ${pct(p0)} last quarter, from ${pct(p1)}.`);
     if (p0 != null && p1 != null && p0 < p1 - 0.05) T.push(`Promoter holding slipped to ${pct(p0)} from ${pct(p1)}; understand why before investing.`);
     const f0 = hd.latest.fii, f1 = hd.prev.fii;
     if (f0 != null && f1 != null && f0 < f1 - 0.3) T.push(`Foreign investors trimmed from ${pct(f1)} to ${pct(f0)}.`);
@@ -469,7 +433,7 @@ ${[["Strengths", swot.strengths], ["Weaknesses", swot.weaknesses], ["Opportuniti
 <div><div class="k" style="margin-bottom:8px">In the Budget</div>${list2(pol.budget || [])}</div></div></div>
 ${pol.disclaimer ? `<div class="note">${esc(pol.disclaimer)}</div>` : ""}</div>` : "";
 
-  const productsCard = prods?.length ? `<div class="card"><div class="card-h"><h2>Hero products &amp; market position</h2></div>
+  const productsCard = prods?.length ? `<div class="card"><div class="card-h"><h2>Key products &amp; market position</h2></div>
 <div class="scroll"><table><thead><tr><th>Product</th><th>What it is</th><th class="num">Share</th></tr></thead>
 <tbody>${prods.map((pr) => `<tr><td><b>${esc(pr.name)}</b>${pr.since ? `<div class="dim" style="font-size:11.5px">since ${esc(pr.since)}</div>` : ""}</td>
 <td style="color:var(--ink-dim);font-size:12.5px;white-space:normal;max-width:520px">${esc(pr.what || pr.detail || "")}</td>
@@ -502,7 +466,7 @@ ${tabs.map(([id, , html], i) => `<div class="pane" data-p="${id}" style="${i ? "
 <div class="note">${esc(st.note || "")}</div></div>` : ""}
 ${holdRows ? `<div class="card"><div class="card-h"><h2>Who owns this company</h2><span class="chip ok">Real · ${esc(hd.periods[0])}</span></div>
 <div class="scroll"><table><thead><tr><th>Holder</th>${hd.periods.slice(0, 5).map((p) => `<th class="num">${esc(p)}</th>`).join("")}<th class="num">QoQ</th></tr></thead><tbody>${holdRows}</tbody></table></div>
-<div class="note">Promoters are the founding owners. A rising promoter stake usually signals confidence; a falling one is worth understanding before investing.</div></div>` : ""}
+<div class="note">Promoters are the founding owners. Changes in their stake are factual filings — understand the reason behind a change before drawing any conclusion.</div></div>` : ""}
 <div class="grid g2">
 ${rivalRows ? `<div class="card"><div class="card-h"><h2>Rivals, side by side</h2><span class="chip ok">Real</span></div>
 <div class="scroll"><table><thead><tr><th>Company</th><th class="num">P/E</th><th class="num">P/B</th><th class="num">EV/EBITDA</th><th class="num">ROE</th><th class="num">ROCE</th></tr></thead><tbody>${rivalRows}</tbody></table></div>
@@ -629,38 +593,41 @@ function screenersPage(rows) {
 <tbody>${items.map((r) => `<tr><td><a href="stock/${encodeURIComponent(r.symbol)}.html" style="font-weight:650">${esc(r.name)} ↗</a><div class="dim" style="font-size:11.5px">${esc(r.symbol)} · ${esc(r.sector)}</div></td>${cols.slice(1).map((c) => `<td${c[2] ? ' class="num"' : ""}>${c[1](r)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`
     : `<div class="card-b dim">${empty}</div>`;
 
+  // every screen is a filter, not a ranking: qualifying names are listed A to Z,
+  // because return-ordered tables read as recommendations on an adviser's site
+  const byName = (a, b) => a.name.localeCompare(b.name);
   const clean = rows.filter((r) => !r.corpAction);
-  const stage2 = clean.filter((r) => r.stage === 2).sort((a, b) => (b.rs ?? -99) - (a.rs ?? -99)).slice(0, 40);
-  const stage4 = clean.filter((r) => r.stage === 4).sort((a, b) => (a.rs ?? 99) - (b.rs ?? 99)).slice(0, 25);
-  const breakouts = clean.filter((r) => r.fromHigh > -3).sort((a, b) => b.fromHigh - a.fromHigh).slice(0, 30);
-  const leaders = clean.filter((r) => r.quadrant === "LEADING").sort((a, b) => b.rs - a.rs).slice(0, 30);
-  const improving = clean.filter((r) => r.quadrant === "IMPROVING").sort((a, b) => b.rm - a.rm).slice(0, 25);
+  const stage2 = clean.filter((r) => r.stage === 2).sort(byName).slice(0, 40);
+  const stage4 = clean.filter((r) => r.stage === 4).sort(byName).slice(0, 25);
+  const breakouts = clean.filter((r) => r.fromHigh > -3).sort(byName).slice(0, 30);
+  const leading = clean.filter((r) => r.quadrant === "LEADING").sort(byName).slice(0, 30);
+  const improving = clean.filter((r) => r.quadrant === "IMPROVING").sort(byName).slice(0, 25);
 
   const body = `
 <div class="head"><div class="eyebrow">Screeners</div>
 <h1>What the market is <em>actually</em> doing</h1>
-<div class="sub">${excluded.length ? `${excluded.length} ${excluded.length === 1 ? "company is" : "companies are"} held out of the return screens below (${excluded.map((r) => esc(r.symbol)).join(", ")}) because the price feed is not adjusted for a demerger or split — comparing prices across that break would be meaningless.<br><br>` : ""}Every screen below is computed from real daily closes for ${rows.length - excluded.length} covered companies — stage analysis off the 30-week average, breakouts off the true 52-week high, rotation against an equal-weight composite of the same universe. Research, not recommendations.</div></div>
+<div class="sub">${excluded.length ? `${excluded.length} ${excluded.length === 1 ? "company is" : "companies are"} held out of the return screens below (${excluded.map((r) => esc(r.symbol)).join(", ")}) because the price feed is not adjusted for a demerger or split — comparing prices across that break would be meaningless.<br><br>` : ""}Every screen below is computed from real daily closes for ${rows.length - excluded.length} covered companies — stage analysis off the 30-week average, breakouts off the true 52-week high, rotation against an equal-weight composite of the same universe. Qualifying names are listed alphabetically. Past performance does not indicate future results — factual data, not investment advice or a recommendation.</div></div>
 
 <div class="card"><div class="card-h"><h2>Sector heatmap</h2><span class="chip ok">Real closes</span></div>
 <div class="card-b"><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(168px,1fr))">${heatTiles}</div></div>
 <div class="note">Average one-day move of the covered companies in each sector. Green is advancing, red declining.</div></div>
 
-<div class="card"><div class="card-h"><div><h2>Weinstein Stage 2 — advancing</h2><div class="k" style="margin-top:3px;letter-spacing:.06em;text-transform:none">price above a rising 30-week average, sorted by relative strength</div></div><span class="chip">${stage2.length} names</span></div>
+<div class="card"><div class="card-h"><div><h2>Weinstein Stage 2 — advancing</h2><div class="k" style="margin-top:3px;letter-spacing:.06em;text-transform:none">price above a rising 30-week average · alphabetical</div></div><span class="chip">${stage2.length} names</span></div>
 ${table(stage2, [["Company"], ["1Y", (r) => sgn(r.y1), 1], ["3M", (r) => sgn(r.m3), 1], ["From 52w high", (r) => sgn(r.fromHigh), 1], ["Rel. strength", (r) => sgn(r.rs), 1], ["P/E", (r) => n2(r.pe), 1]], "No names qualify today.")}
 <div class="note">Stan Weinstein's framework: Stage 1 bases, Stage 2 advances, Stage 3 tops, Stage 4 declines. Stage 2 is where sustained uptrends live — but a stage is a description of the past, not a forecast.</div></div>
 
-<div class="card"><div class="card-h"><div><h2>Near 52-week highs</h2><div class="k" style="margin-top:3px;letter-spacing:.06em;text-transform:none">within 3% of the highest close in a year</div></div><span class="chip">${breakouts.length} names</span></div>
+<div class="card"><div class="card-h"><div><h2>Near 52-week highs</h2><div class="k" style="margin-top:3px;letter-spacing:.06em;text-transform:none">within 3% of the highest close in a year · alphabetical</div></div><span class="chip">${breakouts.length} names</span></div>
 ${table(breakouts, [["Company"], ["Close", (r) => "₹" + num(r.last), 1], ["52w high", (r) => "₹" + num(r.hi52), 1], ["From high", (r) => sgn(r.fromHigh), 1], ["Volume vs 50d", (r) => n2(r.volX, "×"), 1], ["1Y", (r) => sgn(r.y1), 1]], "Nothing near its high.")}
 <div class="note">A push to new highs on volume above the 50-day average is the classic confirmation; the same move on thin volume often fades.</div></div>
 
 <div class="grid g2">
-<div class="card"><div class="card-h"><div><h2>Leading</h2><div class="k" style="margin-top:3px;letter-spacing:.06em;text-transform:none">strong and still strengthening</div></div></div>
-${table(leaders, [["Company"], ["6M", (r) => sgn(r.m6), 1], ["3M", (r) => sgn(r.m3), 1]], "None.")}</div>
-<div class="card"><div class="card-h"><div><h2>Improving</h2><div class="k" style="margin-top:3px;letter-spacing:.06em;text-transform:none">still weak, but momentum has turned up</div></div></div>
+<div class="card"><div class="card-h"><div><h2>Rotation — Leading quadrant</h2><div class="k" style="margin-top:3px;letter-spacing:.06em;text-transform:none">6M and 3M returns both above the universe composite · alphabetical</div></div></div>
+${table(leading, [["Company"], ["6M", (r) => sgn(r.m6), 1], ["3M", (r) => sgn(r.m3), 1]], "None.")}</div>
+<div class="card"><div class="card-h"><div><h2>Rotation — Improving quadrant</h2><div class="k" style="margin-top:3px;letter-spacing:.06em;text-transform:none">6M return below the composite, 3M above · alphabetical</div></div></div>
 ${table(improving, [["Company"], ["6M", (r) => sgn(r.m6), 1], ["3M", (r) => sgn(r.m3), 1]], "None.")}</div>
 </div>
 
-<div class="card"><div class="card-h"><div><h2>Weinstein Stage 4 — declining</h2><div class="k" style="margin-top:3px;letter-spacing:.06em;text-transform:none">price below a falling 30-week average</div></div><span class="chip">${stage4.length} names</span></div>
+<div class="card"><div class="card-h"><div><h2>Weinstein Stage 4 — declining</h2><div class="k" style="margin-top:3px;letter-spacing:.06em;text-transform:none">price below a falling 30-week average · alphabetical</div></div><span class="chip">${stage4.length} names</span></div>
 ${table(stage4, [["Company"], ["1Y", (r) => sgn(r.y1), 1], ["3M", (r) => sgn(r.m3), 1], ["From 52w high", (r) => sgn(r.fromHigh), 1], ["P/E", (r) => n2(r.pe), 1]], "None.")}
 <div class="note">Falling knives: cheap valuations here often get cheaper. Nothing on this page is advice to buy or sell.</div></div>`;
   return shell("Screeners — stage analysis, breakouts & rotation | myfinancial",
@@ -709,9 +676,9 @@ function fundPage(f, series) {
   ].filter(Boolean).map(([k, v, sub]) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div><div class="k" style="margin-top:4px;letter-spacing:.06em;text-transform:none">${sub}</div></div>`).join("");
 
   const plain = [];
-  if (grew) plain.push(`₹10,000 put into this scheme at the start of the period shown would be worth about <b>₹${num(grew, 0)}</b> today, before tax.`);
-  if (f.r3 != null) plain.push(f.r3 > 12 ? `Its three-year CAGR of ${f.r3}% is ahead of what a fixed deposit would have paid, but that came with day-to-day ups and downs.` : `Its three-year CAGR is ${f.r3}%.`);
-  if (f.vol != null) plain.push(f.vol > 18 ? `Volatility of ${num(f.vol)}% means sharp swings are normal here — money you may need within three years does not belong in this fund.` : `Volatility of ${num(f.vol)}% is relatively contained for its category.`);
+  if (grew) plain.push(`₹10,000 at the start of the period shown would have grown to about <b>₹${num(grew, 0)}</b> at the latest NAV, before tax — a restatement of the published NAV history, not a projection.`);
+  if (f.r3 != null) plain.push(`Its three-year CAGR, computed from published NAVs, is ${f.r3}%. Past performance does not indicate future results.`);
+  if (f.vol != null) plain.push(`Volatility of ${num(f.vol)}% describes how widely yearly returns have swung around their average — a higher figure means larger day-to-day ups and downs.`);
   plain.push("This is a <b>Direct</b> plan: no distributor commission is deducted, so it costs less every year than the Regular plan of the same scheme.");
 
   const body = `
