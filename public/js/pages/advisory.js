@@ -42,7 +42,7 @@ function quality() {
     && (r.liabilitiesToEquity === null || r.liabilitiesToEquity <= 1.5)
     && r.peVsPeers !== null && r.peVsPeers <= 0
     && r.aboveSma200 === true && r.avgTurnoverCr >= 5,
-  ).sort((a, b) => b.roce - a.roce).slice(0, 40);
+  ).sort((a, b) => String(a.name).localeCompare(String(b.name))).slice(0, 40);
 
   $("qualityCount").textContent = rows.length + " companies";
   table($("qualityTbl"), rows, [
@@ -59,46 +59,44 @@ function quality() {
 }
 
 function swing() {
-  // Two setups, both requiring a confirmed Stage 2 advance and real liquidity:
+  // Two conditions, both requiring a confirmed Stage 2 advance and real liquidity:
   //   pullback — price has come back toward the 50-day average with RSI reset
   //   breakout — price pressing the 52-week high on expanding volume
+  // A factual filter only: no entry/stop/target levels are published — trade
+  // construction on named securities is advice, and advice happens off-site,
+  // under the SEBI (IA) process.
   const base = ROWS.filter((r) => r.stage === 2 && r.avgTurnoverCr >= 5 && r.atr14 > 0 && r.adx14 >= 18);
 
-  const setups = [];
+  const matches = [];
   for (const r of base) {
     let kind = null;
     if (r.pctFromSma50 !== null && r.pctFromSma50 >= -6 && r.pctFromSma50 <= 2 && r.rsi14 >= 38 && r.rsi14 <= 58) kind = "Pullback to the 50-day";
     else if (r.pctFrom52wHigh >= -3 && r.volumeRatio >= 1.5) kind = "Breakout on volume";
     if (!kind) continue;
-    // Levels from the stock's own volatility, so the risk is scaled to how much
-    // this share actually moves rather than to a fixed percentage.
-    const entry = r.price;
-    const stop = entry - 1.5 * r.atr14;
-    const target = entry + 3 * r.atr14;
-    setups.push({ ...r, kind, entry, stop, target, riskPct: ((entry - stop) / entry) * 100 });
+    matches.push({ ...r, kind });
   }
-  const rows = setups.sort((a, b) => b.rsRank1y - a.rsRank1y).slice(0, 40);
+  const rows = matches.sort((a, b) => String(a.name).localeCompare(String(b.name))).slice(0, 40);
 
-  $("swingCount").textContent = rows.length + " setups";
+  $("swingCount").textContent = rows.length + " matches";
   table($("swingTbl"), rows, [
     { label: "Company", get: () => "" },
-    { label: "Setup", get: (r) => r.kind },
-    { label: "Entry", num: true, get: (r) => inr(r.entry) },
-    { label: "Stop", num: true, get: (r) => inr(r.stop) },
-    { label: "Target", num: true, get: (r) => inr(r.target) },
-    { label: "Risk", num: true, get: (r) => n2(r.riskPct, 1) + "%" },
-    { label: "R:R", num: true, get: () => "2.0" },
+    { label: "Condition", get: (r) => r.kind },
+    { label: "Close", num: true, get: (r) => inr(r.price) },
+    { label: "ATR (14)", num: true, get: (r) => inr(r.atr14) },
+    { label: "vs 50-DMA", num: true, get: (r) => pc(r.pctFromSma50), tone: (r) => r.pctFromSma50 },
+    { label: "From 52w high", num: true, get: (r) => pc(r.pctFrom52wHigh), tone: (r) => r.pctFrom52wHigh },
+    { label: "Vol vs 50d", num: true, get: (r) => n2(r.volumeRatio, 1) + "×" },
     { label: "RSI", num: true, get: (r) => n2(r.rsi14, 0) },
     { label: "ADX", num: true, get: (r) => n2(r.adx14, 0) },
-  ], "No setups qualify today.");
+  ], "No matches today.");
 }
 
 function momentum() {
   const rows = ROWS.filter((r) =>
     r.rsRank1y >= 90 && r.stage === 2 && r.avgTurnoverCr >= 5 && r.pctFrom52wHigh >= -15,
-  ).sort((a, b) => b.rsRank1y - a.rsRank1y).slice(0, 40);
+  ).sort((a, b) => String(a.name).localeCompare(String(b.name))).slice(0, 40);
 
-  $("momCount").textContent = rows.length + " leaders";
+  $("momCount").textContent = rows.length + " companies";
   table($("momTbl"), rows, [
     { label: "Company", get: () => "" },
     { label: "RS rank", num: true, get: (r) => n2(r.rsRank1y, 0) },
@@ -114,7 +112,7 @@ function momentum() {
 function income() {
   const rows = ROWS.filter((r) =>
     r.dividendYieldPct >= 2 && r.roe >= 10 && r.pe > 0 && r.pe <= 30 && r.avgTurnoverCr >= 2,
-  ).sort((a, b) => b.dividendYieldPct - a.dividendYieldPct).slice(0, 40);
+  ).sort((a, b) => String(a.name).localeCompare(String(b.name))).slice(0, 40);
 
   $("incCount").textContent = rows.length + " payers";
   table($("incTbl"), rows, [

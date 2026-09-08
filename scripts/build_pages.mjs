@@ -26,6 +26,14 @@ const dow = IST().getUTCDay();
 const marketDay = dow >= 1 && dow <= 5 && !NSE_HOLIDAYS.includes(todayIST);
 console.log(`[pages] ${istStamp()} · ${marketDay ? "market day" : "non-market day (weekend/holiday) — publishing latest available data"}`);
 
+// Publish the landing page and the SEBI disclosures page BEFORE any network
+// fetch can fail: the workflow runs this script continue-on-error, and a green
+// deploy must never go out missing the mandated compliance pages. (Company,
+// fund and screener pages come from build_app.mjs — buildSite() is deliberately
+// not called anywhere here: it would overwrite them with the narrower older ones.)
+const { buildHome } = await import("./build_site.mjs");
+console.log(buildHome() ? "[site] landing + disclosures published first (dist/index.html · dist/disclosures.html)" : "[site] home.html missing — no landing page written");
+
 // ------------------------------ index quotes --------------------------------
 const YAHOO = [
   ["NIFTY 50", "%5ENSEI"], ["NIFTY BANK", "%5ENSEBANK"], ["NIFTY IT", "%5ECNXIT"], ["SENSEX", "%5EBSESN"], ["USD/INR", "INR%3DX"],
@@ -280,9 +288,5 @@ fs.writeFileSync(path.join(OUT_DIR, ".nojekyll"), "");
 const enriched = universe.funds.filter((f) => f.enriched).length;
 console.log(`[pages] wrote dist/brief.html (${(html.length / 1024).toFixed(0)} KB) · ${sections.length} category tables · ${enriched} schemes enriched · ${indices.length}/${YAHOO.length} indices`);
 
-// The landing page only. Company, fund and screener pages are now produced by
-// build_app.mjs from the full screener dataset — every listed company rather
-// than the subset a token had fetched — so buildSite() is deliberately NOT
-// called here: it would overwrite those pages with the narrower older ones.
-const { buildHome } = await import("./build_site.mjs");
-console.log(buildHome() ? "[site] homepage = the designed landing page (dist/index.html)" : "[site] home.html missing — no landing page written");
+// (The landing page and disclosures were already published at the top of this
+// script, before any network dependency — see the note there.)

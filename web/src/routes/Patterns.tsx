@@ -74,7 +74,7 @@ export default function Patterns() {
               <table className="w-full text-[12.5px]">
                 <thead>
                   <tr className="border-b border-line">
-                    {["Company", "Pattern", "Stage", "Price", "Entry", "Exit / stop", "Target", "R:R", "Confirm"].map((h, i) => (
+                    {["Company", "Pattern", "Stage", "Price", "Breakout", "Invalidation", "Measured move", "Confirm"].map((h, i) => (
                       <th key={h} className={`whitespace-nowrap bg-paper-2 px-3 py-2.5 font-mono text-[9.5px] uppercase tracking-[0.12em] text-ink-faint ${i ? "text-right" : "text-left"}`}>{h}</th>
                     ))}
                   </tr>
@@ -97,7 +97,6 @@ export default function Patterns() {
                         <td className="px-3 py-2.5 text-right tnum">{inr(h.entry)}</td>
                         <td className="px-3 py-2.5 text-right tnum text-down">{inr(h.stop)}</td>
                         <td className="px-3 py-2.5 text-right tnum text-up">{inr(h.target2)}</td>
-                        <td className="px-3 py-2.5 text-right tnum">{nf(h.riskReward, 1)}</td>
                         <td className="px-3 py-2.5 text-right">
                           <span className={`inline-block min-w-[30px] px-1.5 py-0.5 text-center font-mono text-[10.5px] ${h.confirm.score >= 80 ? "bg-up/20 text-up" : h.confirm.score >= 50 ? "bg-line text-ink-dim" : "bg-warn/20 text-warn"}`}>
                             {h.confirm.score}
@@ -107,7 +106,7 @@ export default function Patterns() {
                       <AnimatePresence>
                         {open === h.symbol && (
                           <tr>
-                            <td colSpan={9} className="bg-paper-3 p-0">
+                            <td colSpan={8} className="bg-paper-3 p-0">
                               <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
                                 exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                                 className="overflow-hidden">
@@ -120,7 +119,7 @@ export default function Patterns() {
                     </>
                   ))}
                   {!hits.length && !loading && (
-                    <tr><td colSpan={9} className="px-5 py-16 text-center text-[13px] text-ink-dim">
+                    <tr><td colSpan={8} className="px-5 py-16 text-center text-[13px] text-ink-dim">
                       Nothing matches these filters today.
                     </td></tr>
                   )}
@@ -146,10 +145,10 @@ function Detail({ hit, note }: { hit: any; note?: string }) {
     <div className="p-5">
       <div className="grid gap-px bg-line sm:grid-cols-2 lg:grid-cols-4">
         {[
-          ["Entry", inr(hit.entry), hit.status === "FORMING" ? "on a close through" : "already taken out", ""],
-          ["Exit / stop-loss", inr(hit.stop), `risk ${plainPct(Math.abs((hit.entry - hit.stop) / hit.entry) * 100)}`, "text-down"],
-          ["Target", inr(hit.target2), `first stop ${inr(hit.target1)}`, "text-up"],
-          ["Reward : risk", `${nf(hit.riskReward, 1)} : 1`, `confirmation ${hit.confirm.score}/100`, ""],
+          ["Breakout level", inr(hit.entry), hit.status === "FORMING" ? "pattern completes on a close through" : "already taken out", ""],
+          ["Invalidation", inr(hit.stop), `${plainPct(Math.abs((hit.entry - hit.stop) / hit.entry) * 100)} below — the textbook shape fails here`, "text-down"],
+          ["Measured move", inr(hit.target2), `interim objective ${inr(hit.target1)}`, "text-up"],
+          ["Confirmation", `${hit.confirm.score}/100`, "volume & averages vs pattern direction", ""],
         ].map(([l, v, s, t]) => (
           <div key={l as string} className="bg-paper-2 px-4 py-3">
             <Label>{l}</Label>
@@ -162,9 +161,9 @@ function Detail({ hit, note }: { hit: any; note?: string }) {
       {triggered && (
         <div className={`mt-4 border px-4 py-3 text-[12.5px] leading-relaxed ${rrNow !== null && rrNow < 1 ? "border-down bg-down/10" : "border-warn bg-warn/10"} text-ink-dim`}>
           <b className="text-ink">This pattern has already {hit.bias === "BULLISH" ? "broken out" : "broken down"}.</b>{" "}
-          Price is {inr(px)}, past the {inr(hit.entry)} entry. Buying here risks {inr(Math.abs(riskNow))} a share to make {inr(Math.abs(rewardNow))}
-          {rrNow !== null && <> — <b className="text-ink">{nf(rrNow, 1)} : 1</b> from today's price rather than the {nf(hit.riskReward, 1)} : 1 the pattern offered at the neckline</>}
-          {rrNow !== null && rrNow < 1 && " — less than a rupee of reward per rupee risked, which is a chase, not a setup."}
+          Price is {inr(px)}, past the {inr(hit.entry)} breakout level: {inr(Math.abs(rewardNow))} a share remains to the
+          measured move, against {inr(Math.abs(riskNow))} back to the invalidation level
+          {rrNow !== null && rrNow < 1 ? " — most of the textbook move is already behind the price." : "."}
         </div>
       )}
 

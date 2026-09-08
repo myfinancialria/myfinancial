@@ -7,27 +7,27 @@ import { Reveal } from "../components/motion";
 import { byUnit, inr, nf, pct, plainPct, tone } from "../lib/format";
 
 const PRESETS = [
-  { id: "all", name: "All live schemes", why: "Every Direct-Growth scheme still publishing a NAV.", test: () => true, sort: "r3y" },
+  { id: "all", name: "All live schemes", why: "Every Direct-Growth scheme still publishing a NAV, A to Z.", test: () => true, sort: "name" },
   { id: "consistent", name: "Consistent equity", why: "Equity schemes whose average three-year rolling return has been strong AND which have never lost money over any three-year window.",
-    test: (r: any) => r.categoryGroup === "Equity" && r.rolling3yAvg >= 14 && r.rolling3yPctPositive >= 95 && r.ageYears >= 5, sort: "rolling3yAvg" },
-  { id: "sharpe", name: "Best risk-adjusted", why: "Highest return per unit of volatility over three years — the funds that did not make you suffer for the return.",
-    test: (r: any) => r.sharpe >= 0.8 && r.ageYears >= 3, sort: "sharpe" },
+    test: (r: any) => r.categoryGroup === "Equity" && r.rolling3yAvg >= 14 && r.rolling3yPctPositive >= 95 && r.ageYears >= 5, sort: "name" },
+  { id: "sharpe", name: "High Sharpe (3Y)", why: "A Sharpe ratio of at least 0.8 over three years — return per unit of volatility, computed from published NAV history.",
+    test: (r: any) => r.sharpe >= 0.8 && r.ageYears >= 3, sort: "name" },
   { id: "lowvol", name: "Steady, low volatility", why: "Modest swings with a respectable return — for money that cannot ride out a deep drawdown.",
-    test: (r: any) => r.volatility <= 8 && r.r3y >= 7 && r.maxDrawdownPct >= -12, sort: "r3y" },
-  { id: "index", name: "Index funds", why: "The cheapest way to own the market. Compare tracking against each other rather than chasing the leader.",
-    test: (r: any) => r.categoryGroup === "Index / ETF / FoF", sort: "r5y" },
-  { id: "elss", name: "ELSS tax savers", why: "Section 80C schemes with a three-year lock-in, ranked on rolling three-year holds.",
-    test: (r: any) => String(r.category ?? "").includes("ELSS"), sort: "rolling3yAvg" },
+    test: (r: any) => r.volatility <= 8 && r.r3y >= 7 && r.maxDrawdownPct >= -12, sort: "name" },
+  { id: "index", name: "Index funds", why: "The lowest-cost way to own the market. Compare tracking difference against each other rather than by past return.",
+    test: (r: any) => r.categoryGroup === "Index / ETF / FoF", sort: "name" },
+  { id: "elss", name: "ELSS tax savers", why: "Section 80C schemes with a three-year lock-in, shown with their rolling three-year record.",
+    test: (r: any) => String(r.category ?? "").includes("ELSS"), sort: "name" },
 ];
 
-const COLS = ["name", "category", "nav", "r1y", "r3y", "r5y", "rolling3yAvg", "volatility", "sharpe", "maxDrawdownPct", "stars"];
+const COLS = ["name", "category", "nav", "r1y", "r3y", "r5y", "rolling3yAvg", "volatility", "sharpe", "maxDrawdownPct"];
 
 export default function Funds() {
   const { data, loading, error } = useFunds();
   const [preset, setPreset] = useState("consistent");
   const [q, setQ] = useState("");
   const [shown, setShown] = useState(50);
-  const [sort, setSort] = useState<{ f: string; dir: 1 | -1 }>({ f: "rolling3yAvg", dir: -1 });
+  const [sort, setSort] = useState<{ f: string; dir: 1 | -1 }>({ f: "name", dir: 1 });
 
   const current = PRESETS.find((p) => p.id === preset)!;
 
@@ -72,7 +72,7 @@ export default function Funds() {
         <div className="flex flex-wrap gap-2">
           {PRESETS.map((p) => (
             <Button key={p.id} active={preset === p.id}
-              onClick={() => { setPreset(p.id); setSort({ f: p.sort, dir: -1 }); setShown(50); }}>
+              onClick={() => { setPreset(p.id); setSort({ f: p.sort, dir: p.sort === "name" ? 1 : -1 }); setShown(50); }}>
               {p.name}
             </Button>
           ))}
@@ -123,11 +123,6 @@ export default function Funds() {
                               <span className="block font-semibold group-hover:text-accent">{r.name}</span>
                               <span className="block font-mono text-[10px] text-ink-faint">{r.amc}</span>
                             </Link>
-                          </td>
-                        );
-                        if (k === "stars") return (
-                          <td key={k} className="whitespace-nowrap px-3 py-2.5 text-right text-warn">
-                            {r.stars ? "★".repeat(r.stars) : "—"}
                           </td>
                         );
                         return (

@@ -248,24 +248,27 @@ export function planningPage({ build = '' } = {}) {
 export function advisoryPage({ priceDate, stockCount, build = '' }) {
   const body = `
 <div class="head">
-  <div class="eyebrow">Advisory &amp; Signals</div>
-  <h1>Ideas with the <em>reasoning attached.</em></h1>
-  <p class="sub">Rule-based screens over all ${stockCount.toLocaleString("en-IN")} NSE-listed companies, rebuilt every market day from official exchange data (prices as of ${priceDate}). Every idea shows the rules it passed and the numbers behind it, so you can disagree with it on the evidence rather than take it on trust.</p>
+  <div class="eyebrow">Market screens</div>
+  <h1>Screens with the <em>reasoning attached.</em></h1>
+  <p class="sub">Rule-based screens over all ${stockCount.toLocaleString("en-IN")} NSE-listed companies, rebuilt every market day from official exchange data (prices as of ${priceDate}). Every row shows the rules it passed and the numbers behind it, so you can examine the evidence yourself.</p>
 </div>
 
+<!-- COMPLIANCE: this wording is deliberate. The screens are factual data displays; investment advice is
+     rendered only under the SEBI (IA) process — agreement, risk profiling, suitability. Do not reintroduce
+     trade calls, entry/stop/target levels, or "ideas/setups/signals" framing on this public page. -->
 <div class="card" style="border-color:var(--warn)">
   <div class="card-b" style="font-size:13px;line-height:1.75;color:var(--ink-dim)">
-    <b style="color:var(--warn)">Educational research, not investment advice.</b>
-    myfinancial is not a SEBI-registered investment adviser or research analyst. These are mechanical screens over public data, not recommendations, and nothing here accounts for your circumstances, horizon or risk tolerance. Levels are computed from price history, not predictions. Do your own work, and size positions so that being wrong is survivable.
+    <b style="color:var(--warn)">Factual screens — not investment advice, research or a recommendation.</b>
+    These are mechanical screens over public exchange data. They account for no one's circumstances, horizon or risk tolerance, and no security named here is a recommendation to buy, sell or hold. myfinancial is the trade name of NITHIN P, a SEBI-registered Investment Adviser (INA000023162); investment advice is rendered only to clients, in writing, after risk profiling and a signed agreement — see the <a href="disclosures.html" style="text-decoration:underline">disclosures</a>. Levels shown anywhere on this page are computed from price history, not predictions. Past performance does not indicate future results.
   </div>
 </div>
 
 <div class="tabsbar">
-  <button class="tabbtn on" data-tab="quality">Long-term ideas</button>
-  <button class="tabbtn" data-tab="swing">Swing setups</button>
+  <button class="tabbtn on" data-tab="quality">Quality</button>
+  <button class="tabbtn" data-tab="swing">Pullbacks &amp; breakouts</button>
   <button class="tabbtn" data-tab="patterns">Chart patterns</button>
   <button class="tabbtn" data-tab="momentum">Momentum</button>
-  <button class="tabbtn" data-tab="income">Income &amp; hedging</button>
+  <button class="tabbtn" data-tab="income">Dividends &amp; hedging</button>
 </div>
 
 <div class="panel" data-panel="quality">
@@ -273,16 +276,16 @@ export function advisoryPage({ priceDate, stockCount, build = '' }) {
     <div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none">high return on capital, sensible leverage, not expensive against its own sub-sector, and trending up</div></div>
     <span class="chip" id="qualityCount"></span></div>
     <div class="scroll"><table id="qualityTbl"></table></div>
-    <div class="note">The screen: ROE and ROCE both at least 15%, net margin 8%+, liabilities under 1.5&times; equity, priced at or below the sub-sector median P/E, above the 200-day average, and at least &#8377;5 crore traded a day. Ranked by return on capital.</div>
+    <div class="note">The screen: ROE and ROCE both at least 15%, net margin 8%+, liabilities under 1.5&times; equity, priced at or below the sub-sector median P/E, above the 200-day average, and at least &#8377;5 crore traded a day. Listed alphabetically &mdash; a filter, not a ranking.</div>
   </div>
 </div>
 
 <div class="panel" data-panel="swing" hidden>
-  <div class="card"><div class="card-h"><div><h2>Swing setups</h2>
-    <div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none">pullbacks and breakouts in confirmed uptrends, with levels from the stock's own volatility</div></div>
+  <div class="card"><div class="card-h"><div><h2>Pullbacks &amp; breakouts</h2>
+    <div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none">pullbacks toward the 50-day and breakouts near the 52-week high, within confirmed uptrends &middot; alphabetical</div></div>
     <span class="chip" id="swingCount"></span></div>
     <div class="scroll"><table id="swingTbl"></table></div>
-    <div class="note">Entry, stop and target are derived from the 14-day Average True Range &mdash; the stop sits 1.5&times; ATR below entry and the target 3&times; ATR above, so every setup shown carries a 2:1 reward-to-risk by construction. A wide ATR means a wider stop and a smaller position, not a tighter stop.</div>
+    <div class="note">ATR(14) is the Average True Range &mdash; a factual measure of how much the share moves in a typical day, shown so the volatility of each name is visible. A screen describes what price has already done; nothing here is an instruction to enter, exit or place orders.</div>
   </div>
 </div>
 
@@ -309,11 +312,11 @@ export function advisoryPage({ priceDate, stockCount, build = '' }) {
 </div>
 
 <div class="panel" data-panel="momentum" hidden>
-  <div class="card"><div class="card-h"><div><h2>Relative-strength leaders</h2>
-    <div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none">strongest one-year performers still in a confirmed advance</div></div>
+  <div class="card"><div class="card-h"><div><h2>High relative strength</h2>
+    <div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none">one-year return percentile of 90 or above, still in a confirmed advance &middot; alphabetical</div></div>
     <span class="chip" id="momCount"></span></div>
     <div class="scroll"><table id="momTbl"></table></div>
-    <div class="note">RS rank is the percentile of one-year return against every listed company: 95 means only 5% of the market did better. Momentum persists on average and reverses violently in particular &mdash; these need stops more than conviction.</div>
+    <div class="note">RS rank is the percentile of one-year return against every listed company: 95 means only 5% of the market rose more. It is arithmetic on past prices &mdash; momentum persists on average and reverses violently in particular.</div>
   </div>
 </div>
 
@@ -322,7 +325,7 @@ export function advisoryPage({ priceDate, stockCount, build = '' }) {
     <div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none">yield backed by profits, summed from each company's own filed payouts</div></div>
     <span class="chip" id="incCount"></span></div>
     <div class="scroll"><table id="incTbl"></table></div>
-    <div class="note">Yield is the total cash dividend declared over the last twelve months divided by today's price. A very high yield usually means the price has fallen for a reason &mdash; check why before buying it for the income.</div>
+    <div class="note">Yield is the total cash dividend declared over the last twelve months divided by today's price. A very high yield usually means the price has fallen for a reason &mdash; understand why before reading the yield as income.</div>
   </div>
 
   <div class="card"><div class="card-h"><h2>Portfolio hedging</h2></div>
@@ -336,8 +339,8 @@ export function advisoryPage({ priceDate, stockCount, build = '' }) {
 </div>`;
 
   return shell({
-    title: "Advisory & Signals — rule-based ideas over every NSE company | myfinancial",
-    description: `Quality, value, swing and momentum screens over all ${stockCount} NSE-listed companies, rebuilt each market day from official exchange data. Every idea shows the rules it passed. Educational research, not investment advice.`,
+    title: "Market screens — rule-based scans over every NSE company | myfinancial",
+    description: `Quality, value and momentum screens over all ${stockCount} NSE-listed companies, rebuilt each market day from official exchange data. Every row shows the rules it passed. Factual data — not investment advice or a recommendation.`,
     body, active: "advisory",
     head: `<style>${MODULE_CSS}</style>`,
     bodyEnd: `<script type="module" src="js/advisory.js${build ? "?v=" + build : ""}"></script>`,

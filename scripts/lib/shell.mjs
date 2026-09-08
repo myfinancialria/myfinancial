@@ -114,9 +114,10 @@ const NAV = [
   ["screener", "screener.html", "Screener"],
   ["funds", "funds.html", "Mutual Funds"],
   ["planning", "planning.html", "Planning &amp; Tax"],
-  ["advisory", "advisory.html", "Advisory"],
+  ["advisory", "advisory.html", "Screens"],
   ["estate", "estate.html", "Will &amp; Vault"],
   ["brief", "brief.html", "Daily Brief"],
+  ["disclosures", "disclosures.html", "Disclosures"],
 ];
 
 /**
@@ -133,16 +134,17 @@ export function shell({ title, description, body, active = "", base = "", head =
 <link rel="stylesheet" href="${base}app.css">${head}
 </head><body>
 <nav class="site">
-<a class="wordmark" href="${base}index.html">my<b>financial</b></a>
+<a class="wordmark" href="${base}index.html"><b>my</b>financial</a>
 ${NAV.map(([id, href, label]) => `<a class="lk${active === id ? " on" : ""}" href="${base}${href}">${label}</a>`).join("\n")}
 <div class="spacer"></div>
 <button class="tt" title="Toggle light / dark" onclick="var r=document.documentElement,n=r.dataset.theme==='dark'?'light':'dark';r.dataset.theme=n;localStorage.setItem('myfin.theme',n)">&#9788;</button>
 </nav>
 <div class="wrap">${body}</div>
+<!-- Site-wide SEBI footer — keep identical on every page. BASL Member ID: replace [___] once allotted. -->
 <footer class="site"><div class="wrap">
-Educational research only &mdash; not investment advice under SEBI (Investment Advisers) Regulations, 2013. Investments are subject to market risks; read all scheme-related documents carefully.<br>
-Prices, volumes and delivery percentages are official NSE bhavcopy data. Mutual fund NAVs are official AMFI data; every return, risk and rolling figure is computed here from published NAV history. Company fundamentals are filed data. Past performance does not indicate future results.<br>
-<a href="${base}index.html">Home</a> &middot; <a href="https://github.com/myfinancialria/myfinancial" rel="noopener">Source</a>
+NITHIN P &middot; SEBI Registered Investment Adviser &middot; Registration No. INA000023162 &middot; Validity: Sep 07, 2026 &ndash; Perpetual &middot; BASL Member ID: [___] &middot; Registered Address: Krishna H, Thathamangalam, Palakkad, Kerala &ndash; 678102 &middot; Principal Officer: Nithin P &middot; <a href="mailto:nithinp90@gmail.com">nithinp90@gmail.com</a> &middot; <a href="tel:+919544927559">+91 95449 27559</a> &mdash; Registration granted by SEBI and certification from NISM in no way guarantee performance of the intermediary or provide any assurance of returns to investors. Investment in securities market are subject to market risks. Read all the related documents carefully before investing.<br>
+Prices, volumes and delivery percentages are official NSE bhavcopy data. Mutual fund NAVs are official AMFI data; every return, risk and rolling figure is computed here from published NAV history. Company fundamentals are filed data. Past performance does not indicate future results. Data on this website is factual information &mdash; not investment advice or a recommendation.<br>
+<a href="${base}disclosures.html">Disclosures</a> &middot; <a href="${base}disclosures.html#charter">Investor Charter</a> &middot; <a href="${base}disclosures.html#complaints">Complaints Data</a> &middot; <a href="https://scores.sebi.gov.in" rel="noopener">SCORES</a> &middot; <a href="https://smartodr.in" rel="noopener">ODR</a> &middot; <a href="${base}index.html">Home</a>
 </div></footer>${bodyEnd}
 </body></html>`;
 }

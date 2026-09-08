@@ -119,10 +119,10 @@ function stockPage(detail) {
     weekly: detail.weekly, weeklySma50: detail.weeklySma50, weeklySma200: detail.weeklySma200,
   }) : null;
   const stageNote = {
-    1: "Basing — the long-term average has flattened after a decline. This is where bottoms form, but also where things go nowhere for a long time.",
-    2: "Advancing — price is above a rising 30-week average. Weinstein's only buying stage.",
-    3: "Topping — the advance has stalled and the average is rolling over. Momentum is leaving.",
-    4: "Declining — price is below a falling 30-week average. Rallies here tend to fail.",
+    1: "Basing — the long-term average has flattened after a decline. In Weinstein's framework this is where bases form, and where prices can also drift for a long time.",
+    2: "Advancing — price is above a rising 30-week average. Weinstein's framework labels this the advancing stage. A stage describes the past, not a forecast.",
+    3: "Topping — the advance has stalled and the average is rolling over.",
+    4: "Declining — price is below a falling 30-week average.",
   }[m.stage];
 
   const stats = [
@@ -158,7 +158,7 @@ function stockPage(detail) {
   const holdCard = hd?.rows?.length ? `<div class="card"><div class="card-h"><h2>Who owns this company</h2><span class="chip ok">Filed · ${esc(hd.periods?.[0] || "")}</span></div>
 <div class="scroll"><table><thead><tr><th>Holder</th>${(hd.periods || []).slice(0, 5).map((p) => `<th class="num">${esc(p)}</th>`).join("")}</tr></thead>
 <tbody>${hd.rows.map((r) => `<tr><td><b>${esc(r.label)}</b></td>${(hd.periods || []).slice(0, 5).map((_, i) => `<td class="num">${r.values[i] === null || r.values[i] === undefined ? "—" : r.values[i] + "%"}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
-<div class="note">Promoters are the founding owners. A rising promoter stake usually signals confidence; a falling one is worth understanding before investing.</div></div>` : "";
+<div class="note">Promoters are the founding owners. Changes in their stake are factual filings — understand the reason behind a change before drawing any conclusion.</div></div>` : "";
 
   // Sub-sector comparison, built from the whole listed universe rather than a
   // supplied rival list — so it exists for every company, and every row links.
@@ -309,7 +309,9 @@ ${chartData ? `<script type="application/json" id="scData">${chartData.replace(/
 }
 
 // ------------------------------- fund detail --------------------------------
-const FUND_GROUPS = ["Returns", "Rolling returns", "Risk", "Ranking"];
+// No "Ranking" group and no stars on a registered adviser's website — category
+// ranks and quintile ratings of past returns read as recommendations.
+const FUND_GROUPS = ["Returns", "Rolling returns", "Risk"];
 
 function fundPage(d) {
   const series = d.navSeries || [];
@@ -321,7 +323,6 @@ function fundPage(d) {
     d.volatility != null ? ["Volatility", `${num(d.volatility, 1)}%`, "annualised, 3Y"] : null,
     d.sharpe != null ? ["Sharpe", num(d.sharpe), "return per unit of risk"] : null,
     d.maxDrawdownPct != null ? ["Worst fall", `${num(d.maxDrawdownPct, 1)}%`, "peak to trough, ever"] : null,
-    d.rank ? ["Rank", `${d.rank} / ${d.rankOf}`, "in its category"] : null,
   ].filter(Boolean);
 
   const roll = d.rolling3y;
@@ -329,18 +330,17 @@ function fundPage(d) {
 <div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none">every 3-year holding period in this scheme's history · ${roll.windows} windows</div></div></div>
 <div class="grid g4" style="padding:16px 18px">
 <div class="stat"><div class="k">Average</div><div class="v ${cls(roll.avg)}">${pct(roll.avg)}</div></div>
-<div class="stat"><div class="k">Worst</div><div class="v ${cls(roll.min)}">${pct(roll.min)}</div></div>
-<div class="stat"><div class="k">Best</div><div class="v ${cls(roll.max)}">${pct(roll.max)}</div></div>
-<div class="stat"><div class="k">Never lost money</div><div class="v">${num(roll.pctPositive, 0)}%</div></div>
+<div class="stat"><div class="k">Lowest</div><div class="v ${cls(roll.min)}">${pct(roll.min)}</div></div>
+<div class="stat"><div class="k">Highest</div><div class="v ${cls(roll.max)}">${pct(roll.max)}</div></div>
+<div class="stat"><div class="k">Windows ended positive</div><div class="v">${num(roll.pctPositive, 0)}%</div></div>
 </div>
-<div class="note">A single trailing return depends entirely on which day you happen to look. This measures every possible three-year hold instead: ${num(roll.pctPositive, 0)}% of them ended positive, ${num(roll.pctAbove12, 0)}% beat 12% a year, and the worst one returned ${pct(roll.min)}.</div></div>` : "";
+<div class="note">A single trailing return depends entirely on which day you happen to look. This measures every possible three-year hold in the recorded history instead: ${num(roll.pctPositive, 0)}% of them ended positive, ${num(roll.pctAbove12, 0)}% exceeded 12% a year, and the lowest returned ${pct(roll.min)}. Past performance does not indicate future results.</div></div>` : "";
 
   const body = `
 <div class="head">
   <div class="eyebrow">${esc(d.categoryGroup || "")}${d.category ? ` · ${esc(d.category)}` : ""}</div>
   <h1>${esc(d.name)}</h1>
-  <p class="sub">${esc(d.amc)} · Direct plan · Growth option · scheme code ${esc(d.code)}
-${d.stars ? ` · <span class="chip ok">${"★".repeat(d.stars)}</span>` : ""}${d.stale ? ' · <span class="chip" style="color:var(--warn);border-color:var(--warn)">wound up — NAV no longer updating</span>' : ""}</p>
+  <p class="sub">${esc(d.amc)} · Direct plan · Growth option · scheme code ${esc(d.code)}${d.stale ? ' · <span class="chip" style="color:var(--warn);border-color:var(--warn)">wound up — NAV no longer updating</span>' : ""}</p>
 </div>
 <div class="grid g4" style="margin-top:16px">
 ${stats.map(([k, v, s]) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div>${s ? `<div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none">${s}</div>` : ""}</div>`).join("")}
@@ -353,8 +353,8 @@ ${rollCard}
 <div class="grid g2">${FUND_GROUPS.map((g) => metricTable(FUND_FIELDS, d, g)).join("")}</div>
 <div class="card"><div class="card-h"><h2>What this means</h2></div><div class="card-b" style="color:var(--ink-dim);line-height:1.8;font-size:14px">
 <p style="margin-bottom:9px">This is a <b>Direct</b> plan: no distributor commission is deducted, so it costs less every year than the Regular plan of the very same portfolio. Over a couple of decades that gap compounds into a meaningful sum.</p>
-${d.volatility != null ? `<p style="margin-bottom:9px">Volatility of ${num(d.volatility, 1)}% means ${d.volatility > 18 ? "sharp swings are normal here — money you may need within three years does not belong in this fund" : d.volatility > 8 ? "moderate ups and downs are to be expected" : "the ride has been relatively smooth"}.</p>` : ""}
-${d.maxDrawdownPct != null ? `<p>At its worst, this scheme fell ${num(Math.abs(d.maxDrawdownPct), 1)}% from a previous peak${d.maxDrawdownDate ? `, bottoming in ${esc(d.maxDrawdownDate)}` : ""}. Ask yourself whether you would have held through that before you buy.</p>` : ""}
+${d.volatility != null ? `<p style="margin-bottom:9px">Volatility of ${num(d.volatility, 1)}% describes how widely yearly returns have swung around their average — ${d.volatility > 18 ? "sharp day-to-day moves have been normal in this scheme's history" : d.volatility > 8 ? "moderate ups and downs have been the norm" : "the recorded swings have been comparatively small"}.</p>` : ""}
+${d.maxDrawdownPct != null ? `<p>At its worst, this scheme fell ${num(Math.abs(d.maxDrawdownPct), 1)}% from a previous peak${d.maxDrawdownDate ? `, bottoming in ${esc(d.maxDrawdownDate)}` : ""}. Falls of that size are part of this scheme's recorded history.</p>` : ""}
 </div></div>
 <p class="sub" style="margin-top:24px"><a href="../screener.html" style="text-decoration:underline">← Screen every fund</a> · <a href="../funds.html" style="text-decoration:underline">All schemes</a></p>`;
 
@@ -498,11 +498,13 @@ fs.writeFileSync(path.join(OUT, "stocks.html"), indexPage({
 
 fs.writeFileSync(path.join(OUT, "funds.html"), indexPage({
   kind: "funds",
-  rows: fundRows.filter((r) => !r.stale).slice().sort((a, b) => (b.r3y ?? -99) - (a.r3y ?? -99)).map((r) => ({ ...r, _id: r.code })),
-  cols: [G("name"), G("category"), G("nav"), G("r1y"), G("r3y"), G("r5y"), G("volatility"), G("sharpe"), G("stars"), { key: "_id", label: "", unit: "" }],
+  // Alphabetical, deliberately: a return-sorted default order reads as a
+  // ranking — and this site belongs to a SEBI-registered Investment Adviser.
+  rows: fundRows.filter((r) => !r.stale).slice().sort((a, b) => String(a.name).localeCompare(String(b.name))).map((r) => ({ ...r, _id: r.code })),
+  cols: [G("name"), G("category"), G("nav"), G("r1y"), G("r3y"), G("r5y"), G("volatility"), G("sharpe"), { key: "_id", label: "", unit: "" }],
   title: "Every Direct-Growth mutual fund — NAV, returns & risk | myfinancial",
   heading: "Every mutual fund <em>scheme.</em>",
-  blurb: `All ${fundRows.filter((r) => !r.stale).length.toLocaleString("en-IN")} live Direct-Growth schemes with official AMFI NAVs dated ${funds.navDate}. Every return, volatility, Sharpe and drawdown figure is computed here from the scheme's own published NAV history.`,
+  blurb: `All ${fundRows.filter((r) => !r.stale).length.toLocaleString("en-IN")} live Direct-Growth schemes with official AMFI NAVs dated ${funds.navDate}, listed alphabetically — a directory, not a ranking. Every return, volatility, Sharpe and drawdown figure is computed here from the scheme's own published NAV history. Past performance does not indicate future results.`,
   asOf: `NAVs ${funds.navDate}`,
 }));
 

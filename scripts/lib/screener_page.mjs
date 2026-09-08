@@ -38,14 +38,14 @@ export const STOCK_PRESETS = [
     sort: { f: "pe", dir: 1 },
   },
   {
-    id: "momentum", name: "Momentum leaders",
-    why: "Top of the market on one-year relative strength, in a confirmed uptrend, and near their highs.",
+    id: "momentum", name: "High relative strength",
+    why: "One-year relative strength in the top 15% of the market (RS rank 85+), in a confirmed uptrend, and near their highs.",
     filters: [
       { f: "rsRank1y", op: ">=", a: 85 }, { f: "stage", op: "=", a: 2 },
       { f: "pctFrom52wHigh", op: ">=", a: -12 }, { f: "adx14", op: ">=", a: 20 },
       { f: "avgTurnoverCr", op: ">=", a: 5 },
     ],
-    sort: { f: "rsRank1y", dir: -1 },
+    sort: { f: "name", dir: 1 },
   },
   {
     id: "breakout", name: "Breaking out on volume",
@@ -91,7 +91,7 @@ export const STOCK_PRESETS = [
       { f: "nseTier", op: "in", a: ["Mid cap", "Small cap"] }, { f: "aboveSma200", op: "true" },
       { f: "ret3m", op: ">=", a: 10 }, { f: "avgTurnoverCr", op: ">=", a: 2 },
     ],
-    sort: { f: "ret3m", dir: -1 },
+    sort: { f: "name", dir: 1 },
   },
   {
     id: "squeeze", name: "Volatility squeeze",
@@ -103,10 +103,10 @@ export const STOCK_PRESETS = [
     sort: { f: "bbWidthPct", dir: 1 },
   },
   {
-    id: "stage4", name: "Stage 4 — avoid",
+    id: "stage4", name: "Stage 4 — declining",
     why: "Price below a falling 30-week average. Shown so you can check whether something you hold is here.",
     filters: [{ f: "stage", op: "=", a: 4 }, { f: "avgTurnoverCr", op: ">=", a: 3 }],
-    sort: { f: "ret1y", dir: 1 },
+    sort: { f: "name", dir: 1 },
   },
 ];
 
@@ -119,22 +119,22 @@ export const FUND_PRESETS = [
       { f: "rolling3yPctPositive", op: ">=", a: 95 }, { f: "ageYears", op: ">=", a: 5 },
       { f: "stale", op: "false" },
     ],
-    sort: { f: "rolling3yAvg", dir: -1 },
+    sort: { f: "name", dir: 1 },
   },
   {
-    id: "sharpe", name: "Best risk-adjusted",
-    why: "Highest return per unit of volatility over three years — the funds that did not make you suffer for the return.",
+    id: "sharpe", name: "High Sharpe (3Y)",
+    why: "A Sharpe ratio of at least 0.8 over three years — return per unit of volatility, computed from published NAV history.",
     filters: [{ f: "sharpe", op: ">=", a: 0.8 }, { f: "ageYears", op: ">=", a: 3 }, { f: "stale", op: "false" }],
-    sort: { f: "sharpe", dir: -1 },
+    sort: { f: "name", dir: 1 },
   },
   {
-    id: "topquartile", name: "Top quartile, 5 years",
-    why: "Schemes in the best quarter of their own category, with a five-year record to judge them on.",
+    id: "topquartile", name: "First quartile, 5 years",
+    why: "Schemes whose five-year record sits in the first quartile of their own category — a fact about the past, not a forecast.",
     filters: [
       { f: "quartile", op: "=", a: 1 }, { f: "r5y", op: ">=", a: 12 },
       { f: "ageYears", op: ">=", a: 5 }, { f: "stale", op: "false" },
     ],
-    sort: { f: "r5y", dir: -1 },
+    sort: { f: "name", dir: 1 },
   },
   {
     id: "lowvol", name: "Steady, low volatility",
@@ -143,19 +143,19 @@ export const FUND_PRESETS = [
       { f: "volatility", op: "<=", a: 8 }, { f: "r3y", op: ">=", a: 7 },
       { f: "maxDrawdownPct", op: ">=", a: -12 }, { f: "stale", op: "false" },
     ],
-    sort: { f: "r3y", dir: -1 },
+    sort: { f: "name", dir: 1 },
   },
   {
     id: "index", name: "Index funds",
-    why: "The cheapest way to own the market. Compare tracking against each other rather than chasing the leader.",
+    why: "The lowest-cost way to own the market. Compare tracking difference against each other rather than by past return.",
     filters: [{ f: "categoryGroup", op: "in", a: ["Index / ETF / FoF"] }, { f: "stale", op: "false" }],
-    sort: { f: "r5y", dir: -1 },
+    sort: { f: "name", dir: 1 },
   },
   {
     id: "elss", name: "ELSS tax savers",
-    why: "Section 80C schemes with a three-year lock-in, ranked on how they actually did over rolling three-year holds.",
+    why: "Section 80C schemes with a three-year lock-in, shown with their record over rolling three-year holds.",
     filters: [{ f: "category", op: "contains", a: "ELSS" }, { f: "stale", op: "false" }],
-    sort: { f: "rolling3yAvg", dir: -1 },
+    sort: { f: "name", dir: 1 },
   },
   {
     id: "smallcapf", name: "Small & mid cap",
@@ -164,7 +164,7 @@ export const FUND_PRESETS = [
       { f: "category", op: "contains", a: "Cap" }, { f: "volatility", op: ">=", a: 14 },
       { f: "ageYears", op: ">=", a: 5 }, { f: "stale", op: "false" },
     ],
-    sort: { f: "rolling3yMin", dir: -1 },
+    sort: { f: "name", dir: 1 },
   },
   {
     id: "debt", name: "Debt — parked money",
@@ -173,7 +173,7 @@ export const FUND_PRESETS = [
       { f: "categoryGroup", op: "in", a: ["Debt"] }, { f: "volatility", op: "<=", a: 3 },
       { f: "r1y", op: ">=", a: 5 }, { f: "stale", op: "false" },
     ],
-    sort: { f: "r1y", dir: -1 },
+    sort: { f: "name", dir: 1 },
   },
 ];
 

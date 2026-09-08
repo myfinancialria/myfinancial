@@ -113,10 +113,10 @@ function chart(h) {
 
   // ------------------- price levels, labelled in the gutter -----------------
   const wanted = [
-    { v: h.target2, colour: "var(--up)", text: "TARGET", sub: inr(h.target2), dash: "6 4" },
-    { v: h.entry, colour: "var(--ink)", text: "ENTRY", sub: inr(h.entry), dash: "" },
+    { v: h.target2, colour: "var(--up)", text: "MEASURED MOVE", sub: inr(h.target2), dash: "6 4" },
+    { v: h.entry, colour: "var(--ink)", text: "BREAKOUT", sub: inr(h.entry), dash: "" },
     { v: h.neckline, colour: "var(--accent)", text: "NECKLINE", sub: inr(h.neckline), dash: "2 3" },
-    { v: h.stop, colour: "var(--down)", text: "EXIT / STOP", sub: inr(h.stop), dash: "6 4" },
+    { v: h.stop, colour: "var(--down)", text: "INVALIDATION", sub: inr(h.stop), dash: "6 4" },
   ].filter((l) => typeof l.v === "number" && Y(l.v) >= -4 && Y(l.v) <= PH + 4)
     .map((l) => ({ ...l, trueY: Y(l.v), y: Y(l.v) }));
 
@@ -289,10 +289,9 @@ const COLS = [
   { key: "pattern", label: "Pattern", get: (h) => h.patternLabel },
   { key: "status", label: "Stage", get: (h) => h.status },
   { key: "price", label: "Price", num: true, get: (h) => h.company.price },
-  { key: "entry", label: "Entry", num: true, get: (h) => h.entry },
-  { key: "stop", label: "Exit / stop", num: true, get: (h) => h.stop },
-  { key: "target", label: "Target", num: true, get: (h) => h.target2 },
-  { key: "rr", label: "R:R", num: true, get: (h) => h.riskReward },
+  { key: "entry", label: "Breakout", num: true, get: (h) => h.entry },
+  { key: "stop", label: "Invalidation", num: true, get: (h) => h.stop },
+  { key: "target", label: "Measured move", num: true, get: (h) => h.target2 },
   { key: "score", label: "Confirm", num: true, get: (h) => h.confirm.score },
   { key: "turnover", label: "₹ cr/day", num: true, get: (h) => h.company.avgTurnoverCr },
 ];
@@ -312,7 +311,6 @@ function renderTable() {
       + '<td class="num">' + inr(h.entry) + "</td>"
       + '<td class="num down">' + inr(h.stop) + "</td>"
       + '<td class="num up">' + inr(h.target2) + "</td>"
-      + '<td class="num">' + n2(h.riskReward, 1) + "</td>"
       + '<td class="num"><span class="score s' + (h.confirm.score >= 80 ? "3" : h.confirm.score >= 50 ? "2" : "1") + '">' + h.confirm.score + "</span></td>"
       + '<td class="num">' + n2(h.company.avgTurnoverCr, 1) + "</td></tr>"
       + (on ? '<tr class="drow"><td colspan="' + COLS.length + '"><div id="patDetail"></div></td></tr>' : "");
@@ -396,26 +394,25 @@ function paintDetail() {
     + (sub ? '<div class="k" style="margin-top:3px;letter-spacing:.05em;text-transform:none">' + sub + "</div>" : "") + "</div>";
 
   el.innerHTML =
-    // ---------------- the trade, stated plainly and separately ----------------
+    // -------- the pattern's geometry, described — not a trade plan -----------
     '<div class="plan">'
-    + '<div class="plan-i"><div class="plan-k">Entry</div><div class="plan-v">' + inr(h.entry) + "</div>"
-    + '<div class="plan-s">' + (h.status === "FORMING" ? "on a close through this level" : "level already taken out") + "</div></div>"
-    + '<div class="plan-i down"><div class="plan-k">Exit / stop-loss</div><div class="plan-v">' + inr(h.stop) + "</div>"
-    + '<div class="plan-s">risk ' + n2(riskPct, 1) + "% from entry</div></div>"
-    + '<div class="plan-i up"><div class="plan-k">Target</div><div class="plan-v">' + inr(h.target2) + "</div>"
-    + '<div class="plan-s">reward ' + n2(rewardPct, 1) + "% · first stop " + inr(h.target1) + "</div></div>"
-    + '<div class="plan-i"><div class="plan-k">Reward : risk</div><div class="plan-v">' + n2(h.riskReward, 1) + " : 1</div>"
-    + '<div class="plan-s">at the pattern entry · confirmation ' + h.confirm.score + "/100</div></div>"
+    + '<div class="plan-i"><div class="plan-k">Breakout level</div><div class="plan-v">' + inr(h.entry) + "</div>"
+    + '<div class="plan-s">' + (h.status === "FORMING" ? "the pattern completes on a close through this level" : "level already taken out") + "</div></div>"
+    + '<div class="plan-i down"><div class="plan-k">Invalidation</div><div class="plan-v">' + inr(h.stop) + "</div>"
+    + '<div class="plan-s">' + n2(riskPct, 1) + "% from the breakout level — the textbook shape fails here</div></div>"
+    + '<div class="plan-i up"><div class="plan-k">Measured move</div><div class="plan-v">' + inr(h.target2) + "</div>"
+    + '<div class="plan-s">' + n2(rewardPct, 1) + "% projection · interim objective " + inr(h.target1) + "</div></div>"
+    + '<div class="plan-i"><div class="plan-k">Confirmation</div><div class="plan-v">' + h.confirm.score + "/100</div>"
+    + '<div class="plan-s">volume and moving averages vs pattern direction</div></div>'
     + "</div>"
 
     + (triggered
       ? '<div class="alert' + (rrNow !== null && rrNow < 1 ? " bad" : "") + '">'
         + "<b>This pattern has already " + (h.bias === "BULLISH" ? "broken out" : "broken down") + ".</b> "
-        + "Price is " + inr(px) + ", past the " + inr(h.entry) + " entry. Buying here means risking "
-        + inr(Math.abs(riskNow)) + " a share to make " + inr(Math.abs(rewardNow))
-        + (rrNow !== null ? ", a reward-to-risk of <b>" + n2(rrNow, 1) + " : 1</b> from today's price rather than the "
-          + n2(h.riskReward, 1) + " : 1 the pattern offered at the neckline" : "")
-        + (rrNow !== null && rrNow < 1 ? " — less than one rupee of reward per rupee risked, which is a chase, not a setup." : ".")
+        + "Price is " + inr(px) + ", past the " + inr(h.entry) + " breakout level: "
+        + inr(Math.abs(rewardNow)) + " a share remains to the measured move, against " + inr(Math.abs(riskNow))
+        + " back to the invalidation level"
+        + (rrNow !== null && rrNow < 1 ? " — most of the textbook move is already behind the price." : ".")
         + "</div>"
       : "")
 

@@ -37,7 +37,7 @@ const SCREENS: Screen[] = [
       && (r.liabilitiesToEquity === null || r.liabilitiesToEquity <= 1.5)
       && r.peVsPeers !== null && r.peVsPeers <= 0
       && r.aboveSma200 === true && r.avgTurnoverCr >= 5,
-    ).sort((a, b) => b.roce - a.roce).slice(0, 40),
+    ).sort((a, b) => String(a.name).localeCompare(String(b.name))).slice(0, 40),
     cols: [
       { label: "ROCE", get: (r) => plainPct(r.roce), sort: (r) => r.roce },
       { label: "ROE", get: (r) => plainPct(r.roe), sort: (r) => r.roe },
@@ -52,9 +52,9 @@ const SCREENS: Screen[] = [
   },
   {
     id: "swing",
-    label: "Swing setups",
+    label: "Pullbacks & breakouts",
     blurb:
-      "Two setups, both needing a confirmed Stage 2 advance and real liquidity: a pullback toward the 50-day with RSI reset, or a breakout pressing the 52-week high on expanding volume. Levels are scaled to each share's own ATR, so the risk fits how much that stock actually moves.",
+      "Two conditions, both needing a confirmed Stage 2 advance and real liquidity: a pullback toward the 50-day with RSI reset, or a breakout pressing the 52-week high on expanding volume. A factual filter, alphabetical — no entry, stop or target levels are published here: ATR(14) is shown only as a measure of how much each share moves in a typical day.",
     rows: (all) => {
       const base = all.filter((r) => r.stage === 2 && r.avgTurnoverCr >= 5 && r.atr14 > 0 && r.adx14 >= 18);
       const out: Row[] = [];
@@ -63,31 +63,30 @@ const SCREENS: Screen[] = [
         if (isNum(r.pctFromSma50) && r.pctFromSma50 >= -6 && r.pctFromSma50 <= 2 && r.rsi14 >= 38 && r.rsi14 <= 58) kind = "Pullback to the 50-day";
         else if (r.pctFrom52wHigh >= -3 && r.volumeRatio >= 1.5) kind = "Breakout on volume";
         if (!kind) continue;
-        const entry = r.price, stop = entry - 1.5 * r.atr14, target = entry + 3 * r.atr14;
-        out.push({ ...r, kind, entry, stop, target, riskPct: ((entry - stop) / entry) * 100 });
+        out.push({ ...r, kind });
       }
-      return out.sort((a, b) => b.rsRank1y - a.rsRank1y).slice(0, 40);
+      return out.sort((a, b) => String(a.name).localeCompare(String(b.name))).slice(0, 40);
     },
     cols: [
-      { label: "Setup", get: (r) => r.kind },
-      { label: "Entry", get: (r) => inr(r.entry), sort: (r) => r.entry },
-      { label: "Stop", get: (r) => inr(r.stop), sort: (r) => r.stop },
-      { label: "Target", get: (r) => inr(r.target), sort: (r) => r.target },
-      { label: "Risk", get: (r) => plainPct(r.riskPct), sort: (r) => r.riskPct },
-      { label: "R:R", get: () => "2.0" },
+      { label: "Condition", get: (r) => r.kind },
+      { label: "Close", get: (r) => inr(r.price), sort: (r) => r.price },
+      { label: "ATR (14)", get: (r) => inr(r.atr14), sort: (r) => r.atr14 },
+      { label: "vs 50-DMA", get: (r) => pct(r.pctFromSma50), sort: (r) => r.pctFromSma50, tone: (r) => r.pctFromSma50 },
+      { label: "From 52w high", get: (r) => pct(r.pctFrom52wHigh), sort: (r) => r.pctFrom52wHigh, tone: (r) => r.pctFrom52wHigh },
+      { label: "Vol vs 50d", get: (r) => `${nf(r.volumeRatio, 1)}×`, sort: (r) => r.volumeRatio },
       { label: "RSI", get: (r) => nf(r.rsi14, 0), sort: (r) => r.rsi14 },
       { label: "ADX", get: (r) => nf(r.adx14, 0), sort: (r) => r.adx14 },
     ],
-    empty: "No setups qualify today.",
+    empty: "No matches today.",
   },
   {
     id: "momentum",
-    label: "Momentum leaders",
+    label: "High relative strength",
     blurb:
       "The strongest tenth of the market by one-year relative strength, still in a Stage 2 advance and within 15% of its own 52-week high. Delivery percentage is shown because leadership backed by delivery is a different thing from leadership backed by intraday churn.",
     rows: (all) => all.filter((r) =>
       r.rsRank1y >= 90 && r.stage === 2 && r.avgTurnoverCr >= 5 && r.pctFrom52wHigh >= -15,
-    ).sort((a, b) => b.rsRank1y - a.rsRank1y).slice(0, 40),
+    ).sort((a, b) => String(a.name).localeCompare(String(b.name))).slice(0, 40),
     cols: [
       { label: "RS rank", get: (r) => nf(r.rsRank1y, 0), sort: (r) => r.rsRank1y },
       { label: "1-year", get: (r) => pct(r.ret1y), sort: (r) => r.ret1y, tone: (r) => r.ret1y },
@@ -97,7 +96,7 @@ const SCREENS: Screen[] = [
       { label: "Delivery", get: (r) => plainPct(r.avgDeliveryPct20, 0), sort: (r) => r.avgDeliveryPct20 },
       { label: "Turnover", get: (r) => `₹${nf(r.avgTurnoverCr, 0)} cr`, sort: (r) => r.avgTurnoverCr },
     ],
-    empty: "No leaders qualify today.",
+    empty: "No matches today.",
   },
   {
     id: "income",
@@ -106,7 +105,7 @@ const SCREENS: Screen[] = [
       "Yield above 2% from companies that actually earn it: a return on equity of at least 10%, a positive and unstretched P/E, and enough turnover to get out of. Payout ratio is shown so you can see whether the dividend is covered.",
     rows: (all) => all.filter((r) =>
       r.dividendYieldPct >= 2 && r.roe >= 10 && r.pe > 0 && r.pe <= 30 && r.avgTurnoverCr >= 2,
-    ).sort((a, b) => b.dividendYieldPct - a.dividendYieldPct).slice(0, 40),
+    ).sort((a, b) => String(a.name).localeCompare(String(b.name))).slice(0, 40),
     cols: [
       { label: "Yield", get: (r) => plainPct(r.dividendYieldPct, 2), sort: (r) => r.dividendYieldPct },
       { label: "Dividend/share", get: (r) => inr(r.dividendPerShare), sort: (r) => r.dividendPerShare },
@@ -284,7 +283,7 @@ export default function Advisory() {
     <>
       <section className="pt-12 pb-4">
         <Reveal>
-          <Label className="mb-3">Advisory &amp; signals</Label>
+          <Label className="mb-3">Market screens</Label>
           <h1 className="text-[clamp(1.9rem,4.2vw,3rem)] font-extrabold leading-[1.03] tracking-[-0.04em]">
             Rules, run over the <em className="font-serif font-normal italic tracking-tight">whole market</em>.
           </h1>
@@ -322,10 +321,12 @@ export default function Advisory() {
           </div>
 
           <p className="mt-6 max-w-[80ch] text-[11.5px] leading-relaxed text-ink-faint">
-            These are screens, not recommendations. A rule that selects well over one market regime can select
-            badly over the next, and none of this accounts for your tax position, your existing holdings or what
-            you need the money for. Educational research only — not investment advice under SEBI (Investment
-            Advisers) Regulations, 2013.
+            These are factual screens, not investment advice, research or recommendations. A rule that selects
+            well over one market regime can select badly over the next, and none of this accounts for your tax
+            position, your existing holdings or what you need the money for. myfinancial is the trade name of
+            NITHIN P, a SEBI-registered Investment Adviser (INA000023162); investment advice is rendered only to
+            clients, in writing, after risk profiling and a signed agreement. Past performance does not indicate
+            future results.
           </p>
         </>
       )}

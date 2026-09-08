@@ -189,12 +189,11 @@ export const FUND_FIELDS = [
   { key: "maxDrawdown3yPct", label: "Max drawdown (3Y)", group: "Risk", unit: "%", dir: 1, type: "num" },
   { key: "currentDrawdownPct", label: "Below its peak", group: "Risk", unit: "%", dir: 1, type: "num" },
 
-  { key: "stars", label: "Stars", group: "Ranking", unit: "n", dir: 1, type: "num", col: true, help: "5 = top fifth of its own category on 3-year CAGR." },
-  { key: "rank", label: "Rank in category", group: "Ranking", unit: "n", dir: -1, type: "num", col: true },
-  { key: "percentile", label: "Percentile", group: "Ranking", unit: "n", dir: -1, type: "num", help: "Lower is better: 5 means top 5% of the category." },
-  { key: "quartile", label: "Quartile", group: "Ranking", unit: "n", dir: -1, type: "num" },
-  { key: "sharperank", label: "Sharpe rank", group: "Ranking", unit: "n", dir: -1, type: "num" },
-  { key: "stale", label: "Wound up", group: "Ranking", type: "bool", dir: -1, help: "The NAV stopped updating — the scheme is no longer investable." },
+  { key: "rank", label: "Rank in category", group: "Category record", unit: "n", dir: -1, type: "num", col: true },
+  { key: "percentile", label: "Percentile", group: "Category record", unit: "n", dir: -1, type: "num", help: "Lower is better: 5 means top 5% of the category." },
+  { key: "quartile", label: "Quartile", group: "Category record", unit: "n", dir: -1, type: "num" },
+  { key: "sharperank", label: "Sharpe rank", group: "Category record", unit: "n", dir: -1, type: "num" },
+  { key: "stale", label: "Wound up", group: "Category record", type: "bool", dir: -1, help: "The NAV stopped updating — the scheme is no longer investable." },
 ];
 
 export const stockKeys = () => STOCK_FIELDS.map((f) => f.key);

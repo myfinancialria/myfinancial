@@ -113,8 +113,6 @@ export default function Fund() {
               <h1 className="text-[clamp(1.7rem,3.6vw,2.6rem)] font-extrabold leading-[1.05] tracking-[-0.04em]">{row.name}</h1>
               <div className="mt-2.5 flex flex-wrap items-center gap-2">
                 <Chip tone="accent">{row.amc}</Chip>
-                {row.stars ? <Chip tone="warn">{"★".repeat(row.stars)}</Chip> : null}
-                {row.quartile ? <Chip>Q{row.quartile} in category</Chip> : null}
                 {row.stale && <Chip tone="down">NAV stale</Chip>}
                 <a href={staticFundUrl(String(row.code))}
                   className="font-mono text-[10px] uppercase tracking-[0.1em] text-ink-faint underline hover:text-ink">

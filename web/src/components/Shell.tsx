@@ -109,11 +109,21 @@ export default function Shell({ children, asOf }: { children: ReactNode; asOf?: 
             <a href={siteUrl("brief.html")} className="underline transition-colors hover:text-ink">Daily brief</a>
             <a href={siteUrl("stocks.html")} className="underline transition-colors hover:text-ink">Company reports</a>
             <a href={siteUrl("funds.html")} className="underline transition-colors hover:text-ink">Scheme reports</a>
-            <a href="https://github.com/myfinancialria/myfinancial" rel="noopener" className="underline transition-colors hover:text-ink">Source</a>
+            <a href={siteUrl("disclosures.html")} className="underline transition-colors hover:text-ink">Disclosures</a>
+            <a href={siteUrl("disclosures.html#charter")} className="underline transition-colors hover:text-ink">Investor Charter</a>
+            <a href={siteUrl("disclosures.html#complaints")} className="underline transition-colors hover:text-ink">Complaints Data</a>
+            <a href="https://scores.sebi.gov.in" rel="noopener" className="underline transition-colors hover:text-ink">SCORES</a>
+            <a href="https://smartodr.in" rel="noopener" className="underline transition-colors hover:text-ink">ODR</a>
           </div>
-          Educational research only — not investment advice under SEBI (Investment Advisers) Regulations, 2013.
+          {/* Site-wide SEBI footer — keep identical on every page. BASL Member ID: replace [___] once allotted. */}
+          NITHIN P · SEBI Registered Investment Adviser · Registration No. INA000023162 · Validity: Sep 07, 2026 – Perpetual ·
+          BASL Member ID: [___] · Registered Address: Krishna H, Thathamangalam, Palakkad, Kerala – 678102 · Principal Officer:
+          Nithin P · nithinp90@gmail.com · +91 95449 27559 — Registration granted by SEBI and certification from NISM in no way
+          guarantee performance of the intermediary or provide any assurance of returns to investors. Investment in securities
+          market are subject to market risks. Read all the related documents carefully before investing.
           Prices, volumes and delivery percentages are official NSE bhavcopy data; mutual fund NAVs are official AMFI data.
-          Every return, ratio and risk figure is computed from that published data. Past performance does not indicate future results.
+          Every return, ratio and risk figure is computed from that published data. Past performance does not indicate future
+          results — factual data, not investment advice or a recommendation.
         </div>
       </footer>
     </div>

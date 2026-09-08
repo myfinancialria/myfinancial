@@ -128,6 +128,7 @@ Company fundamentals are real filed data via the Upstox Company Fundamentals API
 export function buildHome() {
   const home = path.join(ROOT, "public", "home.html");
   if (!fs.existsSync(home)) return false;
+  fs.mkdirSync(OUT, { recursive: true });
   fs.copyFileSync(home, path.join(OUT, "index.html"));
   const disclosures = path.join(ROOT, "public", "disclosures.html");
   if (fs.existsSync(disclosures)) fs.copyFileSync(disclosures, path.join(OUT, "disclosures.html"));
