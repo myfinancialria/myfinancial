@@ -117,8 +117,7 @@ export default function Shell({ children, asOf }: { children: ReactNode; asOf?: 
           </div>
           {/* Site-wide SEBI footer — keep identical on every page. BASL Member ID: replace [___] once allotted. */}
           NITHIN P · SEBI Registered Investment Adviser · Registration No. INA000023162 · Validity: Sep 07, 2026 – Perpetual ·
-          BASL Member ID: [___] · Registered Address: Krishna H, Thathamangalam, Palakkad, Kerala – 678102 · Principal Officer:
-          Nithin P · nithinp90@gmail.com · +91 95449 27559 — Registration granted by SEBI and certification from NISM in no way
+          BASL Member ID: [___] · Principal Officer: Nithin P · info@myfinancial.in — Registration granted by SEBI and certification from NISM in no way
           guarantee performance of the intermediary or provide any assurance of returns to investors. Investment in securities
           market are subject to market risks. Read all the related documents carefully before investing.
           Prices, volumes and delivery percentages are official NSE bhavcopy data; mutual fund NAVs are official AMFI data.
