@@ -8,7 +8,11 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='black'/><text x='50' y='72' font-size='62' text-anchor='middle' fill='white' font-family='Georgia'>m</text></svg>" />
 <script>
 if (document.hidden) document.documentElement.classList.add("qa-still"); /* background-tab loads render settled */
-document.documentElement.dataset.theme = localStorage.getItem("myfin.theme") === "dark" ? "dark" : "light";
+/* Persist the resolved theme so the embedded platform (same origin, same
+   localStorage key) opens in the same light/dark mode as this page. */
+const _t = localStorage.getItem("myfin.theme") === "dark" ? "dark" : "light";
+document.documentElement.dataset.theme = _t;
+try { localStorage.setItem("myfin.theme", _t); } catch { /* private mode */ }
 </script>
 <script type="application/ld+json">
 {
@@ -176,6 +180,20 @@ h2 em { font-family: var(--serif); font-weight: 400; font-style: italic; }
 .step h3 em { font-family: var(--serif); font-weight: 400; }
 .step p { color: var(--ink-dim); font-size: 14px; line-height: 1.75; }
 
+/* --------------------------- platform embed ------------------------------ */
+.app-embed { border: 1px solid var(--line-2); background: var(--paper-2); overflow: hidden; }
+.app-bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.app-dot { width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--line-2); flex: none; }
+.app-url { margin-left: 10px; flex: 1; max-width: 420px; border: 1px solid var(--line); padding: 5px 14px; font-family: var(--mono); font-size: 11px; color: var(--ink-faint); letter-spacing: .06em; white-space: nowrap; overflow: hidden; }
+.app-open { margin-left: auto; font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); white-space: nowrap; }
+.app-open:hover { color: var(--ink); }
+.app-embed iframe { display: block; width: 100%; height: min(880px, 86vh); border: 0; background: var(--paper); }
+.app-links { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 8px 24px; font-family: var(--mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; }
+.app-links a { color: var(--ink-dim); text-decoration: underline; text-underline-offset: 4px; transition: color .25s; }
+.app-links a:hover { color: var(--ink); }
+.app-note { margin-top: 14px; color: var(--ink-faint); font-size: 12px; line-height: 1.75; max-width: 90ch; }
+@media (max-width: 720px) { .app-embed iframe { height: 78vh; } .app-url { display: none; } }
+
 /* ----------------------------- personas --------------------------------- */
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); }
 .half { background: var(--paper); padding: clamp(34px, 4.4vw, 64px); position: relative; overflow: hidden; min-height: 420px; }
@@ -271,7 +289,7 @@ footer { border-top: 1px solid var(--line); padding: 54px clamp(20px, 4vw, 56px)
 <nav>
   <a class="wordmark" href="index.html"><b>my</b>financial</a>
   <div class="nav-links">
-    <a href="#services">Services</a><a href="#approach">Approach</a><a href="#fees">Fees</a><a href="disclosures.html">Disclosures</a><a href="#contact">Contact</a>
+    <a href="#services">Services</a><a href="#approach">Approach</a><a href="#platform">Platform</a><a href="#fees">Fees</a><a href="disclosures.html">Disclosures</a><a href="#contact">Contact</a>
   </div>
   <div style="display:flex; gap:12px; align-items:center">
     <button id="themeToggle" class="tbtn" title="Toggle light / dark">☀︎</button>
@@ -418,6 +436,33 @@ footer { border-top: 1px solid var(--line); padding: 54px clamp(20px, 4vw, 56px)
         <p>Scheduled reviews, rebalancing advice and updates as regulations or life change. Records of advice and interactions are maintained as the regulations require.</p>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ============================== PLATFORM ============================== -->
+<section id="platform" style="padding-top: 40px">
+  <div class="shell">
+    <div class="sec-head">
+      <div class="reveal"><div class="sec-label">The platform · live</div>
+        <h2>The research platform, <em>running live.</em></h2></div>
+      <p class="sec-side reveal" style="--d:.15s">Screeners, company and fund data, and daily briefs — factual market data computed from official sources and rebuilt every market day. Use it right here, or open it full screen.</p>
+    </div>
+    <div class="app-embed reveal">
+      <div class="app-bar">
+        <span class="app-dot"></span><span class="app-dot"></span><span class="app-dot"></span>
+        <span class="app-url">myfinancial · live platform</span>
+        <a class="app-open" href="app/" target="_blank" rel="noopener">Open full screen →</a>
+      </div>
+      <iframe src="app/" title="myfinancial — live platform" loading="lazy"></iframe>
+    </div>
+    <div class="app-links reveal" style="--d:.1s">
+      <a href="screener.html">Screener</a>
+      <a href="stocks.html">Companies</a>
+      <a href="funds.html">Mutual Funds</a>
+      <a href="brief.html">Daily Brief</a>
+      <a href="app/insights" rel="noopener">Insights</a>
+    </div>
+    <p class="app-note reveal" style="--d:.15s">Everything in the platform is factual market data with past-performance labelling — not investment advice or a recommendation. Investment advice is rendered only under the advisory engagement described above.</p>
   </div>
 </section>
 
