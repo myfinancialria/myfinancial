@@ -78,19 +78,19 @@ nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; display: flex; a
 /* ------------------------------- hero ----------------------------------- */
 .hero { position: relative; min-height: 100vh; display: flex; flex-direction: column; justify-content: center;
   padding: 150px clamp(20px, 4vw, 56px) 90px; }
-.hero-art { position: absolute; inset: 0; overflow: hidden; z-index: -1; }
+.hero-art { position: absolute; inset: 0; overflow: hidden; z-index: -1; pointer-events: none; }
 .hero-art svg { position: absolute; right: -4%; bottom: -6%; width: min(1080px, 96vw); opacity: .8; }
 .art-main { stroke: var(--ink); }
 .art-soft { stroke: var(--line-2); }
 .art-ghost { stroke: var(--line); }
 .art-dot { fill: var(--ink); }
-.hero-grid { position: absolute; inset: 0;
+.hero-grid { position: absolute; inset: 0; pointer-events: none; z-index: -1;
   background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
   background-size: 72px 72px; mask-image: radial-gradient(ellipse 90% 70% at 30% 40%, black 0%, transparent 70%); opacity: .5; }
 .eyebrow { display: inline-flex; align-items: center; gap: 12px; font-family: var(--mono); font-size: 11.5px; letter-spacing: .3em;
   text-transform: uppercase; color: var(--ink-dim); margin-bottom: 30px; }
 .eyebrow::before { content: ""; width: 44px; height: 1px; background: var(--ink-dim); flex: none; }
-h1 { font-size: clamp(38px, 4.6vw, 74px); line-height: .98; letter-spacing: -.045em; font-weight: 800; max-width: 12ch; }
+h1 { font-size: clamp(34px, 4.1vw, 64px); line-height: .98; letter-spacing: -.045em; font-weight: 800; max-width: 12ch; }
 h1 .w { display: inline-block; overflow: hidden; vertical-align: bottom; }
 h1 .w > span { display: inline-block; transform: translateY(110%); animation: rise 1s var(--ease) forwards; }
 h1 em { font-family: var(--serif); font-weight: 400; font-style: italic; letter-spacing: -.02em; }
@@ -181,8 +181,8 @@ h2 em { font-family: var(--serif); font-weight: 400; font-style: italic; }
 .step p { color: var(--ink-dim); font-size: 14px; line-height: 1.75; }
 
 /* ------------------- live platform, embedded in the hero ------------------ */
-.hero-cols { display: grid; grid-template-columns: minmax(0, .86fr) minmax(0, 1.14fr); gap: clamp(26px, 3.4vw, 54px); align-items: center; width: 100%; }
-.hero-app { min-width: 0; animation: appIn 1.1s .45s var(--ease) backwards; }
+.hero-cols { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, .76fr) minmax(0, 1.24fr); gap: clamp(24px, 3vw, 48px); align-items: center; width: 100%; }
+.hero-app { min-width: 0; animation: appIn 1.1s .45s var(--ease) backwards; margin-right: calc(-1 * clamp(0px, 1.6vw, 30px)); }
 @keyframes appIn { from { opacity: 0; transform: translateY(26px); } }
 .app-embed { border: 1px solid var(--line-2); background: var(--paper-2); overflow: hidden; box-shadow: 0 40px 90px -50px rgba(0,0,0,.5); }
 .app-bar { display: flex; align-items: center; gap: 8px; padding: 11px 15px; border-bottom: 1px solid var(--line); }
@@ -190,11 +190,15 @@ h2 em { font-family: var(--serif); font-weight: 400; font-style: italic; }
 .app-url { margin-left: 10px; flex: 1; max-width: 340px; border: 1px solid var(--line); padding: 4px 14px; font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); letter-spacing: .06em; white-space: nowrap; overflow: hidden; }
 .app-open { margin-left: auto; font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; white-space: nowrap;
   background: var(--inv-bg); color: var(--inv-fg); border: 1px solid var(--inv-bg); padding: 7px 14px; font-weight: 700;
-  transition: background .25s var(--ease), color .25s var(--ease); }
-.app-open:hover { background: transparent; color: var(--ink); }
+  animation: blinkBtn 1.5s ease-in-out infinite; }
+@keyframes blinkBtn {
+  0%, 100% { background: var(--inv-bg); color: var(--inv-fg); }
+  50% { background: transparent; color: var(--ink); }
+}
+.app-open:hover { animation-play-state: paused; background: var(--inv-bg); color: var(--inv-fg); }
 /* The iframe renders at ~1.67x the column width and is scaled back down, so the
    embed previews the platform's full desktop layout, not its narrow one. */
-.app-frame { height: clamp(500px, 68vh, 800px); overflow: hidden; background: var(--paper); }
+.app-frame { height: clamp(540px, 76vh, 880px); overflow: hidden; background: var(--paper); }
 .app-frame iframe { display: block; width: 125%; height: 125%; border: 0; transform: scale(.8); transform-origin: 0 0; background: var(--paper); }
 .hero-app-note { margin-top: 10px; font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
 .btn-app-mobile { display: none; }
@@ -349,7 +353,7 @@ footer { border-top: 1px solid var(--line); padding: 54px clamp(20px, 4vw, 56px)
         <div class="app-bar">
           <span class="app-dot"></span><span class="app-dot"></span><span class="app-dot"></span>
           <span class="app-url">myfinancial · live platform</span>
-          <a class="app-open" href="https://myfinancialria.github.io/myfinancial/app/" target="_blank" rel="noopener">Open full screen →</a>
+          <a class="app-open" href="https://myfinancialria.github.io/myfinancial/app/">Open full screen →</a>
         </div>
         <div class="app-frame"><iframe src="app/" title="myfinancial — live platform" loading="lazy"></iframe></div>
       </div>
