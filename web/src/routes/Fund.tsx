@@ -18,7 +18,10 @@ import { staticFundUrl, type RollingBucket } from "../lib/data";
    an investor is really asking.
 --------------------------------------------------------------------------- */
 
-const GROUPS = ["Returns", "Rolling returns", "Risk", "Ranking", "Scheme"];
+// No "Category record" here for the same reason the static fund pages omit
+// it: ranks and quartiles of past returns on a registered adviser's website
+// read as recommendations.
+const GROUPS = ["Returns", "Rolling returns", "Risk", "Scheme"];
 
 function RollingCard({ label, b, horizon }: { label: string; b: RollingBucket; horizon: string }) {
   const span = b.max - b.min || 1;

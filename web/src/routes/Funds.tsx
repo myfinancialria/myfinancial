@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { useFunds } from "../lib/useData";
 import { Card, CardHead, Label, Chip, Button, ErrorNote, Skeleton } from "../components/ui";
 import { Reveal } from "../components/motion";
-import { byUnit, inr, nf, pct, plainPct, tone } from "../lib/format";
+import { byUnit, nf, tone } from "../lib/format";
+import { toCsv, downloadCsv } from "../lib/screens";
+import type { FieldMeta, Index } from "../lib/data";
 
 const PRESETS = [
   { id: "all", name: "All live schemes", why: "Every Direct-Growth scheme still publishing a NAV, A to Z.", test: () => true, sort: "name" },
@@ -20,7 +22,67 @@ const PRESETS = [
     test: (r: any) => String(r.category ?? "").includes("ELSS"), sort: "name" },
 ];
 
-const COLS = ["name", "category", "nav", "r1y", "r3y", "r5y", "rolling3yAvg", "volatility", "sharpe", "maxDrawdownPct"];
+// The value columns shown before the reader picks their own. The scheme name
+// (with its fund house) is always the first column and is not listed here.
+const DEFAULT_COLS = ["category", "nav", "r1y", "r3y", "r5y", "rolling3yAvg", "volatility", "sharpe", "maxDrawdownPct"];
+
+// Every measure the build computes for a scheme, minus what must not become a
+// column: the name and fund house (they are the fixed first column), internal
+// flags — and the whole "Category record" group. No ranks on a registered
+// adviser's website: a rank or quartile of past returns reads as a
+// recommendation, which is why the static fund pages omit it too.
+const pickable = (data: Index): FieldMeta[] =>
+  data.meta.filter((m) => m.g !== "Category record" && !["name", "amc", "code", "stale"].includes(m.k));
+
+/* ------------------------------ column picker ----------------------------- */
+function ColumnPicker({ meta, cols, setCols, onClose }: {
+  meta: FieldMeta[]; cols: string[]; setCols: (c: string[]) => void; onClose: () => void;
+}) {
+  const groups = useMemo(() => {
+    const g: Record<string, FieldMeta[]> = {};
+    for (const m of meta) (g[m.g] ??= []).push(m);
+    return g;
+  }, [meta]);
+
+  const toggle = (k: string) =>
+    setCols(cols.includes(k) ? cols.filter((c) => c !== k) : [...cols, k]);
+
+  return (
+    <motion.div layout initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+      exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.22 }}
+      className="overflow-hidden border-t border-line">
+      <div className="flex flex-wrap items-center gap-2 px-5 pt-4">
+        <span className="text-[12px] text-ink-dim">
+          <b className="text-ink tnum">{cols.length}</b> of {meta.length} measures shown.
+          The scheme name is always the first column.
+        </span>
+        <div className="ml-auto flex gap-2">
+          <Button onClick={() => setCols(meta.map((m) => m.k))}>All</Button>
+          <Button onClick={() => setCols(DEFAULT_COLS)}>Reset</Button>
+          <Button onClick={onClose}>Done</Button>
+        </div>
+      </div>
+      <div className="grid gap-5 px-5 py-4 sm:grid-cols-2 xl:grid-cols-3">
+        {Object.entries(groups).map(([g, items]) => (
+          <div key={g}>
+            <Label className="mb-2">{g}</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {items.map((m) => (
+                <button key={m.k} onClick={() => toggle(m.k)} title={m.h}
+                  className={`border px-2 py-1 text-[11px] transition-colors
+                    ${cols.includes(m.k)
+                      ? "border-ink bg-ink text-paper"
+                      : "border-line-2 text-ink-dim hover:border-ink hover:text-ink"}`}>
+                  {m.l}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
 
 export default function Funds() {
   const { data, loading, error } = useFunds();
@@ -28,6 +90,9 @@ export default function Funds() {
   const [q, setQ] = useState("");
   const [shown, setShown] = useState(50);
   const [sort, setSort] = useState<{ f: string; dir: 1 | -1 }>({ f: "name", dir: 1 });
+  const [cols, setCols] = useState<string[]>(DEFAULT_COLS);
+  const [picking, setPicking] = useState(false);
+  const [flash, setFlash] = useState("");
 
   const current = PRESETS.find((p) => p.id === preset)!;
 
@@ -46,6 +111,29 @@ export default function Funds() {
       return sort.dir * (a - b);
     });
   }, [data, current, q, sort]);
+
+  // Chosen columns in schema order, so Returns always precede Risk however
+  // they were clicked. The name (with fund house) is the fixed first column.
+  const visible = useMemo(() => {
+    if (!data) return [];
+    return ["name", ...pickable(data).map((m) => m.k).filter((k) => cols.includes(k))];
+  }, [data, cols]);
+
+  // The whole record for every scheme in the current view — identifiers first
+  // (ISIN is what a CAS names schemes by), then each computed measure, whether
+  // or not it is a visible column.
+  const doExport = () => {
+    if (!data) return;
+    const columns = [
+      { key: "code", label: "Scheme code" },
+      { key: "isin", label: "ISIN" },
+      { key: "name", label: "Scheme" },
+      { key: "amc", label: "Fund house" },
+      ...pickable(data).filter((m) => !["isin"].includes(m.k)).map((m) => ({ key: m.k, label: m.l })),
+    ];
+    downloadCsv(`myfinancial-funds-${data.navDate ?? "export"}.csv`, toCsv(rows, columns));
+    setFlash(`Exported ${nf(rows.length, 0)} schemes with ${columns.length} columns — every measure this build computes.`);
+  };
 
   if (error) return <ErrorNote error={error} />;
 
@@ -85,18 +173,37 @@ export default function Funds() {
         <Card>
           <CardHead title="Schemes" sub={`Sorted by ${data?.byKey[sort.f]?.l ?? sort.f}`}
             right={
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search scheme or fund house…"
                   className="min-w-[200px] border border-line-2 bg-paper px-3 py-1.5 text-[12.5px] outline-none transition-colors focus:border-accent" />
+                <Button onClick={() => setPicking((v) => !v)} active={picking}>
+                  Columns <span className="ml-1.5 opacity-70">{visible.length}</span>
+                </Button>
+                <Button onClick={doExport} active>Export CSV</Button>
                 <Chip>{nf(rows.length, 0)}</Chip>
               </div>
             } />
+          <AnimatePresence initial={false}>
+            {picking && data && (
+              <ColumnPicker key="picker" meta={pickable(data)} cols={cols} setCols={setCols}
+                onClose={() => setPicking(false)} />
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
+            {flash && (
+              <motion.div key={flash} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2 }}
+                className="overflow-hidden border-t border-line bg-ink/[0.04]">
+                <div className="px-5 py-2.5 text-[12px] text-ink-dim">{flash}</div>
+              </motion.div>
+            )}
+          </AnimatePresence>
           {loading ? <Skeleton className="h-[420px]" /> : (
             <div className="overflow-x-auto">
               <table className="w-full text-[12.5px]">
                 <thead>
                   <tr className="border-b border-line">
-                    {COLS.map((k, i) => {
+                    {visible.map((k, i) => {
                       const m = data!.byKey[k];
                       if (!m) return null;
                       return (
@@ -114,7 +221,7 @@ export default function Funds() {
                     <motion.tr key={r.code} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                       transition={{ duration: 0.25, delay: Math.min(i, 24) * 0.012 }}
                       className="border-b border-line transition-colors last:border-0 hover:bg-paper-3">
-                      {COLS.map((k, ci) => {
+                      {visible.map((k, ci) => {
                         const m = data!.byKey[k];
                         if (!m) return null;
                         if (ci === 0) return (
@@ -134,7 +241,7 @@ export default function Funds() {
                     </motion.tr>
                   ))}
                   {!rows.length && (
-                    <tr><td colSpan={COLS.length} className="px-5 py-16 text-center text-[13px] text-ink-dim">No schemes match.</td></tr>
+                    <tr><td colSpan={visible.length} className="px-5 py-16 text-center text-[13px] text-ink-dim">No schemes match.</td></tr>
                   )}
                 </tbody>
               </table>
