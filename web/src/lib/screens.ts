@@ -20,25 +20,27 @@ export interface Screen {
   savedAt?: number;
 }
 
+// One store per asset class: a saved fund screen filters on fields the stock
+// screener has never heard of, so mixing them would offer dead chips.
 const STORE = "myfin.screens.v1";
 
-export function listSaved(): Screen[] {
+export function listSaved(store = STORE): Screen[] {
   try {
-    const raw = JSON.parse(localStorage.getItem(STORE) || "[]");
+    const raw = JSON.parse(localStorage.getItem(store) || "[]");
     return Array.isArray(raw) ? raw : [];
   } catch { return []; }
 }
 
-export function saveScreen(s: Screen): Screen[] {
-  const all = listSaved().filter((x) => x.name !== s.name);
+export function saveScreen(s: Screen, store = STORE): Screen[] {
+  const all = listSaved(store).filter((x) => x.name !== s.name);
   const next = [{ ...s, savedAt: Date.now() }, ...all].slice(0, 40);
-  try { localStorage.setItem(STORE, JSON.stringify(next)); } catch { /* private mode */ }
+  try { localStorage.setItem(store, JSON.stringify(next)); } catch { /* private mode */ }
   return next;
 }
 
-export function deleteScreen(name: string): Screen[] {
-  const next = listSaved().filter((x) => x.name !== name);
-  try { localStorage.setItem(STORE, JSON.stringify(next)); } catch { /* private mode */ }
+export function deleteScreen(name: string, store = STORE): Screen[] {
+  const next = listSaved(store).filter((x) => x.name !== name);
+  try { localStorage.setItem(store, JSON.stringify(next)); } catch { /* private mode */ }
   return next;
 }
 

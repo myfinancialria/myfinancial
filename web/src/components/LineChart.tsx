@@ -13,27 +13,34 @@ export type Point = [string, number];
 
 const W = 1000, GUTTER = 76, PLOT = W - GUTTER, H = 260;
 
-export default function LineChart({ points, valueLabel = "NAV", format = (v: number) => nf(v, 2), fill = true }: {
+export default function LineChart({ points, valueLabel = "NAV", format = (v: number) => nf(v, 2), fill = true, secondary, secondaryLabel = "Reference" }: {
   points: Point[]; valueLabel?: string; format?: (v: number) => string; fill?: boolean;
+  /** Optional comparison series on the same axis — must align with `points` index by index. */
+  secondary?: Point[]; secondaryLabel?: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const ref = useRef<SVGSVGElement>(null);
   const n = points.length;
+  const two = !!secondary && secondary.length === n;
 
   const geo = useMemo(() => {
     if (n < 2) return null;
     const vals = points.map((p) => p[1]);
-    const hi = Math.max(...vals), lo = Math.min(...vals);
+    const all = two ? vals.concat(secondary!.map((p) => p[1])) : vals;
+    const hi = Math.max(...all), lo = Math.min(...all);
     const pad = (hi - lo) * 0.08 || 1;
-    const yMax = hi + pad, yMin = lo - pad;
+    // A series that never goes negative must not get a negative axis label —
+    // a growth-of-money chart with a "₹-2,13,000" tick reads as a data error.
+    const yMax = hi + pad, yMin = lo >= 0 ? Math.max(0, lo - pad) : lo - pad;
     const X = (i: number) => (i / (n - 1)) * PLOT;
     const Y = (v: number) => H - ((v - yMin) / (yMax - yMin)) * H;
     const d = points.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join("");
+    const d2 = two ? secondary!.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join("") : null;
     const area = `${d}L${PLOT} ${H}L0 ${H}Z`;
     const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => ({ y: t * H, v: yMax - t * (yMax - yMin) }));
     const up = vals[n - 1] >= vals[0];
-    return { X, Y, d, area, ticks, up };
-  }, [points, n]);
+    return { X, Y, d, d2, area, ticks, up };
+  }, [points, secondary, two, n]);
 
   if (!geo) return null;
 
@@ -68,6 +75,10 @@ export default function LineChart({ points, valueLabel = "NAV", format = (v: num
         {fill && <motion.path d={geo.area} className={tint} opacity={0.09}
           initial={{ opacity: 0 }} animate={{ opacity: 0.09 }} transition={{ duration: 0.5, delay: 0.4 }} />}
 
+        {geo.d2 && <motion.path d={geo.d2} fill="none" className="stroke-ink" strokeWidth={1.2}
+          strokeDasharray="4 4" strokeLinejoin="round"
+          initial={{ opacity: 0 }} animate={{ opacity: 0.5 }} transition={{ duration: 0.6, delay: 0.5 }} />}
+
         <motion.path d={geo.d} fill="none" className={stroke} strokeWidth={1.8} strokeLinejoin="round"
           initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }} />
 
@@ -91,6 +102,12 @@ export default function LineChart({ points, valueLabel = "NAV", format = (v: num
           <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">{p[0]}</div>
           <div className="mt-1 text-[14px] font-bold tnum">{format(p[1])}</div>
           <div className="text-[10.5px] text-ink-faint">{valueLabel}</div>
+          {two && secondary![hover!] && (
+            <>
+              <div className="mt-1 text-[12px] font-semibold tnum">{format(secondary![hover!][1])}</div>
+              <div className="text-[10.5px] text-ink-faint">{secondaryLabel}</div>
+            </>
+          )}
         </motion.div>
       )}
     </div>

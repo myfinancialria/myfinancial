@@ -23,6 +23,95 @@ import { staticFundUrl, type RollingBucket } from "../lib/data";
 // read as recommendations.
 const GROUPS = ["Returns", "Rolling returns", "Risk", "Scheme"];
 
+/* --------------------------------- SIP ----------------------------------- */
+
+const SIP_AMT = 10_000;
+
+/** Annualised money-weighted return: every instalment compounded to the end
+    date must sum to the final value. Solved by bisection — the function is
+    monotonic in the rate, so this cannot miss. */
+function xirr(datesMs: number[], flows: number[]): number | null {
+  const end = datesMs[datesMs.length - 1];
+  const YEAR = 365.25 * 86_400_000;
+  const fv = (r: number) =>
+    flows.reduce((s, f, i) => s + f * Math.pow(1 + r, (end - datesMs[i]) / YEAR), 0);
+  let lo = -0.95, hi = 3;
+  let flo = fv(lo);
+  if (!Number.isFinite(flo) || flo * fv(hi) > 0) return null;
+  for (let i = 0; i < 90; i++) {
+    const mid = (lo + hi) / 2;
+    const fm = fv(mid);
+    if (Math.abs(fm) < 1e-6) return mid;
+    if (flo * fm <= 0) hi = mid; else { lo = mid; flo = fm; }
+  }
+  return (lo + hi) / 2;
+}
+
+function sipSimulation(navPoints: [string, number][]) {
+  if (navPoints.length < 13) return null;   // a year of instalments, minimum
+  let units = 0, invested = 0;
+  const value: [string, number][] = [];
+  const paid: [string, number][] = [];
+  for (const [month, nav] of navPoints) {
+    if (!(nav > 0)) continue;
+    units += SIP_AMT / nav;
+    invested += SIP_AMT;
+    value.push([month, units * nav]);
+    paid.push([month, invested]);
+  }
+  if (value.length < 13) return null;
+  const datesMs = value.map(([m]) => Date.parse(`${m}-01T00:00:00Z`));
+  const flows = value.map(() => -SIP_AMT);
+  datesMs.push(datesMs[datesMs.length - 1]);
+  flows.push(value[value.length - 1][1]);
+  return {
+    value, paid, invested,
+    final: value[value.length - 1][1],
+    rate: xirr(datesMs, flows),
+    months: value.length,
+    since: value[0][0],
+  };
+}
+
+function SipCard({ navPoints }: { navPoints: [string, number][] }) {
+  const sip = useMemo(() => sipSimulation(navPoints), [navPoints]);
+  if (!sip) return null;
+
+  const stats: [string, string][] = [
+    ["Put in", inr(sip.invested, 0)],
+    ["Worth now", inr(sip.final, 0)],
+    ["XIRR", sip.rate === null ? "—" : plainPct(sip.rate * 100)],
+    ["Instalments", nf(sip.months, 0)],
+  ];
+
+  return (
+    <Card>
+      <CardHead title={`SIP of ${inr(SIP_AMT, 0)} a month`}
+        sub={`every month since ${sip.since}, bought at that month's published NAV`}
+        right={sip.rate !== null ? <Chip tone={sip.rate >= 0 ? "up" : "down"}>{plainPct(sip.rate * 100)} a year</Chip> : undefined} />
+      <div className="px-5 py-4">
+        <LineChart points={sip.value} secondary={sip.paid}
+          valueLabel="SIP value" secondaryLabel="Amount put in"
+          format={(v) => inr(v, 0)} />
+        <div className="mt-4 grid grid-cols-2 gap-px bg-line sm:grid-cols-4">
+          {stats.map(([l, v]) => (
+            <div key={l} className="bg-paper-2 px-3 py-2.5">
+              <Label>{l}</Label>
+              <div className="mt-1 text-[15px] font-bold tnum">{v}</div>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 text-[11.5px] leading-relaxed text-ink-faint">
+          The dashed line is money put in; the solid line is what those units were worth. Simulated on the
+          scheme's month-sampled NAV history — each instalment buys at that month's published NAV, with no
+          exit load, expenses beyond the NAV, or tax. XIRR is the annualised money-weighted return of exactly
+          this schedule. Past performance does not indicate future results.
+        </p>
+      </div>
+    </Card>
+  );
+}
+
 function RollingCard({ label, b, horizon }: { label: string; b: RollingBucket; horizon: string }) {
   const span = b.max - b.min || 1;
   const at = (v: number) => ((v - b.min) / span) * 100;
@@ -159,6 +248,12 @@ export default function Fund() {
           </div>
         </Card>
       </Reveal>
+
+      {navPoints.length > 12 && (
+        <Reveal className="mt-6">
+          <SipCard navPoints={navPoints} />
+        </Reveal>
+      )}
 
       {holdings.data && <Holdings h={holdings.data} />}
 

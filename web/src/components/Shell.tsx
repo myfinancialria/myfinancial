@@ -14,6 +14,7 @@ const NAV = [
   { to: "/screener", label: "Screener" },
   { to: "/patterns", label: "Patterns" },
   { to: "/funds", label: "Funds" },
+  { to: "/mf-screener", label: "MF Screener" },
   { to: "/advisory", label: "Advisory" },
   { to: "/planning", label: "Planning & Tax" },
   { to: "/estate", label: "Will & Vault" },

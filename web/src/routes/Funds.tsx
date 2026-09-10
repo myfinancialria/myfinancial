@@ -157,13 +157,17 @@ export default function Funds() {
       </section>
 
       <Reveal>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {PRESETS.map((p) => (
             <Button key={p.id} active={preset === p.id}
               onClick={() => { setPreset(p.id); setSort({ f: p.sort, dir: p.sort === "name" ? 1 : -1 }); setShown(50); }}>
               {p.name}
             </Button>
           ))}
+          <Link to="/mf-screener"
+            className="px-2 py-1.5 font-mono text-[10px] uppercase tracking-[0.1em] text-ink-faint underline transition-colors hover:text-ink">
+            Build your own screen →
+          </Link>
         </div>
         <motion.p key={preset} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22 }}
           className="mt-3.5 max-w-[88ch] text-[13px] leading-relaxed text-ink-dim">{current.why}</motion.p>

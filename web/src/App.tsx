@@ -13,6 +13,7 @@ import { relativeDay } from "./lib/format";
 const Screener = lazy(() => import("./routes/Screener"));
 const Patterns = lazy(() => import("./routes/Patterns"));
 const Funds = lazy(() => import("./routes/Funds"));
+const FundScreener = lazy(() => import("./routes/FundScreener"));
 const Company = lazy(() => import("./routes/Company"));
 const Stocks = lazy(() => import("./routes/Stocks"));
 const Insights = lazy(() => import("./routes/Insights"));
@@ -50,6 +51,7 @@ export default function App() {
               <Route path="/screener" element={<Screener />} />
               <Route path="/patterns" element={<Patterns />} />
               <Route path="/funds" element={<Funds />} />
+              <Route path="/mf-screener" element={<FundScreener />} />
               <Route path="/fund/:code" element={<Fund />} />
               <Route path="/stocks" element={<Stocks />} />
               <Route path="/insights" element={<Insights />} />

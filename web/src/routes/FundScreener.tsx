@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { useStocks } from "../lib/useData";
+import { useFunds } from "../lib/useData";
 import { Card, CardHead, Label, Chip, Button, ErrorNote, Skeleton } from "../components/ui";
 import { Reveal } from "../components/motion";
 import { byUnit, nf, tone } from "../lib/format";
@@ -11,6 +11,15 @@ import {
   toCsv, downloadCsv, type Filter, type Op, type Screen,
 } from "../lib/screens";
 
+/* ---------------------------------------------------------------------------
+   The mutual fund screener — the stock screener's discipline pointed at every
+   live Direct-Growth scheme. Same conditions, same saved screens and share
+   links, same CSV; the measures are the fund set: rolling returns, risk and
+   the full return ladder, all computed from published AMFI NAV history.
+--------------------------------------------------------------------------- */
+
+const STORE = "myfin.fundscreens.v1";
+
 const OPS: Record<string, [Op, string][]> = {
   num: [[">=", "at least"], ["<=", "at most"], ["between", "between"], ["=", "equals"], [">", "over"], ["<", "under"], ["notnull", "has a value"]],
   bool: [["true", "is yes"], ["false", "is no"]],
@@ -18,34 +27,41 @@ const OPS: Record<string, [Op, string][]> = {
   text: [["contains", "contains"], ["=", "equals"]],
 };
 
+// The measures a condition or column may use. The whole "Category record"
+// group stays out for the same reason it is absent everywhere else on this
+// site: ranks and quartiles of past returns on a registered adviser's website
+// read as recommendations.
+const usable = (data: Index): FieldMeta[] =>
+  data.meta.filter((m) => m.g !== "Category record" && !["name", "amc", "code", "stale"].includes(m.k));
+
+const DEFAULT_COLS = ["category", "nav", "r1y", "r3y", "r5y", "rolling3yAvg", "volatility", "sharpe", "maxDrawdownPct"];
+
 const PRESETS: { id: string; name: string; why: string; filters: Filter[]; sort: string }[] = [
-  { id: "quality", name: "Quality compounders",
-    why: "High return on capital, sensible leverage, real margins — and still above its long-term average.",
-    filters: [{ f: "roe", op: ">=", a: 15 }, { f: "roce", op: ">=", a: 15 }, { f: "profitMarginPct", op: ">=", a: 8 },
-              { f: "liabilitiesToEquity", op: "<=", a: 1.5 }, { f: "aboveSma200", op: "true" }, { f: "avgTurnoverCr", op: ">=", a: 5 }],
-    sort: "roce" },
-  { id: "value", name: "Value, not broken",
-    why: "Cheap against earnings, cheap against its own sub-sector, and still profitable — the filter that separates value from a falling knife.",
-    filters: [{ f: "pe", op: "between", a: 3, b: 18 }, { f: "pb", op: "<=", a: 3 }, { f: "peVsPeers", op: "<=", a: -10 },
-              { f: "roe", op: ">=", a: 10 }, { f: "avgTurnoverCr", op: ">=", a: 2 }],
-    sort: "pe" },
-  { id: "momentum", name: "Momentum leaders",
-    why: "Top of the market on one-year relative strength, in a confirmed advance, near their highs.",
-    filters: [{ f: "rsRank1y", op: ">=", a: 85 }, { f: "stage", op: "=", a: 2 }, { f: "adx14", op: ">=", a: 20 },
-              { f: "pctFrom52wHigh", op: ">=", a: -12 }, { f: "avgTurnoverCr", op: ">=", a: 5 }],
-    sort: "rsRank1y" },
-  { id: "delivery", name: "Quiet accumulation",
-    why: "High delivery means buyers are taking shares home rather than trading them intraday — and these are still well off their highs.",
-    filters: [{ f: "avgDeliveryPct20", op: ">=", a: 60 }, { f: "pctFrom52wHigh", op: "<=", a: -15 }, { f: "avgTurnoverCr", op: ">=", a: 2 }],
-    sort: "avgDeliveryPct20" },
-  { id: "dividend", name: "Dividend payers",
-    why: "A real yield, summed from each company's own filed payouts, backed by profits rather than a falling price.",
-    filters: [{ f: "dividendYieldPct", op: ">=", a: 2 }, { f: "roe", op: ">=", a: 10 }, { f: "pe", op: "<=", a: 30 }, { f: "avgTurnoverCr", op: ">=", a: 2 }],
-    sort: "dividendYieldPct" },
-  { id: "oversold", name: "Oversold quality",
-    why: "Profitable, lightly geared companies that have been beaten down. A watchlist, not a buy list.",
-    filters: [{ f: "rsi14", op: "<=", a: 35 }, { f: "roe", op: ">=", a: 12 }, { f: "liabilitiesToEquity", op: "<=", a: 2 }, { f: "avgTurnoverCr", op: ">=", a: 3 }],
-    sort: "rsi14" },
+  { id: "consistent", name: "Consistent equity",
+    why: "Equity schemes whose average three-year rolling return has been strong AND which have never lost money over any three-year window — five years of history minimum.",
+    filters: [{ f: "categoryGroup", op: "in", a: ["Equity"] }, { f: "rolling3yAvg", op: ">=", a: 14 },
+              { f: "rolling3yPctPositive", op: ">=", a: 95 }, { f: "ageYears", op: ">=", a: 5 }],
+    sort: "rolling3yAvg" },
+  { id: "sharpe", name: "Best paid risk",
+    why: "A Sharpe ratio of at least 0.8 over three years — return per unit of volatility, computed from published NAV history rather than quoted from a factsheet.",
+    filters: [{ f: "sharpe", op: ">=", a: 0.8 }, { f: "ageYears", op: ">=", a: 3 }],
+    sort: "sharpe" },
+  { id: "shallow", name: "Shallow drawdowns",
+    why: "Respectable compounding whose worst-ever fall stayed inside 15% — for money that cannot ride out a deep trough.",
+    filters: [{ f: "maxDrawdownPct", op: ">=", a: -15 }, { f: "r3y", op: ">=", a: 8 }, { f: "ageYears", op: ">=", a: 5 }],
+    sort: "maxDrawdownPct" },
+  { id: "veterans", name: "Ten-year veterans",
+    why: "A decade of published NAVs and a double-digit ten-year CAGR — records long enough to include a full cycle, not just the last bull run.",
+    filters: [{ f: "ageYears", op: ">=", a: 10 }, { f: "r10y", op: ">=", a: 10 }],
+    sort: "r10y" },
+  { id: "steadydebt", name: "Steady debt",
+    why: "Debt schemes with genuinely low volatility and a three-year return that beat a savings account — parking money, honestly measured.",
+    filters: [{ f: "categoryGroup", op: "in", a: ["Debt"] }, { f: "volatility", op: "<=", a: 2 }, { f: "r3y", op: ">=", a: 6 }],
+    sort: "r3y" },
+  { id: "elss", name: "ELSS tax savers",
+    why: "Section 80C schemes with a three-year lock-in — judged on their rolling three-year record, the exact horizon the lock-in forces on you.",
+    filters: [{ f: "category", op: "contains", a: "ELSS" }, { f: "ageYears", op: ">=", a: 3 }],
+    sort: "rolling3yAvg" },
 ];
 
 function passes(row: Row, f: Filter): boolean {
@@ -71,22 +87,23 @@ function passes(row: Row, f: Filter): boolean {
   }
 }
 
-function FilterRow({ idx, filter, data, onChange, onRemove }: {
-  idx: number; filter: Filter; data: Index; onChange: (f: Filter) => void; onRemove: () => void;
+function FilterRow({ filter, data, meta: metaList, onChange, onRemove }: {
+  filter: Filter; data: Index; meta: FieldMeta[]; onChange: (f: Filter) => void; onRemove: () => void;
 }) {
   const meta = data.byKey[filter.f];
   const ops = OPS[meta?.t ?? "num"] ?? OPS.num;
+  const live = useMemo(() => data.rows.filter((r) => !r.stale), [data]);
   const coverage = useMemo(() => {
-    const n = data.rows.filter((r) => r[filter.f] !== null && r[filter.f] !== undefined && r[filter.f] !== "").length;
-    return n / data.rows.length;
-  }, [data, filter.f]);
+    const n = live.filter((r) => r[filter.f] !== null && r[filter.f] !== undefined && r[filter.f] !== "").length;
+    return n / (live.length || 1);
+  }, [live, filter.f]);
   const needsValue = !["true", "false", "notnull"].includes(filter.op);
 
   const groups = useMemo(() => {
     const g: Record<string, FieldMeta[]> = {};
-    for (const m of data.meta) (g[m.g] ??= []).push(m);
+    for (const m of metaList) (g[m.g] ??= []).push(m);
     return g;
-  }, [data]);
+  }, [metaList]);
 
   const input = "border border-line-2 bg-paper px-2.5 py-1.5 text-[12.5px] text-ink outline-none focus:border-accent transition-colors";
 
@@ -136,9 +153,9 @@ function FilterRow({ idx, filter, data, onChange, onRemove }: {
         </>
       ))}
 
-      {meta?.u && <span className="font-mono text-[10px] text-ink-faint">{meta.u === "₹cr" ? "₹ cr" : meta.u}</span>}
+      {meta?.u && <span className="font-mono text-[10px] text-ink-faint">{meta.u}</span>}
       {needsValue && coverage < 0.6 && (
-        <span title={`${meta?.l} is present for ${(coverage * 100).toFixed(0)}% of companies. Rows without a value cannot meet a threshold, so this condition excludes them.`}
+        <span title={`${meta?.l} is present for ${(coverage * 100).toFixed(0)}% of schemes. Rows without a value cannot meet a threshold, so this condition excludes them.`}
           className="cursor-help border border-warn px-1.5 py-0.5 font-mono text-[9px] text-warn">
           only {(coverage * 100).toFixed(0)}% have this
         </span>
@@ -149,16 +166,15 @@ function FilterRow({ idx, filter, data, onChange, onRemove }: {
   );
 }
 
-
 /* ------------------------------ column picker ----------------------------- */
-function ColumnPicker({ data, cols, setCols, onClose }: {
-  data: Index; cols: string[]; setCols: (c: string[]) => void; onClose: () => void;
+function ColumnPicker({ meta, cols, setCols, onClose }: {
+  meta: FieldMeta[]; cols: string[]; setCols: (c: string[]) => void; onClose: () => void;
 }) {
   const groups = useMemo(() => {
     const g: Record<string, FieldMeta[]> = {};
-    for (const m of data.meta) (g[m.g] ??= []).push(m);
+    for (const m of meta) (g[m.g] ??= []).push(m);
     return g;
-  }, [data]);
+  }, [meta]);
 
   const toggle = (k: string) =>
     setCols(cols.includes(k) ? cols.filter((c) => c !== k) : [...cols, k]);
@@ -169,11 +185,12 @@ function ColumnPicker({ data, cols, setCols, onClose }: {
       className="overflow-hidden border-t border-line">
       <div className="flex flex-wrap items-center gap-2 px-5 pt-4">
         <span className="text-[12px] text-ink-dim">
-          <b className="text-ink tnum">{cols.length}</b> of {data.meta.length} measures shown.
-          The name column is always first; conditions and the sort column are added automatically.
+          <b className="text-ink tnum">{cols.length}</b> of {meta.length} measures shown.
+          The scheme name is always first; conditions and the sort column are added automatically.
         </span>
         <div className="ml-auto flex gap-2">
-          <Button onClick={() => setCols(data.meta.filter((m) => m.c).map((m) => m.k))}>Reset</Button>
+          <Button onClick={() => setCols(meta.map((m) => m.k))}>All</Button>
+          <Button onClick={() => setCols(DEFAULT_COLS)}>Reset</Button>
           <Button onClick={onClose}>Done</Button>
         </div>
       </div>
@@ -199,8 +216,8 @@ function ColumnPicker({ data, cols, setCols, onClose }: {
   );
 }
 
-export default function Screener() {
-  const { data, loading, error } = useStocks();
+export default function FundScreener() {
+  const { data, loading, error } = useFunds();
   const [params, setParams] = useSearchParams();
 
   // A shared link carries the whole screen, so it is read once on mount and
@@ -211,11 +228,11 @@ export default function Screener() {
   const [filters, setFilters] = useState<Filter[]>(shared?.filters ?? PRESETS[0].filters);
   const [preset, setPreset] = useState<string | null>(shared ? null : PRESETS[0].id);
   const [q, setQ] = useState(shared?.q ?? "");
-  const [sort, setSort] = useState<{ f: string; dir: 1 | -1 }>(shared?.sort ?? { f: "roce", dir: -1 });
+  const [sort, setSort] = useState<{ f: string; dir: 1 | -1 }>(shared?.sort ?? { f: "rolling3yAvg", dir: -1 });
   const [shown, setShown] = useState(50);
   const [chosen, setChosen] = useState<string[] | null>(shared?.cols?.length ? shared.cols : null);
   const [picking, setPicking] = useState(false);
-  const [saved, setSaved] = useState<Screen[]>(() => listSaved());
+  const [saved, setSaved] = useState<Screen[]>(() => listSaved(STORE));
   const [flash, setFlash] = useState("");
 
   useEffect(() => {
@@ -229,7 +246,7 @@ export default function Screener() {
   // row you cannot see the reason for is not a result you can check.
   const cols = useMemo(() => {
     if (!data) return [];
-    const base = chosen ? [...chosen] : data.meta.filter((m) => m.c).map((m) => m.k);
+    const base = chosen ? [...chosen] : [...DEFAULT_COLS];
     if (!base.includes("name")) base.unshift("name");
     for (const f of filters) if (!base.includes(f.f)) base.push(f.f);
     if (!base.includes(sort.f)) base.push(sort.f);
@@ -238,9 +255,9 @@ export default function Screener() {
 
   const rows = useMemo(() => {
     if (!data) return [];
-    let out = data.rows;
+    let out = data.rows.filter((r) => !r.stale);   // wound-up schemes are not investable
     const needle = q.trim().toLowerCase();
-    if (needle) out = out.filter((r) => `${r.name} ${r.symbol} ${r.industry ?? ""}`.toLowerCase().includes(needle));
+    if (needle) out = out.filter((r) => `${r.name} ${r.amc} ${r.category}`.toLowerCase().includes(needle));
     for (const f of filters) out = out.filter((r) => passes(r, f));
     return [...out].sort((x, y) => {
       const a = x[sort.f], b = y[sort.f];
@@ -271,25 +288,20 @@ export default function Screener() {
   };
 
   const doSave = () => {
-    const name = prompt("Name this screen", current?.name ?? "My screen")?.trim();
+    const name = prompt("Name this screen", current?.name ?? "My fund screen")?.trim();
     if (!name) return;
-    setSaved(saveScreen({ name, ...definition }));
+    setSaved(saveScreen({ name, ...definition }, STORE));
     setFlash(`Saved “${name}” to this browser.`);
   };
 
   const doShare = async () => {
-    // A plain query on the route survives the Pages 404 bounce (it parks
-    // location.search too); the old "#/screener?s=" form landed the payload in
-    // the hash, where useSearchParams never saw it — a link that opened the
-    // page but restored nothing.
+    // The Pages 404 bounce parks location.search along with the path, so a
+    // plain query survives a cold open of the link.
     const url = `${location.origin}${location.pathname}?s=${encodeScreen(definition)}`;
     try {
       await navigator.clipboard.writeText(url);
       setFlash("Link copied — it carries the whole screen, so it works for anyone you send it to.");
     } catch {
-      // Clipboard is refused without a user gesture in some browsers, and over
-      // plain http everywhere. Falling back to the URL bar still hands the
-      // link over rather than failing silently.
       setParams({ s: encodeScreen(definition) }, { replace: true });
       setFlash("Link is in the address bar — copy it from there.");
     }
@@ -297,28 +309,34 @@ export default function Screener() {
 
   const doExport = () => {
     if (!data) return;
-    const columns = cols.map((k) => ({ key: k, label: data.byKey[k]?.l ?? k }));
+    const columns = cols.filter((k) => k !== "name").map((k) => ({ key: k, label: data.byKey[k]?.l ?? k }));
     downloadCsv(
-      `myfinancial-screen-${data.priceDate ?? "export"}.csv`,
-      toCsv(rows, [{ key: "symbol", label: "Symbol" }, ...columns.filter((c) => c.key !== "symbol")]),
+      `myfinancial-mf-screen-${data.navDate ?? "export"}.csv`,
+      toCsv(rows, [
+        { key: "code", label: "Scheme code" },
+        { key: "name", label: "Scheme" },
+        { key: "amc", label: "Fund house" },
+        ...columns,
+      ]),
     );
-    setFlash(`Exported ${nf(rows.length, 0)} rows with ${columns.length} columns.`);
+    setFlash(`Exported ${nf(rows.length, 0)} schemes with ${columns.length + 3} columns.`);
   };
 
   return (
     <>
       <section className="pt-12 pb-7">
-        <Reveal><Label className="mb-3.5">Screener</Label></Reveal>
+        <Reveal><Label className="mb-3.5">MF Screener</Label></Reveal>
         <Reveal delay={0.05}>
           <h1 className="text-[clamp(2rem,4.6vw,3.1rem)] font-extrabold leading-[1.02] tracking-[-0.04em]">
-            Filter the market{" "}
+            Filter every fund{" "}
             <span className="font-serif font-normal italic text-ink-dim">on anything.</span>
           </h1>
         </Reveal>
         <Reveal delay={0.1}>
-          <p className="mt-4 max-w-[62ch] text-[14px] leading-relaxed text-ink-dim">
-            {data ? nf(data.count, 0) : "—"} listed companies across {data?.meta.length ?? "—"} measures.
-            Everything is filtered in your browser, so each keystroke re-screens the whole market.
+          <p className="mt-4 max-w-[68ch] text-[14px] leading-relaxed text-ink-dim">
+            {data ? nf(data.liveCount ?? data.count, 0) : "—"} live Direct-Growth schemes across{" "}
+            {data ? usable(data).length : "—"} measures, every one computed from official AMFI NAV history.
+            Everything filters in your browser, so each keystroke re-screens the whole universe.
           </p>
         </Reveal>
       </section>
@@ -341,7 +359,7 @@ export default function Screener() {
                   <span className="ml-2 font-mono text-[9.5px] text-ink-faint">{sc.filters.length}</span>
                 </button>
                 <button title={`Delete “${sc.name}”`}
-                  onClick={() => { if (confirm(`Delete the saved screen “${sc.name}”?`)) setSaved(deleteScreen(sc.name)); }}
+                  onClick={() => { if (confirm(`Delete the saved screen “${sc.name}”?`)) setSaved(deleteScreen(sc.name, STORE)); }}
                   className="border-l border-line-2 px-2 py-1.5 text-[11px] text-ink-faint transition-colors hover:text-down">×</button>
               </span>
             ))}
@@ -365,11 +383,11 @@ export default function Screener() {
             title="Conditions"
             right={
               <div className="flex flex-wrap items-center gap-2">
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or symbol…"
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search scheme or fund house…"
                   className="min-w-[190px] border border-line-2 bg-paper px-3 py-1.5 text-[12.5px] outline-none transition-colors focus:border-accent" />
                 <Button onClick={() => {
                   if (!data) return;
-                  const first = data.meta.find((m) => m.t === "num" && !filters.some((f) => f.f === m.k));
+                  const first = usable(data).find((m) => m.t === "num" && !filters.some((f) => f.f === m.k));
                   if (first) { setFilters([...filters, { f: first.k, op: ">=", a: "" }]); setPreset(null); }
                 }}>+ Condition</Button>
                 <Button onClick={() => { setFilters([]); setPreset(null); setQ(""); }}>Clear</Button>
@@ -380,13 +398,13 @@ export default function Screener() {
             {loading && <Skeleton className="h-24" />}
             <AnimatePresence initial={false}>
               {data && filters.map((f, i) => (
-                <FilterRow key={`${f.f}-${i}`} idx={i} filter={f} data={data}
+                <FilterRow key={`${f.f}-${i}`} filter={f} data={data} meta={usable(data)}
                   onChange={(nf2) => { const c = [...filters]; c[i] = nf2; setFilters(c); setPreset(null); }}
                   onRemove={() => { setFilters(filters.filter((_, j) => j !== i)); setPreset(null); }} />
               ))}
             </AnimatePresence>
             {data && !filters.length && (
-              <p className="text-[13px] text-ink-dim">No conditions — the whole market is shown. Add one, or start from a ready-made screen above.</p>
+              <p className="text-[13px] text-ink-dim">No conditions — every live scheme is shown. Add one, or start from a ready-made screen above.</p>
             )}
           </div>
           {data && (
@@ -394,7 +412,7 @@ export default function Screener() {
               <motion.span key={rows.length} initial={{ opacity: 0.4 }} animate={{ opacity: 1 }} className="tnum font-semibold text-ink">
                 {nf(rows.length, 0)}
               </motion.span>{" "}
-              of {nf(data.count, 0)} companies match{filters.length ? ` all ${filters.length} condition${filters.length > 1 ? "s" : ""}` : ""}.
+              of {nf(data.liveCount ?? data.count, 0)} live schemes match{filters.length ? ` all ${filters.length} condition${filters.length > 1 ? "s" : ""}` : ""}.
             </div>
           )}
         </Card>
@@ -416,7 +434,8 @@ export default function Screener() {
             } />
           <AnimatePresence initial={false}>
             {picking && data && (
-              <ColumnPicker key="picker" data={data} cols={chosen ?? data.meta.filter((m) => m.c).map((m) => m.k)}
+              <ColumnPicker key="picker" meta={usable(data)}
+                cols={chosen ?? DEFAULT_COLS}
                 setCols={setChosen} onClose={() => setPicking(false)} />
             )}
           </AnimatePresence>
@@ -436,11 +455,11 @@ export default function Screener() {
                   <tr className="border-b border-line">
                     {cols.map((k, i) => {
                       const m = data!.byKey[k];
+                      if (!m) return null;
                       return (
-                        <th key={k} onClick={() => setSort((s) => s.f === k ? { f: k, dir: (-s.dir) as 1 | -1 } : { f: k, dir: m.d === -1 ? 1 : -1 })}
-                          title={m.h}
-                          className={`sticky top-0 z-10 cursor-pointer select-none whitespace-nowrap bg-paper-2 px-3 py-2.5 font-mono text-[9.5px] uppercase tracking-[0.12em] text-ink-faint transition-colors hover:text-ink
-                            ${i === 0 ? "text-left" : "text-right"}`}>
+                        <th key={k} title={m.h}
+                          onClick={() => setSort((s) => s.f === k ? { f: k, dir: (-s.dir) as 1 | -1 } : { f: k, dir: m.d === -1 ? 1 : -1 })}
+                          className={`sticky top-0 z-10 cursor-pointer select-none whitespace-nowrap bg-paper-2 px-3 py-2.5 font-mono text-[9.5px] uppercase tracking-[0.12em] text-ink-faint hover:text-ink ${i ? "text-right" : "text-left"}`}>
                           {m.l}{sort.f === k && <span className="ml-1 text-ink">{sort.dir === -1 ? "▾" : "▴"}</span>}
                         </th>
                       );
@@ -448,30 +467,32 @@ export default function Screener() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.slice(0, shown).map((r, ri) => (
-                    <motion.tr key={r.symbol}
-                      initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                      transition={{ duration: 0.25, delay: Math.min(ri, 24) * 0.012 }}
+                  {rows.slice(0, shown).map((r, i) => (
+                    <motion.tr key={r.code} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                      transition={{ duration: 0.25, delay: Math.min(i, 24) * 0.012 }}
                       className="border-b border-line transition-colors last:border-0 hover:bg-paper-3">
-                      {cols.map((k, i) => {
+                      {cols.map((k, ci) => {
                         const m = data!.byKey[k];
-                        const v = r[k];
-                        if (i === 0) return (
+                        if (!m) return null;
+                        if (ci === 0) return (
                           <td key={k} className="px-3 py-2.5">
-                            <Link to={`/company/${encodeURIComponent(r.symbol)}`} className="group block">
-                              <span className="font-semibold group-hover:text-accent">{String(v ?? r.symbol)}</span>
-                              <span className="block font-mono text-[10px] text-ink-faint">{r.symbol}</span>
+                            <Link to={`/fund/${encodeURIComponent(String(r.code))}`} className="group block">
+                              <span className="block font-semibold group-hover:text-accent">{r.name}</span>
+                              <span className="block font-mono text-[10px] text-ink-faint">{r.amc}</span>
                             </Link>
                           </td>
                         );
-                        const colour = m.u === "%" && m.d === 1 ? tone(v) : "";
-                        return <td key={k} className={`whitespace-nowrap px-3 py-2.5 text-right tnum ${colour}`}>{byUnit(v, m.u)}</td>;
+                        return (
+                          <td key={k} className={`whitespace-nowrap px-3 py-2.5 text-right tnum ${m.u === "%" && m.d === 1 ? tone(r[k]) : ""}`}>
+                            {byUnit(r[k], m.u)}
+                          </td>
+                        );
                       })}
                     </motion.tr>
                   ))}
                   {!rows.length && (
                     <tr><td colSpan={cols.length} className="px-5 py-16 text-center text-[13px] text-ink-dim">
-                      Nothing matches all of these conditions. Loosen one — a quiet market genuinely produces fewer results.
+                      No schemes match all the conditions. Loosen one, or clear them.
                     </td></tr>
                   )}
                 </tbody>
@@ -483,13 +504,14 @@ export default function Screener() {
               <Button onClick={() => setShown((s) => s + 100)}>Show more ({nf(rows.length - shown, 0)} left)</Button>
             </div>
           )}
-          <div className="border-t border-line px-5 py-3.5 text-[11.5px] leading-relaxed text-ink-faint">
-            A saved screen lives in this browser only — there is no account behind it. A shared link carries the
-            whole definition rather than an id, so it keeps working even though nothing is stored on a server.
-            The CSV exports every matching row, not just the ones on screen.
-          </div>
         </Card>
       </Reveal>
+
+      <p className="mt-2 max-w-[80ch] text-[11.5px] leading-relaxed text-ink-faint">
+        Universe: every live Direct-plan Growth-option scheme publishing a NAV to AMFI. Returns, rolling
+        windows and risk are computed from the complete published NAV history of each scheme. This is a
+        filtering tool, not advice; past performance does not indicate future results.
+      </p>
     </>
   );
 }
